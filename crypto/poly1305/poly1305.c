@@ -193,7 +193,9 @@ void CRYPTO_poly1305_init(poly1305_state *statep, const uint8_t key[32]) {
 void CRYPTO_poly1305_update(poly1305_state *statep, const uint8_t *in,
                             size_t in_len) {
   struct poly1305_state_st *state = poly1305_aligned_state(statep);
-
+#if 1 // hezhiwen
+  size_t i;
+#endif
   // Work around a C language bug. See https://crbug.com/1019588.
   if (in_len == 0) {
     return;
@@ -211,7 +213,11 @@ void CRYPTO_poly1305_update(poly1305_state *statep, const uint8_t *in,
     if (todo > in_len) {
       todo = in_len;
     }
+  #if 1 // hezhiwen
+    for (i = 0; i < todo; i++) {
+  #else
     for (size_t i = 0; i < todo; i++) {
+  #endif
       state->buf[state->buf_used + i] = in[i];
     }
     state->buf_used += todo;
@@ -232,7 +238,11 @@ void CRYPTO_poly1305_update(poly1305_state *statep, const uint8_t *in,
   }
 
   if (in_len) {
+  #if 1 // hezhiwen
+    for (i = 0; i < in_len; i++) {
+  #else
     for (size_t i = 0; i < in_len; i++) {
+  #endif
       state->buf[i] = in[i];
     }
     state->buf_used = in_len;
@@ -243,6 +253,9 @@ void CRYPTO_poly1305_finish(poly1305_state *statep, uint8_t mac[16]) {
   struct poly1305_state_st *state = poly1305_aligned_state(statep);
   uint32_t g0, g1, g2, g3, g4;
   uint32_t b, nb;
+#if 1 // hezhiwen
+  uint64_t f0, f1, f2, f3;
+#endif
 
 #if defined(OPENSSL_POLY1305_NEON)
   if (CRYPTO_is_NEON_capable()) {
@@ -293,6 +306,16 @@ void CRYPTO_poly1305_finish(poly1305_state *statep, uint8_t mac[16]) {
   state->h3 = (state->h3 & nb) | (g3 & b);
   state->h4 = (state->h4 & nb) | (g4 & b);
 
+#if 1 // hezhiwen
+  f0 = ((state->h0) | (state->h1 << 26)) +
+       (uint64_t)CRYPTO_load_u32_le(&state->key[0]);
+  f1 = ((state->h1 >> 6) | (state->h2 << 20)) +
+       (uint64_t)CRYPTO_load_u32_le(&state->key[4]);
+  f2 = ((state->h2 >> 12) | (state->h3 << 14)) +
+       (uint64_t)CRYPTO_load_u32_le(&state->key[8]);
+  f3 = ((state->h3 >> 18) | (state->h4 << 8)) +
+       (uint64_t)CRYPTO_load_u32_le(&state->key[12]);
+#else
   uint64_t f0 = ((state->h0) | (state->h1 << 26)) +
                 (uint64_t)CRYPTO_load_u32_le(&state->key[0]);
   uint64_t f1 = ((state->h1 >> 6) | (state->h2 << 20)) +
@@ -301,6 +324,7 @@ void CRYPTO_poly1305_finish(poly1305_state *statep, uint8_t mac[16]) {
                 (uint64_t)CRYPTO_load_u32_le(&state->key[8]);
   uint64_t f3 = ((state->h3 >> 18) | (state->h4 << 8)) +
                 (uint64_t)CRYPTO_load_u32_le(&state->key[12]);
+#endif
 
   CRYPTO_store_u32_le(&mac[0], (uint32_t)f0);
   f1 += (f0 >> 32);

@@ -435,11 +435,18 @@ static int mod_exp_recp(BIGNUM *r, const BIGNUM *a, const BIGNUM *p,
   // Table of variables obtained from 'ctx'
   BIGNUM *val[TABLE_SIZE];
   BN_RECP_CTX recp;
+#if 1 // hezhiwen
+  int bits;
+#endif
 
   // This function is only called on even moduli.
   assert(!BN_is_odd(m));
 
+#if 1 // hezhiwen
+  bits = BN_num_bits(p);
+#else
   int bits = BN_num_bits(p);
+#endif
   if (bits == 0) {
     return BN_one(r);
   }
@@ -586,6 +593,16 @@ int BN_mod_exp(BIGNUM *r, const BIGNUM *a, const BIGNUM *p, const BIGNUM *m,
 
 int BN_mod_exp_mont(BIGNUM *rr, const BIGNUM *a, const BIGNUM *p,
                     const BIGNUM *m, BN_CTX *ctx, const BN_MONT_CTX *mont) {
+#if 1 // hezhiwen
+  int bits;
+  int ret = 0;
+  BIGNUM *val[TABLE_SIZE];
+  BN_MONT_CTX *new_mont = NULL;
+  BIGNUM *r;
+  int window;
+  int r_is_one = 1;
+  int wstart;
+#endif
   if (!BN_is_odd(m)) {
     OPENSSL_PUT_ERROR(BN, BN_R_CALLED_WITH_EVEN_MODULUS);
     return 0;
@@ -599,7 +616,11 @@ int BN_mod_exp_mont(BIGNUM *rr, const BIGNUM *a, const BIGNUM *p,
     return 0;
   }
 
+#if 1 // hezhiwen
+  bits = BN_num_bits(p);
+#else
   int bits = BN_num_bits(p);
+#endif
   if (bits == 0) {
     // x**0 mod 1 is still zero.
     if (BN_abs_is_word(m, 1)) {
@@ -609,12 +630,17 @@ int BN_mod_exp_mont(BIGNUM *rr, const BIGNUM *a, const BIGNUM *p,
     return BN_one(rr);
   }
 
+#if 1 // hezhiwen
+  BN_CTX_start(ctx);
+  r = BN_CTX_get(ctx);
+#else
   int ret = 0;
   BIGNUM *val[TABLE_SIZE];
   BN_MONT_CTX *new_mont = NULL;
 
   BN_CTX_start(ctx);
   BIGNUM *r = BN_CTX_get(ctx);
+#endif
   val[0] = BN_CTX_get(ctx);
   if (r == NULL || val[0] == NULL) {
     goto err;
@@ -633,17 +659,26 @@ int BN_mod_exp_mont(BIGNUM *rr, const BIGNUM *a, const BIGNUM *p,
   // precomputing powers of |a|. Windows may be shifted so they always end on a
   // set bit, so only precompute odd powers. We compute val[i] = a^(2*i + 1)
   // for i = 0 to 2^(window-1), all in Montgomery form.
+#if 1 // hezhiwen
+  window = BN_window_bits_for_exponent_size(bits);
+#else
   int window = BN_window_bits_for_exponent_size(bits);
+#endif
   if (!BN_to_montgomery(val[0], a, mont, ctx)) {
     goto err;
   }
   if (window > 1) {
     BIGNUM *d = BN_CTX_get(ctx);
+    int i;
     if (d == NULL ||
         !BN_mod_mul_montgomery(d, val[0], val[0], mont, ctx)) {
       goto err;
     }
+  #if 1 // hezhiwen
+    for (i = 1; i < 1 << (window - 1); i++) {
+  #else
     for (int i = 1; i < 1 << (window - 1); i++) {
+  #endif
       val[i] = BN_CTX_get(ctx);
       if (val[i] == NULL ||
           !BN_mod_mul_montgomery(val[i], val[i - 1], d, mont, ctx)) {
@@ -654,9 +689,18 @@ int BN_mod_exp_mont(BIGNUM *rr, const BIGNUM *a, const BIGNUM *p,
 
   // |p| is non-zero, so at least one window is non-zero. To save some
   // multiplications, defer initializing |r| until then.
+#if 1 // hezhiwen
+  wstart = bits - 1;
+#else
   int r_is_one = 1;
   int wstart = bits - 1;  // The top bit of the window.
+#endif
   for (;;) {
+  #if 1 // hezhiwen
+    int wvalue = 1;
+    int wsize = 0;
+    int i;
+  #endif
     if (!BN_is_bit_set(p, wstart)) {
       if (!r_is_one && !BN_mod_mul_montgomery(r, r, r, mont, ctx)) {
         goto err;
@@ -669,9 +713,13 @@ int BN_mod_exp_mont(BIGNUM *rr, const BIGNUM *a, const BIGNUM *p,
     }
 
     // We now have wstart on a set bit. Find the largest window we can use.
+  #if 1 // hezhiwen
+    for (i = 1; i < window && i <= wstart; i++) {
+  #else
     int wvalue = 1;
     int wsize = 0;
     for (int i = 1; i < window && i <= wstart; i++) {
+  #endif
       if (BN_is_bit_set(p, wstart - i)) {
         wvalue <<= (i - wsize);
         wvalue |= 1;
@@ -681,7 +729,12 @@ int BN_mod_exp_mont(BIGNUM *rr, const BIGNUM *a, const BIGNUM *p,
 
     // Shift |r| to the end of the window.
     if (!r_is_one) {
+    #if 1 // hezhiwen
+      int i;
+      for (i = 0; i < wsize + 1; i++) {
+    #else
       for (int i = 0; i < wsize + 1; i++) {
+    #endif
         if (!BN_mod_mul_montgomery(r, r, r, mont, ctx)) {
           goto err;
         }
@@ -722,6 +775,13 @@ err:
 void bn_mod_exp_mont_small(BN_ULONG *r, const BN_ULONG *a, size_t num,
                            const BN_ULONG *p, size_t num_p,
                            const BN_MONT_CTX *mont) {
+#if 1 // hezhiwen
+  size_t bits;
+  unsigned window;
+  BN_ULONG val[TABLE_SIZE_SMALL][BN_SMALL_MAX_WORDS];
+  int r_is_one = 1;
+  size_t wstart;
+#endif
   if (num != (size_t)mont->N.width || num > BN_SMALL_MAX_WORDS ||
       num_p > ((size_t)-1) / BN_BITS2) {
     abort();
@@ -737,32 +797,56 @@ void bn_mod_exp_mont_small(BN_ULONG *r, const BN_ULONG *a, size_t num,
     bn_from_montgomery_small(r, num, mont->RR.d, num, mont);
     return;
   }
+#if 1 // hezhiwen
+  bits = BN_num_bits_word(p[num_p - 1]) + (num_p - 1) * BN_BITS2;
+#else
   size_t bits = BN_num_bits_word(p[num_p - 1]) + (num_p - 1) * BN_BITS2;
+#endif
   assert(bits != 0);
 
   // We exponentiate by looking at sliding windows of the exponent and
   // precomputing powers of |a|. Windows may be shifted so they always end on a
   // set bit, so only precompute odd powers. We compute val[i] = a^(2*i + 1) for
   // i = 0 to 2^(window-1), all in Montgomery form.
+#if 1 // hezhiwen
+  window = BN_window_bits_for_exponent_size(bits);
+#else
   unsigned window = BN_window_bits_for_exponent_size(bits);
+#endif
   if (window > TABLE_BITS_SMALL) {
     window = TABLE_BITS_SMALL;  // Tolerate excessively large |p|.
   }
+#if 0 // hezhiwen
   BN_ULONG val[TABLE_SIZE_SMALL][BN_SMALL_MAX_WORDS];
+#endif
   OPENSSL_memcpy(val[0], a, num * sizeof(BN_ULONG));
   if (window > 1) {
     BN_ULONG d[BN_SMALL_MAX_WORDS];
+    unsigned i;
     bn_mod_mul_montgomery_small(d, val[0], val[0], num, mont);
+  #if 1 // hezhiwen
+    for (i = 1; i < 1u << (window - 1); i++) {
+  #else
     for (unsigned i = 1; i < 1u << (window - 1); i++) {
+  #endif
       bn_mod_mul_montgomery_small(val[i], val[i - 1], d, num, mont);
     }
   }
 
   // |p| is non-zero, so at least one window is non-zero. To save some
   // multiplications, defer initializing |r| until then.
+#if 1 // hezhiwen
+  wstart = bits - 1;
+#else
   int r_is_one = 1;
   size_t wstart = bits - 1;  // The top bit of the window.
+#endif
   for (;;) {
+  #if 1 // hezhiwen
+    unsigned wvalue = 1;
+    unsigned wsize = 0;
+    unsigned i;
+  #endif
     if (!bn_is_bit_set_words(p, num_p, wstart)) {
       if (!r_is_one) {
         bn_mod_mul_montgomery_small(r, r, r, num, mont);
@@ -775,9 +859,13 @@ void bn_mod_exp_mont_small(BN_ULONG *r, const BN_ULONG *a, size_t num,
     }
 
     // We now have wstart on a set bit. Find the largest window we can use.
+  #if 1 // hezhiwen
+    for (i = 1; i < window && i <= wstart; i++) {
+  #else
     unsigned wvalue = 1;
     unsigned wsize = 0;
     for (unsigned i = 1; i < window && i <= wstart; i++) {
+  #endif
       if (bn_is_bit_set_words(p, num_p, wstart - i)) {
         wvalue <<= (i - wsize);
         wvalue |= 1;
@@ -787,7 +875,12 @@ void bn_mod_exp_mont_small(BN_ULONG *r, const BN_ULONG *a, size_t num,
 
     // Shift |r| to the end of the window.
     if (!r_is_one) {
+    #if 1 // hezhiwen
+      unsigned i;
+      for (i = 0; i < wsize + 1; i++) {
+    #else
       for (unsigned i = 0; i < wsize + 1; i++) {
+    #endif
         bn_mod_mul_montgomery_small(r, r, r, num, mont);
       }
     }
@@ -813,19 +906,34 @@ void bn_mod_exp_mont_small(BN_ULONG *r, const BN_ULONG *a, size_t num,
 
 void bn_mod_inverse0_prime_mont_small(BN_ULONG *r, const BN_ULONG *a,
                                       size_t num, const BN_MONT_CTX *mont) {
+#if 1 // hezhiwen
+  BN_ULONG p_minus_two[BN_SMALL_MAX_WORDS];
+  const BN_ULONG *p;
+#endif
   if (num != (size_t)mont->N.width || num > BN_SMALL_MAX_WORDS) {
     abort();
   }
 
   // Per Fermat's Little Theorem, a^-1 = a^(p-2) (mod p) for p prime.
+#if 1 // hezhiwen
+  p = mont->N.d;
+#else
   BN_ULONG p_minus_two[BN_SMALL_MAX_WORDS];
   const BN_ULONG *p = mont->N.d;
+#endif
   OPENSSL_memcpy(p_minus_two, p, num * sizeof(BN_ULONG));
   if (p_minus_two[0] >= 2) {
     p_minus_two[0] -= 2;
   } else {
+  #if 1 // hezhiwen
+    size_t i;
+  #endif
     p_minus_two[0] -= 2;
+  #if 1 // hezhiwen
+    for (i = 1; i < num; i++) {
+  #else
     for (size_t i = 1; i < num; i++) {
+  #endif
       if (p_minus_two[i]-- != 0) {
         break;
       }
@@ -844,15 +952,27 @@ static void copy_to_prebuf(const BIGNUM *b, int top, BN_ULONG *table, int idx,
 
 static int copy_from_prebuf(BIGNUM *b, int top, const BN_ULONG *table, int idx,
                             int window) {
+#if 1 // hezhiwen
+  int width;
+  int i;
+  int j;
+#endif
   if (!bn_wexpand(b, top)) {
     return 0;
   }
 
   OPENSSL_memset(b->d, 0, sizeof(BN_ULONG) * top);
+#if 1 // hezhiwen
+  width = 1 << window;
+  for (i = 0; i < width; i++, table += top) {
+    BN_ULONG mask = constant_time_eq_int(i, idx);
+    for (j = 0; j < top; j++) {
+#else
   const int width = 1 << window;
   for (int i = 0; i < width; i++, table += top) {
     BN_ULONG mask = constant_time_eq_int(i, idx);
     for (int j = 0; j < top; j++) {
+#endif
       b->d[j] |= table[j] & mask;
     }
   }
@@ -885,6 +1005,15 @@ int BN_mod_exp_mont_consttime(BIGNUM *rr, const BIGNUM *a, const BIGNUM *p,
   size_t powerbuf_len = 0;
   BN_ULONG *powerbuf = NULL;
 
+#if 1 // hezhiwen
+  int max_bits;
+  int bits;
+  int top;
+  int window;
+  int num_powers;
+  BIGNUM tmp, am;
+#endif
+
   if (!BN_is_odd(m)) {
     OPENSSL_PUT_ERROR(BN, BN_R_CALLED_WITH_EVEN_MODULUS);
     return 0;
@@ -900,8 +1029,13 @@ int BN_mod_exp_mont_consttime(BIGNUM *rr, const BIGNUM *a, const BIGNUM *p,
 
   // Use all bits stored in |p|, rather than |BN_num_bits|, so we do not leak
   // whether the top bits are zero.
+#if 1 // hezhiwen
+  max_bits = p->width * BN_BITS2;
+  bits = max_bits;
+#else
   int max_bits = p->width * BN_BITS2;
   int bits = max_bits;
+#endif
   if (bits == 0) {
     // x**0 mod 1 is still zero.
     if (BN_abs_is_word(m, 1)) {
@@ -922,7 +1056,11 @@ int BN_mod_exp_mont_consttime(BIGNUM *rr, const BIGNUM *a, const BIGNUM *p,
 
   // Use the width in |mont->N|, rather than the copy in |m|. The assembly
   // implementation assumes it can use |top| to size R.
+#if 1 // hezhiwen
+  top = mont->N.width;
+#else
   int top = mont->N.width;
+#endif
 
 #if defined(OPENSSL_BN_ASM_MONT5) || defined(RSAZ_ENABLED)
   // Share one large stack-allocated buffer between the RSAZ and non-RSAZ code
@@ -950,7 +1088,11 @@ int BN_mod_exp_mont_consttime(BIGNUM *rr, const BIGNUM *a, const BIGNUM *p,
 #endif
 
   // Get the window size to use with size of p.
+#if 1 // hezhiwen
+  window = BN_window_bits_for_ctime_exponent_size(bits);
+#else
   int window = BN_window_bits_for_ctime_exponent_size(bits);
+#endif
   assert(window <= BN_MAX_MOD_EXP_CTIME_WINDOW);
 
   // Calculating |powerbuf_len| below cannot overflow because of the bound on
@@ -971,7 +1113,11 @@ int BN_mod_exp_mont_consttime(BIGNUM *rr, const BIGNUM *a, const BIGNUM *p,
 
   // Allocate a buffer large enough to hold all of the pre-computed
   // powers of |am|, |am| itself, and |tmp|.
+#if 1 // hezhiwen
+  num_powers = 1 << window;
+#else
   int num_powers = 1 << window;
+#endif
   powerbuf_len += sizeof(m->d[0]) * top * (num_powers + 2);
 
 #if defined(OPENSSL_BN_ASM_MONT5)
@@ -991,7 +1137,9 @@ int BN_mod_exp_mont_consttime(BIGNUM *rr, const BIGNUM *a, const BIGNUM *p,
   OPENSSL_memset(powerbuf, 0, powerbuf_len);
 
   // Place |tmp| and |am| right after powers table.
+#if 0 // hezhiwen
   BIGNUM tmp, am;
+#endif
   tmp.d = powerbuf + top * num_powers;
   am.d = tmp.d + top;
   tmp.width = am.width = 0;
@@ -1034,12 +1182,19 @@ int BN_mod_exp_mont_consttime(BIGNUM *rr, const BIGNUM *a, const BIGNUM *p,
   if (window == 5 && top > 1) {
     // Copy |mont->N| to improve cache locality.
     BN_ULONG *np = am.d + top;
+  #if 1 // hezhiwen
+    const BN_ULONG *n0;
+  #endif
     for (i = 0; i < top; i++) {
       np[i] = mont->N.d[i];
     }
 
     // Fill |powerbuf| with the first 32 powers of |am|.
+  #if 1 // hezhiwen
+    n0 = mont->n0;
+  #else
     const BN_ULONG *n0 = mont->n0;
+  #endif
     bn_scatter5(tmp.d, top, powerbuf, 0);
     bn_scatter5(am.d, am.width, powerbuf, 1);
     bn_mul_mont(tmp.d, am.d, am.d, np, n0, top);
@@ -1052,9 +1207,16 @@ int BN_mod_exp_mont_consttime(BIGNUM *rr, const BIGNUM *a, const BIGNUM *p,
     }
     // Compute odd powers |i| based on |i - 1|, then all powers |i * 2^j|.
     for (i = 3; i < 32; i += 2) {
+    #if 1 // hezhiwen
+      int j;
+    #endif
       bn_mul_mont_gather5(tmp.d, am.d, powerbuf, np, n0, top, i - 1);
       bn_scatter5(tmp.d, top, powerbuf, i);
+    #if 1 // hezhiwen
+      for (j = 2 * i; j < 32; j *= 2) {
+    #else
       for (int j = 2 * i; j < 32; j *= 2) {
+    #endif
         bn_mul_mont(tmp.d, tmp.d, tmp.d, np, n0, top);
         bn_scatter5(tmp.d, top, powerbuf, j);
       }
@@ -1207,9 +1369,15 @@ int BN_mod_exp_mont_word(BIGNUM *rr, BN_ULONG a, const BIGNUM *p,
                          const BIGNUM *m, BN_CTX *ctx,
                          const BN_MONT_CTX *mont) {
   BIGNUM a_bignum;
+#if 0 // hezhiwen
   BN_init(&a_bignum);
+#endif
 
   int ret = 0;
+
+#if 1 // hezhiwen
+  BN_init(&a_bignum);
+#endif
 
   // BN_mod_exp_mont requires reduced inputs.
   if (bn_minimal_width(m) == 1) {
@@ -1235,10 +1403,16 @@ int BN_mod_exp2_mont(BIGNUM *rr, const BIGNUM *a1, const BIGNUM *p1,
                      const BIGNUM *a2, const BIGNUM *p2, const BIGNUM *m,
                      BN_CTX *ctx, const BN_MONT_CTX *mont) {
   BIGNUM tmp;
-  BN_init(&tmp);
-
+#if 1 // hezhiwen
   int ret = 0;
   BN_MONT_CTX *new_mont = NULL;
+#endif
+  BN_init(&tmp);
+
+#if 0 // hezhiwen
+  int ret = 0;
+  BN_MONT_CTX *new_mont = NULL;
+#endif
 
   // Allocate a montgomery context if it was not supplied by the caller.
   if (mont == NULL) {

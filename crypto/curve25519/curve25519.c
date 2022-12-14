@@ -85,7 +85,8 @@ typedef uint64_t fe_limb_t;
 // inputs or outputs.
 #define assert_fe(f)                                                    \
   do {                                                                  \
-    for (unsigned _assert_fe_i = 0; _assert_fe_i < 5; _assert_fe_i++) { \
+    unsigned _assert_fe_i;                                              \
+    for (_assert_fe_i = 0; _assert_fe_i < 5; _assert_fe_i++) {          \
       assert(f[_assert_fe_i] <= UINT64_C(0x8cccccccccccc));             \
     }                                                                   \
   } while (0)
@@ -102,7 +103,8 @@ typedef uint64_t fe_limb_t;
 // inputs or outputs.
 #define assert_fe_loose(f)                                              \
   do {                                                                  \
-    for (unsigned _assert_fe_i = 0; _assert_fe_i < 5; _assert_fe_i++) { \
+    unsigned _assert_fe_i;                                              \
+    for (_assert_fe_i = 0; _assert_fe_i < 5; _assert_fe_i++) { \
       assert(f[_assert_fe_i] <= UINT64_C(0x1a666666666664));            \
     }                                                                   \
   } while (0)
@@ -124,7 +126,8 @@ typedef uint32_t fe_limb_t;
 // inputs or outputs.
 #define assert_fe(f)                                                     \
   do {                                                                   \
-    for (unsigned _assert_fe_i = 0; _assert_fe_i < 10; _assert_fe_i++) { \
+    unsigned _assert_fe_i;                                               \
+    for (_assert_fe_i = 0; _assert_fe_i < 10; _assert_fe_i++) { \
       assert(f[_assert_fe_i] <=                                          \
              ((_assert_fe_i & 1) ? 0x2333333u : 0x4666666u));            \
     }                                                                    \
@@ -142,7 +145,8 @@ typedef uint32_t fe_limb_t;
 // inputs or outputs.
 #define assert_fe_loose(f)                                               \
   do {                                                                   \
-    for (unsigned _assert_fe_i = 0; _assert_fe_i < 10; _assert_fe_i++) { \
+    unsigned _assert_fe_i;                                               \
+    for (_assert_fe_i = 0; _assert_fe_i < 10; _assert_fe_i++) { \
       assert(f[_assert_fe_i] <=                                          \
              ((_assert_fe_i & 1) ? 0x6999999u : 0xd333332u));            \
     }                                                                    \
@@ -266,8 +270,15 @@ static void fe_sq_tt(fe *h, const fe *f) {
 //
 // Preconditions: b in {0,1}.
 static void fe_cswap(fe *f, fe *g, fe_limb_t b) {
+#if 1 // hezhiwen
+  unsigned i;
+#endif
   b = 0-b;
+#if 1 // hezhiwen
+  for (i = 0; i < FE_NUM_LIMBS; i++) {
+#else
   for (unsigned i = 0; i < FE_NUM_LIMBS; i++) {
+#endif
     fe_limb_t x = f->v[i] ^ g->v[i];
     x &= b;
     f->v[i] ^= x;
@@ -298,10 +309,17 @@ static void fe_cmov(fe_loose *f, const fe_loose *g, fe_limb_t b) {
   //
   // TODO(davidben): Switch to fiat's calling convention, or ask fiat to emit a
   // different one.
+#if 1 // hezhiwen
+  unsigned i;
+#endif
   (void)fiat_25519_selectznz;
 
   b = 0-b;
+#if 1 // hezhiwen
+  for (i = 0; i < FE_NUM_LIMBS; i++) {
+#else
   for (unsigned i = 0; i < FE_NUM_LIMBS; i++) {
+#endif
     fe_limb_t x = f->v[i] ^ g->v[i];
     x &= b;
     f->v[i] ^= x;
@@ -390,12 +408,21 @@ static void fe_invert(fe *out, const fe *z) {
 // return 0 if f == 0
 // return 1 if f != 0
 static int fe_isnonzero(const fe_loose *f) {
+#if 1 // hezhiwen
+  fe tight;
+  uint8_t s[32];
+  static const uint8_t zero[32] = {0};
+
+  fe_carry(&tight, f);
+  fe_tobytes(s, &tight);
+#else
   fe tight;
   fe_carry(&tight, f);
   uint8_t s[32];
   fe_tobytes(s, &tight);
 
   static const uint8_t zero[32] = {0};
+#endif
   return CRYPTO_memcmp(s, zero, sizeof(zero)) != 0;
 }
 
@@ -408,11 +435,16 @@ static int fe_isnegative(const fe *f) {
 }
 
 static void fe_sq2_tt(fe *h, const fe *f) {
+#if 1 // hezhiwen
+  fe_loose tmp;
+#endif
   // h = f^2
   fe_sq_tt(h, f);
 
   // h = h + h
+#if 0 // hezhiwen
   fe_loose tmp;
+#endif
   fe_add(&tmp, h, h);
   fe_carry(h, &tmp);
 }
@@ -728,10 +760,17 @@ void x25519_ge_scalarmult_small_precomp(
     // |fe_frombytes_strict| may be used directly.
     const uint8_t *bytes = &precomp_table[i*(2 * 32)];
     fe x, y;
+  #if 1 // hezhiwen
+    ge_precomp *out;
+  #endif
     fe_frombytes_strict(&x, bytes);
     fe_frombytes_strict(&y, bytes + 32);
 
+  #if 1 // hezhiwen
+    out = &multiples[i];
+  #else
     ge_precomp *out = &multiples[i];
+  #endif
     fe_add(&out->yplusx, &y, &x);
     fe_sub(&out->yminusx, &y, &x);
     fe_mul_ltt(&out->xy2d, &x, &y);
@@ -746,21 +785,30 @@ void x25519_ge_scalarmult_small_precomp(
   for (i = 63; i < 64; i--) {
     unsigned j;
     signed char index = 0;
+  #if 1 // hezhiwen
+    ge_precomp e;
+    ge_cached cached;
+    ge_p1p1 r;
+  #endif
 
     for (j = 0; j < 4; j++) {
       const uint8_t bit = 1 & (a[(8 * j) + (i / 8)] >> (i & 7));
       index |= (bit << j);
     }
 
+  #if 0 // hezhiwen
     ge_precomp e;
+  #endif
     ge_precomp_0(&e);
 
     for (j = 1; j < 16; j++) {
       cmov(&e, &multiples[j-1], equal(index, j));
     }
 
+  #if 0 // hezhiwen
     ge_cached cached;
     ge_p1p1 r;
+  #endif
     x25519_ge_p3_to_cached(&cached, h);
     x25519_ge_add(&r, h, &cached);
     x25519_ge_p1p1_to_p3(h, &r);
@@ -788,6 +836,9 @@ static void table_select(ge_precomp *t, int pos, signed char b) {
   ge_precomp minust;
   uint8_t bnegative = negative(b);
   uint8_t babs = b - ((uint8_t)((-bnegative) & b) << 1);
+#if 1 // hezhiwen
+  fe tmp;
+#endif
 
   ge_precomp_0(t);
   cmov(t, &k25519Precomp[pos][0], equal(babs, 1));
@@ -802,7 +853,9 @@ static void table_select(ge_precomp *t, int pos, signed char b) {
   fe_copy_ll(&minust.yminusx, &t->yplusx);
 
   // NOTE: the input table is canonical, but types don't encode it
+#if 0 // hezhiwen
   fe tmp;
+#endif
   fe_carry(&tmp, &t->xy2d);
   fe_neg(&minust.xy2d, &tmp);
 
@@ -878,12 +931,18 @@ void x25519_ge_scalarmult(ge_p2 *r, const uint8_t *scalar, const ge_p3 *A) {
   ge_p2 Ai_p2[8];
   ge_cached Ai[16];
   ge_p1p1 t;
+#if 1 // hezhiwen
+  unsigned i;
+  ge_p3 u;
+#endif
 
   ge_cached_0(&Ai[0]);
   x25519_ge_p3_to_cached(&Ai[1], A);
   ge_p3_to_p2(&Ai_p2[1], A);
 
+#if 0 // hezhiwen
   unsigned i;
+#endif
   for (i = 2; i < 16; i += 2) {
     ge_p2_dbl(&t, &Ai_p2[i / 2]);
     ge_p1p1_to_cached(&Ai[i], &t);
@@ -898,9 +957,16 @@ void x25519_ge_scalarmult(ge_p2 *r, const uint8_t *scalar, const ge_p3 *A) {
   }
 
   ge_p2_0(r);
+#if 0 // hezhiwen
   ge_p3 u;
+#endif
 
   for (i = 0; i < 256; i += 4) {
+  #if 1 // hezhiwen
+    uint8_t index;
+    unsigned j;
+    ge_cached selected;
+  #endif
     ge_p2_dbl(&t, r);
     x25519_ge_p1p1_to_p2(r, &t);
     ge_p2_dbl(&t, r);
@@ -910,12 +976,18 @@ void x25519_ge_scalarmult(ge_p2 *r, const uint8_t *scalar, const ge_p3 *A) {
     ge_p2_dbl(&t, r);
     x25519_ge_p1p1_to_p3(&u, &t);
 
+  #if 1 // hezhiwen
+    index = scalar[31 - i/8];
+  #else
     uint8_t index = scalar[31 - i/8];
+  #endif
     index >>= 4 - (i & 4);
     index &= 0xf;
 
+  #if 0 // hezhiwen
     unsigned j;
     ge_cached selected;
+  #endif
     ge_cached_0(&selected);
     for (j = 0; j < 16; j++) {
       cmov_cached(&selected, &Ai[j], equal(j, index));
@@ -1885,21 +1957,33 @@ int ED25519_sign(uint8_t out_sig[64], const uint8_t *message,
   // implementation in the future.
 
   uint8_t az[SHA512_DIGEST_LENGTH];
+#if 1 // hezhiwen
+  SHA512_CTX hash_ctx;
+  uint8_t nonce[SHA512_DIGEST_LENGTH];
+  ge_p3 R;
+  uint8_t hram[SHA512_DIGEST_LENGTH];
+#endif
   SHA512(private_key, 32, az);
 
   az[0] &= 248;
   az[31] &= 63;
   az[31] |= 64;
 
+#if 0 // hezhiwen
   SHA512_CTX hash_ctx;
+#endif
   SHA512_Init(&hash_ctx);
   SHA512_Update(&hash_ctx, az + 32, 32);
   SHA512_Update(&hash_ctx, message, message_len);
+#if 0 // hezhiwen
   uint8_t nonce[SHA512_DIGEST_LENGTH];
+#endif
   SHA512_Final(nonce, &hash_ctx);
 
   x25519_sc_reduce(nonce);
+#if 0 // hezhiwen
   ge_p3 R;
+#endif
   x25519_ge_scalarmult_base(&R, nonce);
   ge_p3_tobytes(out_sig, &R);
 
@@ -1907,7 +1991,9 @@ int ED25519_sign(uint8_t out_sig[64], const uint8_t *message,
   SHA512_Update(&hash_ctx, out_sig, 32);
   SHA512_Update(&hash_ctx, private_key + 32, 32);
   SHA512_Update(&hash_ctx, message, message_len);
+#if 0 // hezhiwen
   uint8_t hram[SHA512_DIGEST_LENGTH];
+#endif
   SHA512_Final(hram, &hash_ctx);
 
   x25519_sc_reduce(hram);
@@ -1919,28 +2005,56 @@ int ED25519_sign(uint8_t out_sig[64], const uint8_t *message,
 int ED25519_verify(const uint8_t *message, size_t message_len,
                    const uint8_t signature[64], const uint8_t public_key[32]) {
   ge_p3 A;
+#if 1 // hezhiwen
+  fe_loose t;
+  uint8_t pkcopy[32];
+  uint8_t rcopy[32];
+  uint8_t scopy[32];
+  static const uint64_t kOrder[4] = {
+    UINT64_C(0x5812631a5cf5d3ed),
+    UINT64_C(0x14def9dea2f79cd6),
+    0,
+    UINT64_C(0x1000000000000000),
+  };
+  size_t i;
+  SHA512_CTX hash_ctx;
+  uint8_t h[SHA512_DIGEST_LENGTH];
+  ge_p2 R;
+  uint8_t rcheck[32];
+#endif
   if ((signature[63] & 224) != 0 ||
       !x25519_ge_frombytes_vartime(&A, public_key)) {
     return 0;
   }
 
+#if 0 // hezhiwen
   fe_loose t;
+#endif
   fe_neg(&t, &A.X);
   fe_carry(&A.X, &t);
   fe_neg(&t, &A.T);
   fe_carry(&A.T, &t);
 
+#if 0 // hezhiwen
   uint8_t pkcopy[32];
+#endif
   OPENSSL_memcpy(pkcopy, public_key, 32);
+#if 0 // hezhiwen
   uint8_t rcopy[32];
+#endif
   OPENSSL_memcpy(rcopy, signature, 32);
+#if 0 // hezhiwen
   uint8_t scopy[32];
+#endif
   OPENSSL_memcpy(scopy, signature + 32, 32);
 
   // https://tools.ietf.org/html/rfc8032#section-5.1.7 requires that s be in
   // the range [0, order) in order to prevent signature malleability.
 
   // kOrder is the order of Curve25519 in little-endian form.
+#if 1 // hezhiwen
+  for (i = 3;; i--) {
+#else
   static const uint64_t kOrder[4] = {
     UINT64_C(0x5812631a5cf5d3ed),
     UINT64_C(0x14def9dea2f79cd6),
@@ -1948,6 +2062,7 @@ int ED25519_verify(const uint8_t *message, size_t message_len,
     UINT64_C(0x1000000000000000),
   };
   for (size_t i = 3;; i--) {
+#endif
     uint64_t word = CRYPTO_load_u64_le(scopy + i * 8);
     if (word > kOrder[i]) {
       return 0;
@@ -1958,20 +2073,28 @@ int ED25519_verify(const uint8_t *message, size_t message_len,
     }
   }
 
+#if 0 // hezhiwen
   SHA512_CTX hash_ctx;
+#endif
   SHA512_Init(&hash_ctx);
   SHA512_Update(&hash_ctx, signature, 32);
   SHA512_Update(&hash_ctx, public_key, 32);
   SHA512_Update(&hash_ctx, message, message_len);
+#if 0 // hezhiwen
   uint8_t h[SHA512_DIGEST_LENGTH];
+#endif
   SHA512_Final(h, &hash_ctx);
 
   x25519_sc_reduce(h);
 
+#if 0 // hezhiwen
   ge_p2 R;
+#endif
   ge_double_scalarmult_vartime(&R, h, &A, scopy);
 
+#if 0 // hezhiwen
   uint8_t rcheck[32];
+#endif
   x25519_ge_tobytes(rcheck, &R);
 
   return CRYPTO_memcmp(rcheck, rcopy, sizeof(rcheck)) == 0;
@@ -1981,13 +2104,18 @@ void ED25519_keypair_from_seed(uint8_t out_public_key[32],
                                uint8_t out_private_key[64],
                                const uint8_t seed[32]) {
   uint8_t az[SHA512_DIGEST_LENGTH];
+#if 1 // hezhiwen
+  ge_p3 A;
+#endif
   SHA512(seed, 32, az);
 
   az[0] &= 248;
   az[31] &= 127;
   az[31] |= 64;
 
+#if 0 // hezhiwen
   ge_p3 A;
+#endif
   x25519_ge_scalarmult_base(&A, az);
   ge_p3_tobytes(out_public_key, &A);
 
@@ -2001,6 +2129,10 @@ static void x25519_scalar_mult_generic(uint8_t out[32],
                                        const uint8_t point[32]) {
   fe x1, x2, z2, x3, z3, tmp0, tmp1;
   fe_loose x2l, z2l, x3l, tmp0l, tmp1l;
+#if 1 // hezhiwen
+  unsigned swap = 0;
+  int pos;
+#endif
 
   uint8_t e[32];
   OPENSSL_memcpy(e, scalar, 32);
@@ -2031,8 +2163,10 @@ static void x25519_scalar_mult_generic(uint8_t out[32],
   fe_copy(&x3, &x1);
   fe_1(&z3);
 
+#if 0 // hezhiwen
   unsigned swap = 0;
   int pos;
+#endif
   for (pos = 254; pos >= 0; --pos) {
     // loop invariant as of right before the test, for the case where x1 != 0:
     //   pos >= -1; if z2 = 0 then x2 is nonzero; if z3 = 0 then x3 is nonzero
@@ -2123,6 +2257,12 @@ int X25519(uint8_t out_shared_key[32], const uint8_t private_key[32],
 
 void X25519_public_from_private(uint8_t out_public_value[32],
                                 const uint8_t private_key[32]) {
+#if 1 // hezhiwen
+  uint8_t e[32];
+  ge_p3 A;
+  fe_loose zplusy, zminusy;
+  fe zminusy_inv;
+#endif
 #if defined(BORINGSSL_X25519_NEON)
   if (CRYPTO_is_NEON_capable()) {
     static const uint8_t kMongomeryBasePoint[32] = {9};
@@ -2131,19 +2271,25 @@ void X25519_public_from_private(uint8_t out_public_value[32],
   }
 #endif
 
+#if 0 // hezhiwen
   uint8_t e[32];
+#endif
   OPENSSL_memcpy(e, private_key, 32);
   e[0] &= 248;
   e[31] &= 127;
   e[31] |= 64;
 
+#if 0 // hezhiwen
   ge_p3 A;
+#endif
   x25519_ge_scalarmult_base(&A, e);
 
   // We only need the u-coordinate of the curve25519 point. The map is
   // u=(y+1)/(1-y). Since y=Y/Z, this gives u=(Z+Y)/(Z-Y).
+#if 0 // hezhiwen
   fe_loose zplusy, zminusy;
   fe zminusy_inv;
+#endif
   fe_add(&zplusy, &A.Z, &A.Y);
   fe_sub(&zminusy, &A.Z, &A.Y);
   fe_loose_invert(&zminusy_inv, &zminusy);

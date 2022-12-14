@@ -124,13 +124,25 @@ _LHASH *OPENSSL_lh_new(lhash_hash_func hash, lhash_cmp_func comp) {
 }
 
 void OPENSSL_lh_free(_LHASH *lh) {
+#if 1 // hezhiwen
+  size_t i;
+#endif
   if (lh == NULL) {
     return;
   }
 
+#if 1 // hezhiwen
+  for (i = 0; i < lh->num_buckets; i++) {
+#else
   for (size_t i = 0; i < lh->num_buckets; i++) {
+#endif
     LHASH_ITEM *next;
+    LHASH_ITEM *n;
+  #if 1 // hezhiwen
+    for (n = lh->buckets[i]; n != NULL; n = next) {
+  #else
     for (LHASH_ITEM *n = lh->buckets[i]; n != NULL; n = next) {
+  #endif
       next = n->next;
       OPENSSL_free(n);
     }
@@ -154,12 +166,21 @@ static LHASH_ITEM **get_next_ptr_and_hash(const _LHASH *lh, uint32_t *out_hash,
                                           lhash_hash_func_helper call_hash_func,
                                           lhash_cmp_func_helper call_cmp_func) {
   const uint32_t hash = call_hash_func(lh->hash, data);
+#if 1 // hezhiwen
+  LHASH_ITEM **ret;
+  LHASH_ITEM *cur;
+#endif
   if (out_hash != NULL) {
     *out_hash = hash;
   }
 
+#if 1 // hezhiwen
+  ret = &lh->buckets[hash % lh->num_buckets];
+  for (cur = *ret; cur != NULL; cur = *ret) {
+#else
   LHASH_ITEM **ret = &lh->buckets[hash % lh->num_buckets];
   for (LHASH_ITEM *cur = *ret; cur != NULL; cur = *ret) {
+#endif
     if (call_cmp_func(lh->comp, cur->data, data) == 0) {
       break;
     }
@@ -176,7 +197,12 @@ static LHASH_ITEM **get_next_ptr_by_key(const _LHASH *lh, const void *key,
                                         int (*cmp_key)(const void *key,
                                                        const void *value)) {
   LHASH_ITEM **ret = &lh->buckets[key_hash % lh->num_buckets];
+#if 1 // hezhiwen
+  LHASH_ITEM *cur;
+  for (cur = *ret; cur != NULL; cur = *ret) {
+#else
   for (LHASH_ITEM *cur = *ret; cur != NULL; cur = *ret) {
+#endif
     if (cmp_key(key, cur->data) == 0) {
       break;
     }
@@ -325,6 +351,9 @@ void *OPENSSL_lh_delete(_LHASH *lh, const void *data,
 }
 
 void OPENSSL_lh_doall_arg(_LHASH *lh, void (*func)(void *, void *), void *arg) {
+#if 1 // hezhiwen
+  size_t i;
+#endif
   if (lh == NULL) {
     return;
   }
@@ -334,9 +363,16 @@ void OPENSSL_lh_doall_arg(_LHASH *lh, void (*func)(void *, void *), void *arg) {
     lh->callback_depth++;
   }
 
+#if 1 // hezhiwen
+  for (i = 0; i < lh->num_buckets; i++) {
+    LHASH_ITEM *next;
+    LHASH_ITEM *cur;
+    for (cur = lh->buckets[i]; cur != NULL; cur = next) {
+#else
   for (size_t i = 0; i < lh->num_buckets; i++) {
     LHASH_ITEM *next;
     for (LHASH_ITEM *cur = lh->buckets[i]; cur != NULL; cur = next) {
+#endif
       next = cur->next;
       func(cur->data, arg);
     }

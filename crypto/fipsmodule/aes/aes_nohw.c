@@ -345,12 +345,20 @@ static inline uint32_t aes_nohw_word_from_bytes(uint8_t a0, uint8_t a1,
 
 static inline void aes_nohw_compact_block(aes_word_t out[AES_NOHW_BLOCK_WORDS],
                                           const uint8_t in[16]) {
+#if 0 // hezhiwen
   memcpy(out, in, 16);
+#endif
 #if defined(OPENSSL_SSE2)
   // No conversions needed.
+#if 1 // hezhiwen
+  memcpy(out, in, 16);
+#endif
 #elif defined(OPENSSL_64_BIT)
   uint64_t a0 = aes_nohw_compact_word(out[0]);
   uint64_t a1 = aes_nohw_compact_word(out[1]);
+#if 1 // hezhiwen
+  memcpy(out, in, 16);
+#endif
   out[0] = (a0 & UINT64_C(0x00000000ffffffff)) | (a1 << 32);
   out[1] = (a1 & UINT64_C(0xffffffff00000000)) | (a0 >> 32);
 #else
@@ -363,6 +371,9 @@ static inline void aes_nohw_compact_block(aes_word_t out[AES_NOHW_BLOCK_WORDS],
   // without optimizations. This bug was introduced in
   // https://reviews.llvm.org/rL340261 and fixed in
   // https://reviews.llvm.org/rL351310. The following is written to avoid this.
+#if 1 // hezhiwen
+  memcpy(out, in, 16);
+#endif
   out[0] = aes_nohw_word_from_bytes(a0, a1, a2, a3);
   out[1] = aes_nohw_word_from_bytes(a0 >> 8, a1 >> 8, a2 >> 8, a3 >> 8);
   out[2] = aes_nohw_word_from_bytes(a0 >> 16, a1 >> 16, a2 >> 16, a3 >> 16);
@@ -473,10 +484,17 @@ static void aes_nohw_transpose(AES_NOHW_BATCH *batch) {
 // |num_blocks| must be at most |AES_NOHW_BATCH|.
 static void aes_nohw_to_batch(AES_NOHW_BATCH *out, const uint8_t *in,
                               size_t num_blocks) {
+#if 1 // hezhiwen
+  size_t i;
+#endif
   // Don't leave unused blocks uninitialized.
   memset(out, 0, sizeof(AES_NOHW_BATCH));
   assert(num_blocks <= AES_NOHW_BATCH_SIZE);
+#if 1 // hezhiwen
+  for (i = 0; i < num_blocks; i++) {
+#else
   for (size_t i = 0; i < num_blocks; i++) {
+#endif
     aes_word_t block[AES_NOHW_BLOCK_WORDS];
     aes_nohw_compact_block(block, in + 16 * i);
     aes_nohw_batch_set(out, block, i);
@@ -490,10 +508,17 @@ static void aes_nohw_to_batch(AES_NOHW_BATCH *out, const uint8_t *in,
 static void aes_nohw_from_batch(uint8_t *out, size_t num_blocks,
                                 const AES_NOHW_BATCH *batch) {
   AES_NOHW_BATCH copy = *batch;
+#if 1 // hezhiwen
+  size_t i;
+#endif
   aes_nohw_transpose(&copy);
 
   assert(num_blocks <= AES_NOHW_BATCH_SIZE);
+#if 1 // hezhiwen
+  for (i = 0; i < num_blocks; i++) {
+#else
   for (size_t i = 0; i < num_blocks; i++) {
+#endif
     aes_word_t block[AES_NOHW_BLOCK_WORDS];
     aes_nohw_batch_get(&copy, block, i);
     aes_nohw_uncompact_block(out + 16 * i, block);
@@ -505,7 +530,12 @@ static void aes_nohw_from_batch(uint8_t *out, size_t num_blocks,
 
 static void aes_nohw_add_round_key(AES_NOHW_BATCH *batch,
                                    const AES_NOHW_BATCH *key) {
+#if 1 // hezhiwen
+  size_t i;
+  for (i = 0; i < 8; i++) {
+#else
   for (size_t i = 0; i < 8; i++) {
+#endif
     batch->w[i] = aes_nohw_xor(batch->w[i], key->w[i]);
   }
 }
@@ -709,7 +739,12 @@ static void aes_nohw_inv_sub_bytes(AES_NOHW_BATCH *batch) {
                aes_nohw_shift_left((v), 16 - (n)*4)))
 
 static void aes_nohw_shift_rows(AES_NOHW_BATCH *batch) {
+#if 1 // hezhiwen
+  size_t i;
+  for (i = 0; i < 8; i++) {
+#else
   for (size_t i = 0; i < 8; i++) {
+#endif
     aes_word_t row0 = aes_nohw_and(batch->w[i], AES_NOHW_ROW0_MASK);
     aes_word_t row1 = aes_nohw_and(batch->w[i], AES_NOHW_ROW1_MASK);
     aes_word_t row2 = aes_nohw_and(batch->w[i], AES_NOHW_ROW2_MASK);
@@ -722,7 +757,12 @@ static void aes_nohw_shift_rows(AES_NOHW_BATCH *batch) {
 }
 
 static void aes_nohw_inv_shift_rows(AES_NOHW_BATCH *batch) {
+#if 1 // hezhiwen
+  size_t i;
+  for (i = 0; i < 8; i++) {
+#else
   for (size_t i = 0; i < 8; i++) {
+#endif
     aes_word_t row0 = aes_nohw_and(batch->w[i], AES_NOHW_ROW0_MASK);
     aes_word_t row1 = aes_nohw_and(batch->w[i], AES_NOHW_ROW1_MASK);
     aes_word_t row2 = aes_nohw_and(batch->w[i], AES_NOHW_ROW2_MASK);
@@ -870,8 +910,14 @@ static void aes_nohw_inv_mix_columns(AES_NOHW_BATCH *batch) {
 
 static void aes_nohw_encrypt_batch(const AES_NOHW_SCHEDULE *key,
                                    size_t num_rounds, AES_NOHW_BATCH *batch) {
+#if 1 // hezhiwen
+  size_t i;
+  aes_nohw_add_round_key(batch, &key->keys[0]);
+  for (i = 1; i < num_rounds; i++) {
+#else
   aes_nohw_add_round_key(batch, &key->keys[0]);
   for (size_t i = 1; i < num_rounds; i++) {
+#endif
     aes_nohw_sub_bytes(batch);
     aes_nohw_shift_rows(batch);
     aes_nohw_mix_columns(batch);
@@ -884,10 +930,17 @@ static void aes_nohw_encrypt_batch(const AES_NOHW_SCHEDULE *key,
 
 static void aes_nohw_decrypt_batch(const AES_NOHW_SCHEDULE *key,
                                    size_t num_rounds, AES_NOHW_BATCH *batch) {
+#if 1 // hezhiwen
+  size_t i;
+#endif
   aes_nohw_add_round_key(batch, &key->keys[num_rounds]);
   aes_nohw_inv_shift_rows(batch);
   aes_nohw_inv_sub_bytes(batch);
+#if 1 // hezhiwen
+  for (i = num_rounds - 1; i > 0; i--) {
+#else
   for (size_t i = num_rounds - 1; i > 0; i--) {
+#endif
     aes_nohw_add_round_key(batch, &key->keys[i]);
     aes_nohw_inv_mix_columns(batch);
     aes_nohw_inv_shift_rows(batch);
@@ -901,9 +954,17 @@ static void aes_nohw_decrypt_batch(const AES_NOHW_SCHEDULE *key,
 
 static void aes_nohw_expand_round_keys(AES_NOHW_SCHEDULE *out,
                                        const AES_KEY *key) {
+#if 1 // hezhiwen
+  size_t i;
+  size_t j;
+  for (i = 0; i <= key->rounds; i++) {
+    // Copy the round key into each block in the batch.
+    for (j = 0; j < AES_NOHW_BATCH_SIZE; j++) {
+#else
   for (size_t i = 0; i <= key->rounds; i++) {
     // Copy the round key into each block in the batch.
     for (size_t j = 0; j < AES_NOHW_BATCH_SIZE; j++) {
+#endif
       aes_word_t tmp[AES_NOHW_BLOCK_WORDS];
       memcpy(tmp, key->rd_key + 4 * i, 16);
       aes_nohw_batch_set(&out->keys[i], tmp, j);
@@ -938,17 +999,33 @@ static void aes_nohw_sub_block(aes_word_t out[AES_NOHW_BLOCK_WORDS],
 }
 
 static void aes_nohw_setup_key_128(AES_KEY *key, const uint8_t in[16]) {
+#if 1 // hezhiwen
+  aes_word_t block[AES_NOHW_BLOCK_WORDS];
+  size_t i;
+#endif
   key->rounds = 10;
 
+#if 0 // hezhiwen
   aes_word_t block[AES_NOHW_BLOCK_WORDS];
+#endif
   aes_nohw_compact_block(block, in);
   memcpy(key->rd_key, block, 16);
 
+#if 1 // hezhiwen
+  for (i = 1; i <= 10; i++) {
+    aes_word_t sub[AES_NOHW_BLOCK_WORDS];
+    uint8_t rcon = aes_nohw_rcon[i - 1];
+    size_t j;
+    aes_word_t v;
+    aes_nohw_sub_block(sub, block);
+    for (j = 0; j < AES_NOHW_BLOCK_WORDS; j++) {
+#else
   for (size_t i = 1; i <= 10; i++) {
     aes_word_t sub[AES_NOHW_BLOCK_WORDS];
     aes_nohw_sub_block(sub, block);
     uint8_t rcon = aes_nohw_rcon[i - 1];
     for (size_t j = 0; j < AES_NOHW_BLOCK_WORDS; j++) {
+#endif
       // Incorporate |rcon| and the transformed word into the first word.
       block[j] = aes_nohw_xor(block[j], aes_nohw_rcon_slice(rcon, j));
       block[j] = aes_nohw_xor(
@@ -956,7 +1033,11 @@ static void aes_nohw_setup_key_128(AES_KEY *key, const uint8_t in[16]) {
           aes_nohw_shift_right(aes_nohw_rotate_rows_down(sub[j]), 12));
       // Propagate to the remaining words. Note this is reordered from the usual
       // formulation to avoid needing masks.
+    #if 1 // hezhiwen
+      v = block[j];
+    #else
       aes_word_t v = block[j];
+    #endif
       block[j] = aes_nohw_xor(block[j], aes_nohw_shift_left(v, 4));
       block[j] = aes_nohw_xor(block[j], aes_nohw_shift_left(v, 8));
       block[j] = aes_nohw_xor(block[j], aes_nohw_shift_left(v, 12));
@@ -966,10 +1047,19 @@ static void aes_nohw_setup_key_128(AES_KEY *key, const uint8_t in[16]) {
 }
 
 static void aes_nohw_setup_key_192(AES_KEY *key, const uint8_t in[24]) {
-  key->rounds = 12;
-
+#if 1 // hezhiwen
   aes_word_t storage1[AES_NOHW_BLOCK_WORDS], storage2[AES_NOHW_BLOCK_WORDS];
   aes_word_t *block1 = storage1, *block2 = storage2;
+  uint8_t half_block[16] = {0};
+  size_t i;
+  size_t j;
+#endif
+  key->rounds = 12;
+
+#if 0 // hezhiwen
+  aes_word_t storage1[AES_NOHW_BLOCK_WORDS], storage2[AES_NOHW_BLOCK_WORDS];
+  aes_word_t *block1 = storage1, *block2 = storage2;
+#endif
 
   // AES-192's key schedule is complex because each key schedule iteration
   // produces six words, but we compute on blocks and each block is four words.
@@ -982,16 +1072,28 @@ static void aes_nohw_setup_key_192(AES_KEY *key, const uint8_t in[24]) {
   aes_nohw_compact_block(block1, in);
   memcpy(key->rd_key, block1, 16);
 
+#if 0 // hezhiwen
   uint8_t half_block[16] = {0};
+#endif
   memcpy(half_block, in + 16, 8);
   aes_nohw_compact_block(block2, half_block);
 
+#if 1 // hezhiwen
+  for (i = 0; i < 4; i++) {
+    aes_word_t sub[AES_NOHW_BLOCK_WORDS];
+    uint8_t rcon = aes_nohw_rcon[2 * i];
+    aes_word_t *tmp;
+    aes_nohw_sub_block(sub, block2);
+    for (j = 0; j < AES_NOHW_BLOCK_WORDS; j++) {
+      aes_word_t v;
+#else
   for (size_t i = 0; i < 4; i++) {
     aes_word_t sub[AES_NOHW_BLOCK_WORDS];
     aes_nohw_sub_block(sub, block2);
     uint8_t rcon = aes_nohw_rcon[2 * i];
     for (size_t j = 0; j < AES_NOHW_BLOCK_WORDS; j++) {
-      // Compute the first two words of the next key schedule iteration, which
+#endif
+    // Compute the first two words of the next key schedule iteration, which
       // go in the second half of |block2|. The first two words of the previous
       // iteration are in the first half of |block1|. Apply |rcon| here too
       // because the shifts match.
@@ -1019,7 +1121,11 @@ static void aes_nohw_setup_key_192(AES_KEY *key, const uint8_t in[24]) {
       // Incorporate the second word, computed previously in |block2|, and
       // propagate.
       block1[j] = aes_nohw_xor(block1[j], aes_nohw_shift_right(block2[j], 12));
+    #if 1 // hezhiwen
+      v = block1[j];
+    #else
       aes_word_t v = block1[j];
+    #endif
       block1[j] = aes_nohw_xor(block1[j], aes_nohw_shift_left(v, 4));
       block1[j] = aes_nohw_xor(block1[j], aes_nohw_shift_left(v, 8));
       block1[j] = aes_nohw_xor(block1[j], aes_nohw_shift_left(v, 12));
@@ -1032,7 +1138,12 @@ static void aes_nohw_setup_key_192(AES_KEY *key, const uint8_t in[24]) {
 
     aes_nohw_sub_block(sub, block1);
     rcon = aes_nohw_rcon[2 * i + 1];
+  #if 1 // hezhiwen
+    for (j = 0; j < AES_NOHW_BLOCK_WORDS; j++) {
+      aes_word_t v;
+  #else
     for (size_t j = 0; j < AES_NOHW_BLOCK_WORDS; j++) {
+  #endif
       // Compute the first four words of the next key schedule iteration in
       // |block2|. Begin by moving the corresponding words of the previous
       // iteration: the second half of |block2| and the first half of |block1|.
@@ -1045,7 +1156,11 @@ static void aes_nohw_setup_key_192(AES_KEY *key, const uint8_t in[24]) {
           block2[j],
           aes_nohw_shift_right(aes_nohw_rotate_rows_down(sub[j]), 12));
       // Propagate to the remaining words.
+    #if 1 // hezhiwen
+      v = block2[j];
+    #else
       aes_word_t v = block2[j];
+    #endif
       block2[j] = aes_nohw_xor(block2[j], aes_nohw_shift_left(v, 4));
       block2[j] = aes_nohw_xor(block2[j], aes_nohw_shift_left(v, 8));
       block2[j] = aes_nohw_xor(block2[j], aes_nohw_shift_left(v, 12));
@@ -1065,35 +1180,59 @@ static void aes_nohw_setup_key_192(AES_KEY *key, const uint8_t in[24]) {
     memcpy(key->rd_key + 4 * (3 * i + 3), block2, 16);
 
     // Swap blocks to restore the invariant.
+  #if 1 // hezhiwen
+    tmp = block1;
+  #else
     aes_word_t *tmp = block1;
+  #endif
     block1 = block2;
     block2 = tmp;
   }
 }
 
 static void aes_nohw_setup_key_256(AES_KEY *key, const uint8_t in[32]) {
+#if 1 // hezhiwen
+  aes_word_t block1[AES_NOHW_BLOCK_WORDS], block2[AES_NOHW_BLOCK_WORDS];
+  size_t i;
+  size_t j;
+#endif
   key->rounds = 14;
 
   // Each key schedule iteration produces two round keys.
+#if 0 // hezhiwen
   aes_word_t block1[AES_NOHW_BLOCK_WORDS], block2[AES_NOHW_BLOCK_WORDS];
+#endif
   aes_nohw_compact_block(block1, in);
   memcpy(key->rd_key, block1, 16);
 
   aes_nohw_compact_block(block2, in + 16);
   memcpy(key->rd_key + 4, block2, 16);
 
+#if 1 // hezhiwen
+  for (i = 2; i <= 14; i += 2) {
+    aes_word_t sub[AES_NOHW_BLOCK_WORDS];
+    uint8_t rcon = aes_nohw_rcon[i / 2 - 1];
+    aes_nohw_sub_block(sub, block2);
+    for (j = 0; j < AES_NOHW_BLOCK_WORDS; j++) {
+      aes_word_t v;
+#else
   for (size_t i = 2; i <= 14; i += 2) {
     aes_word_t sub[AES_NOHW_BLOCK_WORDS];
     aes_nohw_sub_block(sub, block2);
     uint8_t rcon = aes_nohw_rcon[i / 2 - 1];
     for (size_t j = 0; j < AES_NOHW_BLOCK_WORDS; j++) {
+#endif
       // Incorporate |rcon| and the transformed word into the first word.
       block1[j] = aes_nohw_xor(block1[j], aes_nohw_rcon_slice(rcon, j));
       block1[j] = aes_nohw_xor(
           block1[j],
           aes_nohw_shift_right(aes_nohw_rotate_rows_down(sub[j]), 12));
       // Propagate to the remaining words.
+    #if 1 // hezhiwen
+      v = block1[j];
+    #else
       aes_word_t v = block1[j];
+    #endif
       block1[j] = aes_nohw_xor(block1[j], aes_nohw_shift_left(v, 4));
       block1[j] = aes_nohw_xor(block1[j], aes_nohw_shift_left(v, 8));
       block1[j] = aes_nohw_xor(block1[j], aes_nohw_shift_left(v, 12));
@@ -1105,11 +1244,20 @@ static void aes_nohw_setup_key_256(AES_KEY *key, const uint8_t in[32]) {
     }
 
     aes_nohw_sub_block(sub, block1);
+  #if 1 // hezhiwen
+    for (j = 0; j < AES_NOHW_BLOCK_WORDS; j++) {
+      aes_word_t v;
+  #else
     for (size_t j = 0; j < AES_NOHW_BLOCK_WORDS; j++) {
+  #endif
       // Incorporate the transformed word into the first word.
       block2[j] = aes_nohw_xor(block2[j], aes_nohw_shift_right(sub[j], 12));
       // Propagate to the remaining words.
+    #if 1 // hezhiwen
+      v = block2[j];
+    #else
       aes_word_t v = block2[j];
+    #endif
       block2[j] = aes_nohw_xor(block2[j], aes_nohw_shift_left(v, 4));
       block2[j] = aes_nohw_xor(block2[j], aes_nohw_shift_left(v, 8));
       block2[j] = aes_nohw_xor(block2[j], aes_nohw_shift_left(v, 12));
@@ -1143,18 +1291,30 @@ int aes_nohw_set_decrypt_key(const uint8_t *key, unsigned bits,
 }
 
 void aes_nohw_encrypt(const uint8_t *in, uint8_t *out, const AES_KEY *key) {
+#if 1 // hezhiwen
+  AES_NOHW_SCHEDULE sched;
+  AES_NOHW_BATCH batch;
+  aes_nohw_expand_round_keys(&sched, key);
+#else
   AES_NOHW_SCHEDULE sched;
   aes_nohw_expand_round_keys(&sched, key);
   AES_NOHW_BATCH batch;
+#endif
   aes_nohw_to_batch(&batch, in, /*num_blocks=*/1);
   aes_nohw_encrypt_batch(&sched, key->rounds, &batch);
   aes_nohw_from_batch(out, /*num_blocks=*/1, &batch);
 }
 
 void aes_nohw_decrypt(const uint8_t *in, uint8_t *out, const AES_KEY *key) {
+#if 1 // hezhiwen
+  AES_NOHW_SCHEDULE sched;
+  AES_NOHW_BATCH batch;
+  aes_nohw_expand_round_keys(&sched, key);
+#else
   AES_NOHW_SCHEDULE sched;
   aes_nohw_expand_round_keys(&sched, key);
   AES_NOHW_BATCH batch;
+#endif
   aes_nohw_to_batch(&batch, in, /*num_blocks=*/1);
   aes_nohw_decrypt_batch(&sched, key->rounds, &batch);
   aes_nohw_from_batch(out, /*num_blocks=*/1, &batch);
@@ -1162,7 +1322,12 @@ void aes_nohw_decrypt(const uint8_t *in, uint8_t *out, const AES_KEY *key) {
 
 static inline void aes_nohw_xor_block(uint8_t out[16], const uint8_t a[16],
                                       const uint8_t b[16]) {
+#if 1 // hezhiwen
+  size_t i;
+  for (i = 0; i < 16; i += sizeof(aes_word_t)) {
+#else
   for (size_t i = 0; i < 16; i += sizeof(aes_word_t)) {
+#endif
     aes_word_t x, y;
     memcpy(&x, a + i, sizeof(aes_word_t));
     memcpy(&y, b + i, sizeof(aes_word_t));
@@ -1174,34 +1339,68 @@ static inline void aes_nohw_xor_block(uint8_t out[16], const uint8_t a[16],
 void aes_nohw_ctr32_encrypt_blocks(const uint8_t *in, uint8_t *out,
                                    size_t blocks, const AES_KEY *key,
                                    const uint8_t ivec[16]) {
+#if 1 // hezhiwen
+  AES_NOHW_SCHEDULE sched;
+  size_t i;
+  uint32_t ctr;
+  alignas(AES_NOHW_WORD_SIZE) uint8_t ivs[AES_NOHW_BATCH_SIZE * 16];
+  alignas(AES_NOHW_WORD_SIZE) uint8_t enc_ivs[AES_NOHW_BATCH_SIZE * 16];
+#endif
   if (blocks == 0) {
     return;
   }
 
+#if 0 // hezhiwen
   AES_NOHW_SCHEDULE sched;
+#endif
   aes_nohw_expand_round_keys(&sched, key);
 
+#if 1 // hezhiwen
+  for (i = 0; i < AES_NOHW_BATCH_SIZE; i++) {
+#else
   // Make |AES_NOHW_BATCH_SIZE| copies of |ivec|.
   alignas(AES_NOHW_WORD_SIZE) uint8_t ivs[AES_NOHW_BATCH_SIZE * 16];
   alignas(AES_NOHW_WORD_SIZE) uint8_t enc_ivs[AES_NOHW_BATCH_SIZE * 16];
   for (size_t i = 0; i < AES_NOHW_BATCH_SIZE; i++) {
+#endif
     memcpy(ivs + 16 * i, ivec, 16);
   }
 
+#if 1 // hezhiwen
+  ctr = CRYPTO_load_u32_be(ivs + 12);
+#else
   uint32_t ctr = CRYPTO_load_u32_be(ivs + 12);
+#endif
   for (;;) {
+  #if 1 // hezhiwen
+    size_t i;
+    size_t todo;
+    AES_NOHW_BATCH batch;
+  #endif
     // Update counters.
+  #if 1 // hezhiwen
+    for (i = 0; i < AES_NOHW_BATCH_SIZE; i++) {
+  #else
     for (size_t i = 0; i < AES_NOHW_BATCH_SIZE; i++) {
+  #endif
       CRYPTO_store_u32_be(ivs + 16 * i + 12, ctr + (uint32_t)i);
     }
 
+  #if 1 // hezhiwen
+    todo = blocks >= AES_NOHW_BATCH_SIZE ? AES_NOHW_BATCH_SIZE : blocks;
+  #else
     size_t todo = blocks >= AES_NOHW_BATCH_SIZE ? AES_NOHW_BATCH_SIZE : blocks;
     AES_NOHW_BATCH batch;
+  #endif
     aes_nohw_to_batch(&batch, ivs, todo);
     aes_nohw_encrypt_batch(&sched, key->rounds, &batch);
     aes_nohw_from_batch(enc_ivs, todo, &batch);
 
+  #if 1 // hezhiwen
+    for (i = 0; i < todo; i++) {
+  #else
     for (size_t i = 0; i < todo; i++) {
+  #endif
       aes_nohw_xor_block(out + 16 * i, in + 16 * i, enc_ivs + 16 * i);
     }
 
@@ -1218,23 +1417,39 @@ void aes_nohw_ctr32_encrypt_blocks(const uint8_t *in, uint8_t *out,
 
 void aes_nohw_cbc_encrypt(const uint8_t *in, uint8_t *out, size_t len,
                           const AES_KEY *key, uint8_t *ivec, const int enc) {
+#if 1 // hezhiwen
+  size_t blocks = len / 16;
+  AES_NOHW_SCHEDULE sched;
+  alignas(AES_NOHW_WORD_SIZE) uint8_t iv[16];
+  assert(len % 16 == 0);
+#else
   assert(len % 16 == 0);
   size_t blocks = len / 16;
+#endif
   if (blocks == 0) {
     return;
   }
 
+#if 1 // hezhiwen
+  aes_nohw_expand_round_keys(&sched, key);
+#else
   AES_NOHW_SCHEDULE sched;
   aes_nohw_expand_round_keys(&sched, key);
   alignas(AES_NOHW_WORD_SIZE) uint8_t iv[16];
+#endif
   memcpy(iv, ivec, 16);
 
   if (enc) {
     // CBC encryption is not parallelizable.
     while (blocks > 0) {
+    #if 1 // hezhiwen
+      AES_NOHW_BATCH batch;
+    #endif
       aes_nohw_xor_block(iv, iv, in);
 
+    #if 0 // hezhiwen
       AES_NOHW_BATCH batch;
+    #endif
       aes_nohw_to_batch(&batch, iv, /*num_blocks=*/1);
       aes_nohw_encrypt_batch(&sched, key->rounds, &batch);
       aes_nohw_from_batch(out, /*num_blocks=*/1, &batch);
@@ -1253,15 +1468,25 @@ void aes_nohw_cbc_encrypt(const uint8_t *in, uint8_t *out, size_t len,
     size_t todo = blocks >= AES_NOHW_BATCH_SIZE ? AES_NOHW_BATCH_SIZE : blocks;
     // Make a copy of the input so we can decrypt in-place.
     alignas(AES_NOHW_WORD_SIZE) uint8_t copy[AES_NOHW_BATCH_SIZE * 16];
+  #if 1 // hezhiwen
+    AES_NOHW_BATCH batch;
+    size_t i;
+  #endif
     memcpy(copy, in, todo * 16);
 
+  #if 0 // hezhiwen
     AES_NOHW_BATCH batch;
+  #endif
     aes_nohw_to_batch(&batch, in, todo);
     aes_nohw_decrypt_batch(&sched, key->rounds, &batch);
     aes_nohw_from_batch(out, todo, &batch);
 
     aes_nohw_xor_block(out, out, iv);
+  #if 1 // hezhiwen
+    for (i = 1; i < todo; i++) {
+  #else
     for (size_t i = 1; i < todo; i++) {
+  #endif
       aes_nohw_xor_block(out + 16 * i, out + 16 * i, copy + 16 * (i - 1));
     }
 

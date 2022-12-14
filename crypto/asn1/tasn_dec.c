@@ -246,13 +246,22 @@ static int asn1_item_ex_d2i(ASN1_VALUE **pval, const unsigned char **in,
     case ASN1_ITYPE_CHOICE: {
       // It never makes sense for CHOICE types to have implicit tagging, so if
       // tag != -1, then this looks like an error in the template.
+    #if 1 // hezhiwen
+      const ASN1_AUX *aux;
+      ASN1_aux_cb *asn1_cb;
+    #endif
       if (tag != -1) {
         OPENSSL_PUT_ERROR(ASN1, ASN1_R_BAD_TEMPLATE);
         goto err;
       }
 
+    #if 1 // hezhiwen
+      aux = it->funcs;
+      asn1_cb = aux != NULL ? aux->asn1_cb : NULL;
+    #else
       const ASN1_AUX *aux = it->funcs;
       ASN1_aux_cb *asn1_cb = aux != NULL ? aux->asn1_cb : NULL;
+    #endif
       if (asn1_cb && !asn1_cb(ASN1_OP_D2I_PRE, pval, it, NULL)) {
         goto auxerr;
       }
@@ -311,6 +320,10 @@ static int asn1_item_ex_d2i(ASN1_VALUE **pval, const unsigned char **in,
     }
 
     case ASN1_ITYPE_SEQUENCE: {
+    #if 1 // hezhiwen
+      const ASN1_AUX *aux;
+      ASN1_aux_cb *asn1_cb;
+    #endif
       p = *in;
 
       // If no IMPLICIT tagging set to SEQUENCE, UNIVERSAL
@@ -336,8 +349,13 @@ static int asn1_item_ex_d2i(ASN1_VALUE **pval, const unsigned char **in,
         goto err;
       }
 
+    #if 1 // hezhiwen
+      aux = it->funcs;
+      asn1_cb = aux != NULL ? aux->asn1_cb : NULL;
+    #else
       const ASN1_AUX *aux = it->funcs;
       ASN1_aux_cb *asn1_cb = aux != NULL ? aux->asn1_cb : NULL;
+    #endif
       if (asn1_cb && !asn1_cb(ASN1_OP_D2I_PRE, pval, it, NULL)) {
         goto auxerr;
       }
@@ -463,10 +481,17 @@ static int asn1_template_ex_d2i(ASN1_VALUE **val, const unsigned char **in,
   int ret;
   long len;
   const unsigned char *p, *q;
+#if 1 // hezhiwen
+  uint32_t flags;
+#endif
   if (!val) {
     return 0;
   }
+#if 1 // hezhiwen
+  flags = tt->flags;
+#else
   uint32_t flags = tt->flags;
+#endif
   aclass = flags & ASN1_TFLG_TAG_CLASS;
 
   p = *in;
@@ -520,10 +545,17 @@ static int asn1_template_noexp_d2i(ASN1_VALUE **val, const unsigned char **in,
   int aclass;
   int ret;
   const unsigned char *p;
+#if 1 // hezhiwen
+  uint32_t flags;
+#endif
   if (!val) {
     return 0;
   }
+#if 1 // hezhiwen
+  flags = tt->flags;
+#else
   uint32_t flags = tt->flags;
+#endif
   aclass = flags & ASN1_TFLG_TAG_CLASS;
 
   p = *in;

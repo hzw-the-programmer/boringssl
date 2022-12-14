@@ -122,6 +122,13 @@
 
 
 int BN_rand(BIGNUM *rnd, int bits, int top, int bottom) {
+#if 1 // hezhiwen
+  int words;
+  int bit;
+  BN_ULONG kOne;
+  BN_ULONG kThree;
+  BN_ULONG mask;
+#endif
   if (rnd == NULL) {
     return 0;
   }
@@ -147,11 +154,19 @@ int BN_rand(BIGNUM *rnd, int bits, int top, int bottom) {
     return 0;
   }
 
+#if 1 // hezhiwen
+  words = (bits + BN_BITS2 - 1) / BN_BITS2;
+  bit = (bits - 1) % BN_BITS2;
+  kOne = 1;
+  kThree = 3;
+  mask = bit < BN_BITS2 - 1 ? (kOne << (bit + 1)) - 1 : BN_MASK2;
+#else
   int words = (bits + BN_BITS2 - 1) / BN_BITS2;
   int bit = (bits - 1) % BN_BITS2;
   const BN_ULONG kOne = 1;
   const BN_ULONG kThree = 3;
   BN_ULONG mask = bit < BN_BITS2 - 1 ? (kOne << (bit + 1)) - 1 : BN_MASK2;
+#endif
   if (!bn_wexpand(rnd, words)) {
     return 0;
   }
@@ -191,6 +206,10 @@ int BN_pseudo_rand(BIGNUM *rnd, int bits, int top, int bottom) {
 // computation in time independent of the value of |a|. |b| is assumed public.
 static crypto_word_t bn_less_than_word_mask(const BN_ULONG *a, size_t len,
                                             BN_ULONG b) {
+#if 1 // hezhiwen
+  crypto_word_t mask = 0;
+  size_t i;
+#endif
   if (b == 0) {
     return CONSTTIME_FALSE_W;
   }
@@ -201,8 +220,12 @@ static crypto_word_t bn_less_than_word_mask(const BN_ULONG *a, size_t len,
   // |a| < |b| iff a[1..len-1] are all zero and a[0] < b.
   static_assert(sizeof(BN_ULONG) <= sizeof(crypto_word_t),
                 "crypto_word_t is too small");
+#if 1 // hezhiwen
+  for (i = 1; i < len; i++) {
+#else
   crypto_word_t mask = 0;
   for (size_t i = 1; i < len; i++) {
+#endif
     mask |= a[i];
   }
   // |mask| is now zero iff a[1..len-1] are all zero.
@@ -222,6 +245,9 @@ static int bn_range_to_mask(size_t *out_words, BN_ULONG *out_mask,
                             size_t len) {
   // The magnitude of |max_exclusive| is assumed public.
   size_t words = len;
+#if 1 // hezhiwen
+  BN_ULONG mask;
+#endif
   while (words > 0 && max_exclusive[words - 1] == 0) {
     words--;
   }
@@ -230,7 +256,11 @@ static int bn_range_to_mask(size_t *out_words, BN_ULONG *out_mask,
     OPENSSL_PUT_ERROR(BN, BN_R_INVALID_RANGE);
     return 0;
   }
+#if 1 // hezhiwen
+  mask = max_exclusive[words - 1];
+#else
   BN_ULONG mask = max_exclusive[words - 1];
+#endif
   // This sets all bits in |mask| below the most significant bit.
   mask |= mask >> 1;
   mask |= mask >> 2;
@@ -258,6 +288,9 @@ int bn_rand_range_words(BN_ULONG *out, BN_ULONG min_inclusive,
   // word.
   size_t words;
   BN_ULONG mask;
+#if 1 // hezhiwen
+  unsigned count = 100;
+#endif
   if (!bn_range_to_mask(&words, &mask, min_inclusive, max_exclusive, len)) {
     return 0;
   }
@@ -265,7 +298,9 @@ int bn_rand_range_words(BN_ULONG *out, BN_ULONG min_inclusive,
   // Fill any unused words with zero.
   OPENSSL_memset(out + words, 0, (len - words) * sizeof(BN_ULONG));
 
+#if 0 // hezhiwen
   unsigned count = 100;
+#endif
   do {
     if (!--count) {
       OPENSSL_PUT_ERROR(BN, BN_R_TOO_MANY_ITERATIONS);
@@ -302,6 +337,9 @@ int BN_rand_range_ex(BIGNUM *r, BN_ULONG min_inclusive,
 
 int bn_rand_secret_range(BIGNUM *r, int *out_is_uniform, BN_ULONG min_inclusive,
                          const BIGNUM *max_exclusive) {
+#if 1 // hezhiwen
+  crypto_word_t in_range;
+#endif
   size_t words;
   BN_ULONG mask;
   if (!bn_range_to_mask(&words, &mask, min_inclusive, max_exclusive->d,
@@ -327,7 +365,11 @@ int bn_rand_secret_range(BIGNUM *r, int *out_is_uniform, BN_ULONG min_inclusive,
   // Check, in constant-time, if the value is in range.
   *out_is_uniform =
       bn_in_range_words(r->d, min_inclusive, max_exclusive->d, words);
+#if 1 // hezhiwen
+  in_range = *out_is_uniform;
+#else
   crypto_word_t in_range = *out_is_uniform;
+#endif
   in_range = 0 - in_range;
 
   // If the value is not in range, force it to be in range.

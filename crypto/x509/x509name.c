@@ -81,11 +81,17 @@ int X509_NAME_get_text_by_NID(const X509_NAME *name, int nid, char *buf,
 int X509_NAME_get_text_by_OBJ(const X509_NAME *name, const ASN1_OBJECT *obj,
                               char *buf, int len) {
   int i = X509_NAME_get_index_by_OBJ(name, obj, -1);
+#if 1 // hezhiwen
+  const ASN1_STRING *data =
+      X509_NAME_ENTRY_get_data(X509_NAME_get_entry(name, i));
+#endif
   if (i < 0) {
     return -1;
   }
+#if 0 // hezhiwen
   const ASN1_STRING *data =
       X509_NAME_ENTRY_get_data(X509_NAME_get_entry(name, i));
+#endif
   i = (data->length > (len - 1)) ? (len - 1) : data->length;
   if (buf == NULL) {
     return data->length;
@@ -146,31 +152,55 @@ X509_NAME_ENTRY *X509_NAME_get_entry(const X509_NAME *name, int loc) {
 }
 
 X509_NAME_ENTRY *X509_NAME_delete_entry(X509_NAME *name, int loc) {
+#if 1 // hezhiwen
+  STACK_OF(X509_NAME_ENTRY) *sk;
+  X509_NAME_ENTRY *ret;
+  int n;
+  int set_prev;
+  int set_next;
+#endif
   if (name == NULL || loc < 0 ||
       sk_X509_NAME_ENTRY_num(name->entries) <= (size_t)loc) {
     return NULL;
   }
 
+#if 1 // hezhiwen
+  sk = name->entries;
+  ret = sk_X509_NAME_ENTRY_delete(sk, loc);
+  n = sk_X509_NAME_ENTRY_num(sk);
+#else
   STACK_OF(X509_NAME_ENTRY) *sk = name->entries;
   X509_NAME_ENTRY *ret = sk_X509_NAME_ENTRY_delete(sk, loc);
   int n = sk_X509_NAME_ENTRY_num(sk);
+#endif
   name->modified = 1;
   if (loc == n) {
     return ret;
   }
 
+#if 0 // hezhiwen
   int set_prev;
+#endif
   if (loc != 0) {
     set_prev = sk_X509_NAME_ENTRY_value(sk, loc - 1)->set;
   } else {
     set_prev = ret->set - 1;
   }
+#if 1 // hezhiwen
+  set_next = sk_X509_NAME_ENTRY_value(sk, loc)->set;
+#else
   int set_next = sk_X509_NAME_ENTRY_value(sk, loc)->set;
+#endif
 
   // If we removed a singleton RDN, update the RDN indices so they are
   // consecutive again.
   if (set_prev + 1 < set_next) {
+  #if 1 // hezhiwen
+    int i;
+    for (i = loc; i < n; i++) {
+  #else
     for (int i = loc; i < n; i++) {
+  #endif
       sk_X509_NAME_ENTRY_value(sk, i)->set--;
     }
   }
@@ -182,10 +212,17 @@ int X509_NAME_add_entry_by_OBJ(X509_NAME *name, const ASN1_OBJECT *obj,
                                int loc, int set) {
   X509_NAME_ENTRY *ne =
       X509_NAME_ENTRY_create_by_OBJ(NULL, obj, type, bytes, len);
+#if 1 // hezhiwen
+  int ret;
+#endif
   if (!ne) {
     return 0;
   }
+#if 1 // hezhiwen
+  ret = X509_NAME_add_entry(name, ne, loc, set);
+#else
   int ret = X509_NAME_add_entry(name, ne, loc, set);
+#endif
   X509_NAME_ENTRY_free(ne);
   return ret;
 }
@@ -195,10 +232,17 @@ int X509_NAME_add_entry_by_NID(X509_NAME *name, int nid, int type,
                                int set) {
   X509_NAME_ENTRY *ne =
       X509_NAME_ENTRY_create_by_NID(NULL, nid, type, bytes, len);
+#if 1 // hezhiwen
+  int ret;
+#endif
   if (!ne) {
     return 0;
   }
+#if 1 // hezhiwen
+  ret = X509_NAME_add_entry(name, ne, loc, set);
+#else
   int ret = X509_NAME_add_entry(name, ne, loc, set);
+#endif
   X509_NAME_ENTRY_free(ne);
   return ret;
 }
@@ -208,10 +252,17 @@ int X509_NAME_add_entry_by_txt(X509_NAME *name, const char *field, int type,
                                int set) {
   X509_NAME_ENTRY *ne =
       X509_NAME_ENTRY_create_by_txt(NULL, field, type, bytes, len);
+#if 1 // hezhiwen
+  int ret;
+#endif
   if (!ne) {
     return 0;
   }
+#if 1 // hezhiwen
+  ret = X509_NAME_add_entry(name, ne, loc, set);
+#else
   int ret = X509_NAME_add_entry(name, ne, loc, set);
+#endif
   X509_NAME_ENTRY_free(ne);
   return ret;
 }

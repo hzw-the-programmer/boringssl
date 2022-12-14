@@ -80,12 +80,22 @@ char *BN_bn2hex(const BIGNUM *bn) {
   int width = bn_minimal_width(bn);
   char *buf = OPENSSL_malloc(1 /* leading '-' */ + 1 /* zero is non-empty */ +
                              width * BN_BYTES * 2 + 1 /* trailing NUL */);
+#if 1 // hezhiwen
+  char *p;
+  int z = 0;
+  int i;
+  int j;
+#endif
   if (buf == NULL) {
     OPENSSL_PUT_ERROR(BN, ERR_R_MALLOC_FAILURE);
     return NULL;
   }
 
+#if 1 // hezhiwen
+  p = buf;
+#else
   char *p = buf;
+#endif
   if (bn->neg) {
     *(p++) = '-';
   }
@@ -94,9 +104,14 @@ char *BN_bn2hex(const BIGNUM *bn) {
     *(p++) = '0';
   }
 
+#if 1 // hezhiwen
+  for (i = width - 1; i >= 0; i--) {
+    for (j = BN_BITS2 - 8; j >= 0; j -= 8) {
+#else
   int z = 0;
   for (int i = width - 1; i >= 0; i--) {
     for (int j = BN_BITS2 - 8; j >= 0; j -= 8) {
+#endif
       // strip leading zeros
       int v = ((int)(bn->d[i] >> (long)j)) & 0xff;
       if (z || v != 0) {
@@ -113,6 +128,9 @@ char *BN_bn2hex(const BIGNUM *bn) {
 
 // decode_hex decodes |in_len| bytes of hex data from |in| and updates |bn|.
 static int decode_hex(BIGNUM *bn, const char *in, int in_len) {
+#if 1 // hezhiwen
+  int i = 0;
+#endif
   if (in_len > INT_MAX/4) {
     OPENSSL_PUT_ERROR(BN, BN_R_BIGNUM_TOO_LONG);
     return 0;
@@ -122,16 +140,24 @@ static int decode_hex(BIGNUM *bn, const char *in, int in_len) {
     return 0;
   }
 
+#if 0 // hezhiwen
   int i = 0;
+#endif
   while (in_len > 0) {
     // Decode one |BN_ULONG| at a time.
     int todo = BN_BYTES * 2;
+  #if 1 // hezhiwen
+    BN_ULONG word = 0;
+    int j;
+  #endif
     if (todo > in_len) {
       todo = in_len;
     }
 
+  #if 0 // hezhiwen
     BN_ULONG word = 0;
     int j;
+  #endif
     for (j = todo; j > 0; j--) {
       char c = in[in_len - j];
 
@@ -248,6 +274,11 @@ char *BN_bn2dec(const BIGNUM *a) {
   // and fix at the end.
   BIGNUM *copy = NULL;
   CBB cbb;
+#if 1 // hezhiwen
+  uint8_t *data;
+  size_t len;
+  size_t i;
+#endif
   if (!CBB_init(&cbb, 16) ||
       !CBB_add_u8(&cbb, 0 /* trailing NUL */)) {
     goto cbb_err;
@@ -265,12 +296,21 @@ char *BN_bn2dec(const BIGNUM *a) {
 
     while (!BN_is_zero(copy)) {
       BN_ULONG word = BN_div_word(copy, BN_DEC_CONV);
+    #if 1 // hezhiwen
+      int add_leading_zeros;
+      int i;
+    #endif
       if (word == (BN_ULONG)-1) {
         goto err;
       }
 
+    #if 1 // hezhiwen
+      add_leading_zeros = !BN_is_zero(copy);
+      for (i = 0; i < BN_DEC_NUM && (add_leading_zeros || word != 0); i++) {
+    #else
       const int add_leading_zeros = !BN_is_zero(copy);
       for (int i = 0; i < BN_DEC_NUM && (add_leading_zeros || word != 0); i++) {
+    #endif
         if (!CBB_add_u8(&cbb, '0' + word % 10)) {
           goto cbb_err;
         }
@@ -285,14 +325,20 @@ char *BN_bn2dec(const BIGNUM *a) {
     goto cbb_err;
   }
 
+#if 0 // hezhiwen
   uint8_t *data;
   size_t len;
+#endif
   if (!CBB_finish(&cbb, &data, &len)) {
     goto cbb_err;
   }
 
   // Reverse the buffer.
+#if 1 // hezhiwen
+  for (i = 0; i < len/2; i++) {
+#else
   for (size_t i = 0; i < len/2; i++) {
+#endif
     uint8_t tmp = data[i];
     data[i] = data[len - 1 - i];
     data[len - 1 - i] = tmp;
@@ -368,11 +414,18 @@ end:
 
 int BN_print_fp(FILE *fp, const BIGNUM *a) {
   BIO *b = BIO_new_fp(fp, BIO_NOCLOSE);
+#if 1 // hezhiwen
+  int ret;
+#endif
   if (b == NULL) {
     return 0;
   }
 
+#if 1 // hezhiwen
+  ret = BN_print(b, a);
+#else
   int ret = BN_print(b, a);
+#endif
   BIO_free(b);
   return ret;
 }
@@ -381,14 +434,24 @@ int BN_print_fp(FILE *fp, const BIGNUM *a) {
 size_t BN_bn2mpi(const BIGNUM *in, uint8_t *out) {
   const size_t bits = BN_num_bits(in);
   const size_t bytes = (bits + 7) / 8;
+#if 1 // hezhiwen
+  int extend = 0;
+  size_t len;
+#endif
   // If the number of bits is a multiple of 8, i.e. if the MSB is set,
   // prefix with a zero byte.
+#if 0 // hezhiwen
   int extend = 0;
+#endif
   if (bytes != 0 && (bits & 0x07) == 0) {
     extend = 1;
   }
 
+#if 1 // hezhiwen
+  len = bytes + extend;
+#else
   const size_t len = bytes + extend;
+#endif
   if (len < bytes ||
       4 + len < len ||
       (len & 0xffffffff) != len) {
@@ -419,20 +482,33 @@ size_t BN_bn2mpi(const BIGNUM *in, uint8_t *out) {
 }
 
 BIGNUM *BN_mpi2bn(const uint8_t *in, size_t len, BIGNUM *out) {
+#if 1 // hezhiwen
+  size_t in_len;
+  int out_is_alloced = 0;
+#endif
   if (len < 4) {
     OPENSSL_PUT_ERROR(BN, BN_R_BAD_ENCODING);
     return NULL;
   }
+#if 1 // hezhiwen
+  in_len = ((size_t)in[0] << 24) |
+           ((size_t)in[1] << 16) |
+           ((size_t)in[2] << 8) |
+           ((size_t)in[3]);
+#else
   const size_t in_len = ((size_t)in[0] << 24) |
                         ((size_t)in[1] << 16) |
                         ((size_t)in[2] << 8) |
                         ((size_t)in[3]);
+#endif
   if (in_len != len - 4) {
     OPENSSL_PUT_ERROR(BN, BN_R_BAD_ENCODING);
     return NULL;
   }
 
+#if 0 // hezhiwen
   int out_is_alloced = 0;
+#endif
   if (out == NULL) {
     out = BN_new();
     if (out == NULL) {

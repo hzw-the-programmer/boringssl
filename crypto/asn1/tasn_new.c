@@ -273,6 +273,9 @@ static void asn1_template_clear(ASN1_VALUE **pval, const ASN1_TEMPLATE *tt) {
 // all the old functions.
 
 static int ASN1_primitive_new(ASN1_VALUE **pval, const ASN1_ITEM *it) {
+#if 1 // hezhiwen
+  int utype;
+#endif
   if (!it) {
     return 0;
   }
@@ -281,7 +284,9 @@ static int ASN1_primitive_new(ASN1_VALUE **pval, const ASN1_ITEM *it) {
   // |ASN1_PRIMITIVE_FUNCS| table of calbacks.
   assert(it->funcs == NULL);
 
+#if 0 // hezhiwen
   int utype;
+#endif
   if (it->itype == ASN1_ITYPE_MSTRING) {
     utype = -1;
   } else {

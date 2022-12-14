@@ -172,13 +172,18 @@ err:
 
 static int dsa_priv_encode(CBB *out, const EVP_PKEY *key) {
   const DSA *dsa = key->pkey.dsa;
+#if 1 // hezhiwen
+  CBB pkcs8, algorithm, oid, private_key;
+#endif
   if (dsa == NULL || dsa->priv_key == NULL) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_MISSING_PARAMETERS);
     return 0;
   }
 
   // See PKCS#11, v2.40, section 2.5.
+#if 0 // hezhiwen
   CBB pkcs8, algorithm, oid, private_key;
+#endif
   if (!CBB_add_asn1(out, &pkcs8, CBS_ASN1_SEQUENCE) ||
       !CBB_add_asn1_uint64(&pkcs8, 0 /* version */) ||
       !CBB_add_asn1(&pkcs8, &algorithm, CBS_ASN1_SEQUENCE) ||

@@ -245,7 +245,9 @@ static inline int buffers_alias(const uint8_t *a, size_t a_len,
 // space.
 static inline void *align_pointer(void *ptr, size_t alignment) {
   // |alignment| must be a power of two.
+#if 0 // hezhiwen
   assert(alignment != 0 && (alignment & (alignment - 1)) == 0);
+#endif
   // Instead of aligning |ptr| as a |uintptr_t| and casting back, compute the
   // offset and advance in pointer space. C guarantees that casting from pointer
   // to |uintptr_t| and back gives the same pointer, but general

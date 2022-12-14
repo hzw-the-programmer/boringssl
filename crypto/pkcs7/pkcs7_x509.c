@@ -34,12 +34,19 @@ int PKCS7_get_certificates(STACK_OF(X509) *out_certs, CBS *cbs) {
   int ret = 0;
   const size_t initial_certs_len = sk_X509_num(out_certs);
   STACK_OF(CRYPTO_BUFFER) *raw = sk_CRYPTO_BUFFER_new_null();
+#if 1 // hezhiwen
+  size_t i;
+#endif
   if (raw == NULL ||
       !PKCS7_get_raw_certificates(raw, cbs, NULL)) {
     goto err;
   }
 
+#if 1 // hezhiwen
+  for (i = 0; i < sk_CRYPTO_BUFFER_num(raw); i++) {
+#else
   for (size_t i = 0; i < sk_CRYPTO_BUFFER_num(raw); i++) {
+#endif
     CRYPTO_BUFFER *buf = sk_CRYPTO_BUFFER_value(raw, i);
     X509 *x509 = X509_parse_from_buffer(buf);
     if (x509 == NULL ||
@@ -130,6 +137,9 @@ int PKCS7_get_PEM_certificates(STACK_OF(X509) *out_certs, BIO *pem_bio) {
   uint8_t *data;
   long len;
   int ret;
+#if 1 // hezhiwen
+  CBS cbs;
+#endif
 
   // Even though we pass PEM_STRING_PKCS7 as the expected PEM type here, PEM
   // internally will actually allow several other values too, including
@@ -141,7 +151,9 @@ int PKCS7_get_PEM_certificates(STACK_OF(X509) *out_certs, BIO *pem_bio) {
     return 0;
   }
 
+#if 0 // hezhiwen
   CBS cbs;
+#endif
   CBS_init(&cbs, data, len);
   ret = PKCS7_get_certificates(out_certs, &cbs);
   OPENSSL_free(data);
@@ -152,6 +164,9 @@ int PKCS7_get_PEM_CRLs(STACK_OF(X509_CRL) *out_crls, BIO *pem_bio) {
   uint8_t *data;
   long len;
   int ret;
+#if 1 // hezhiwen
+  CBS cbs;
+#endif
 
   // Even though we pass PEM_STRING_PKCS7 as the expected PEM type here, PEM
   // internally will actually allow several other values too, including
@@ -163,7 +178,9 @@ int PKCS7_get_PEM_CRLs(STACK_OF(X509_CRL) *out_crls, BIO *pem_bio) {
     return 0;
   }
 
+#if 0 // hezhiwen
   CBS cbs;
+#endif
   CBS_init(&cbs, data, len);
   ret = PKCS7_get_CRLs(out_crls, &cbs);
   OPENSSL_free(data);
@@ -238,6 +255,9 @@ int PKCS7_bundle_CRLs(CBB *out, const STACK_OF(X509_CRL) *crls) {
 
 static PKCS7 *pkcs7_new(CBS *cbs) {
   PKCS7 *ret = OPENSSL_malloc(sizeof(PKCS7));
+#if 1 // hezhiwen
+  CBS copy, copy2;
+#endif
   if (ret == NULL) {
     return NULL;
   }
@@ -249,7 +269,12 @@ static PKCS7 *pkcs7_new(CBS *cbs) {
   }
   ret->d.sign->cert = sk_X509_new_null();
   ret->d.sign->crl = sk_X509_CRL_new_null();
+#if 1 // hezhiwen
+  copy = *cbs;
+  copy2 = *cbs;
+#else
   CBS copy = *cbs, copy2 = *cbs;
+#endif
   if (ret->d.sign->cert == NULL || ret->d.sign->crl == NULL ||
       !PKCS7_get_certificates(ret->d.sign->cert, &copy) ||
       !PKCS7_get_CRLs(ret->d.sign->crl, cbs)) {
@@ -282,8 +307,13 @@ err:
 PKCS7 *d2i_PKCS7(PKCS7 **out, const uint8_t **inp,
                  size_t len) {
   CBS cbs;
+#if 1 // hezhiwen
+  PKCS7 *ret = pkcs7_new(&cbs);
+  CBS_init(&cbs, *inp, len);
+#else
   CBS_init(&cbs, *inp, len);
   PKCS7 *ret = pkcs7_new(&cbs);
+#endif
   if (ret == NULL) {
     return NULL;
   }
@@ -300,13 +330,22 @@ PKCS7 *d2i_PKCS7_bio(BIO *bio, PKCS7 **out) {
   static const size_t kMaxSize = 4 * 1024 * 1024;
   uint8_t *data;
   size_t len;
+#if 1 // hezhiwen
+  CBS cbs;
+  PKCS7 *ret;
+#endif
   if (!BIO_read_asn1(bio, &data, &len, kMaxSize)) {
     return NULL;
   }
 
+#if 1 // hezhiwen
+  CBS_init(&cbs, data, len);
+  ret = pkcs7_new(&cbs);
+#else
   CBS cbs;
   CBS_init(&cbs, data, len);
   PKCS7 *ret = pkcs7_new(&cbs);
+#endif
   OPENSSL_free(data);
   if (out != NULL && ret != NULL) {
     PKCS7_free(*out);
@@ -386,14 +425,22 @@ static int sign_sha256(uint8_t *out_sig, size_t *out_sig_len,
                        size_t max_out_sig, EVP_PKEY *pkey, BIO *data) {
   static const size_t kBufSize = 4096;
   uint8_t *buffer = OPENSSL_malloc(kBufSize);
+#if 1 // hezhiwen
+  EVP_MD_CTX ctx;
+  int ret = 0;
+#endif
   if (!buffer) {
     return 0;
   }
 
+#if 0 // hezhiwen
   EVP_MD_CTX ctx;
+#endif
   EVP_MD_CTX_init(&ctx);
 
+#if 0 // hezhiwen
   int ret = 0;
+#endif
   if (!EVP_DigestSignInit(&ctx, NULL, EVP_sha256(), NULL, pkey)) {
     goto out;
   }
@@ -472,13 +519,21 @@ out:
 PKCS7 *PKCS7_sign(X509 *sign_cert, EVP_PKEY *pkey, STACK_OF(X509) *certs,
                   BIO *data, int flags) {
   CBB cbb;
+#if 1 // hezhiwen
+  uint8_t *der = NULL;
+  size_t len;
+  PKCS7 *ret = NULL;
+  CBS cbs;
+#endif
   if (!CBB_init(&cbb, 2048)) {
     return NULL;
   }
 
+#if 0 // hezhiwen
   uint8_t *der = NULL;
   size_t len;
   PKCS7 *ret = NULL;
+#endif
 
   if (sign_cert == NULL && pkey == NULL && flags == PKCS7_DETACHED) {
     // Caller just wants to bundle certificates.
@@ -492,10 +547,16 @@ PKCS7 *PKCS7_sign(X509 *sign_cert, EVP_PKEY *pkey, STACK_OF(X509) *certs,
              EVP_PKEY_id(pkey) == NID_rsaEncryption) {
     // sign-file.c from the Linux kernel.
     const size_t signature_max_len = EVP_PKEY_size(pkey);
+  #if 1 // hezhiwen
+    struct signer_info_data si_data = {0};
+    si_data.sign_cert = sign_cert;
+    si_data.signature = OPENSSL_malloc(signature_max_len);
+  #else
     struct signer_info_data si_data = {
       .sign_cert = sign_cert,
       .signature = OPENSSL_malloc(signature_max_len),
     };
+  #endif
 
     if (!si_data.signature ||
         !sign_sha256(si_data.signature, &si_data.signature_len,
@@ -515,7 +576,9 @@ PKCS7 *PKCS7_sign(X509 *sign_cert, EVP_PKEY *pkey, STACK_OF(X509) *certs,
     goto out;
   }
 
+#if 0 // hezhiwen
   CBS cbs;
+#endif
   CBS_init(&cbs, der, len);
   ret = pkcs7_new(&cbs);
 

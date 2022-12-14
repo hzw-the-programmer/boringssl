@@ -469,10 +469,19 @@ static char *strip_spaces(char *name) {
 
 char *x509v3_bytes_to_hex(const uint8_t *in, size_t len) {
   CBB cbb;
+#if 1 // hezhiwen
+  size_t i;
+  uint8_t *ret;
+  size_t unused_len;
+#endif
   if (!CBB_init(&cbb, len * 3 + 1)) {
     goto err;
   }
+#if 1 // hezhiwen
+  for (i = 0; i < len; i++) {
+#else
   for (size_t i = 0; i < len; i++) {
+#endif
     static const char hex[] = "0123456789ABCDEF";
     if ((i > 0 && !CBB_add_u8(&cbb, ':')) ||
         !CBB_add_u8(&cbb, hex[in[i] >> 4]) ||
@@ -480,8 +489,10 @@ char *x509v3_bytes_to_hex(const uint8_t *in, size_t len) {
       goto err;
     }
   }
+#if 0 // hezhiwen
   uint8_t *ret;
   size_t unused_len;
+#endif
   if (!CBB_add_u8(&cbb, 0) || !CBB_finish(&cbb, &ret, &unused_len)) {
     goto err;
   }
@@ -623,6 +634,9 @@ static STACK_OF(OPENSSL_STRING) *get_email(const X509_NAME *name,
   STACK_OF(OPENSSL_STRING) *ret = NULL;
   // Now add any email address(es) to STACK
   int i = -1;
+#if 1 // hezhiwen
+  size_t j;
+#endif
   // First supplied X509_NAME
   while ((i = X509_NAME_get_index_by_NID(name, NID_pkcs9_emailAddress, i)) >=
          0) {
@@ -632,7 +646,11 @@ static STACK_OF(OPENSSL_STRING) *get_email(const X509_NAME *name,
       return NULL;
     }
   }
+#if 1 // hezhiwen
+  for (j = 0; j < sk_GENERAL_NAME_num(gens); j++) {
+#else
   for (size_t j = 0; j < sk_GENERAL_NAME_num(gens); j++) {
+#endif
     const GENERAL_NAME *gen = sk_GENERAL_NAME_value(gens, j);
     if (gen->type != GEN_EMAIL) {
       continue;
@@ -648,6 +666,9 @@ static void str_free(OPENSSL_STRING str) { OPENSSL_free(str); }
 
 static int append_ia5(STACK_OF(OPENSSL_STRING) **sk,
                       const ASN1_IA5STRING *email) {
+#if 1 // hezhiwen
+  char *emtmp = NULL;
+#endif
   // First some sanity checks
   if (email->type != V_ASN1_IA5STRING) {
     return 1;
@@ -661,7 +682,9 @@ static int append_ia5(STACK_OF(OPENSSL_STRING) **sk,
     return 1;
   }
 
+#if 0 // hezhiwen
   char *emtmp = NULL;
+#endif
   if (!*sk) {
     *sk = sk_OPENSSL_STRING_new(sk_strcmp);
   }
@@ -907,6 +930,10 @@ int x509v3_looks_like_dns_name(const unsigned char *in, size_t len) {
   // subject. This heuristic must be applied to both name constraints and the
   // common name fallback, so it must be loose enough to accept hostname
   // common names, and tight enough to reject decorative common names.
+#if 1 // hezhiwen
+  size_t label_start = 0;
+  size_t i;
+#endif
 
   if (len > 0 && in[len - 1] == '.') {
     len--;
@@ -922,8 +949,12 @@ int x509v3_looks_like_dns_name(const unsigned char *in, size_t len) {
     return 0;
   }
 
+#if 1 // hezhiwen
+  for (i = 0; i < len; i++) {
+#else
   size_t label_start = 0;
   for (size_t i = 0; i < len; i++) {
+#endif
     unsigned char c = in[i];
     if ((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') ||
         (c >= 'A' && c <= 'Z') || (c == '-' && i > label_start) ||
@@ -998,6 +1029,12 @@ static int do_x509_check(X509 *x, const char *chk, size_t chklen,
   int alt_type;
   int rv = 0;
   equal_fn equal;
+#if 1 // hezhiwen
+  GENERAL_NAMES *gens;
+  size_t i;
+  int j = -1;
+  X509_NAME *name;
+#endif
   if (check_type == GEN_EMAIL) {
     cnid = NID_pkcs9_emailAddress;
     alt_type = V_ASN1_IA5STRING;
@@ -1015,14 +1052,27 @@ static int do_x509_check(X509 *x, const char *chk, size_t chklen,
     equal = equal_case;
   }
 
+#if 1 // hezhiwen
+  gens = X509_get_ext_d2i(x, NID_subject_alt_name, NULL, NULL);
+#else
   GENERAL_NAMES *gens = X509_get_ext_d2i(x, NID_subject_alt_name, NULL, NULL);
+#endif
   if (gens) {
+  #if 1 // hezhiwen
+    for (i = 0; i < sk_GENERAL_NAME_num(gens); i++) {
+  #else
     for (size_t i = 0; i < sk_GENERAL_NAME_num(gens); i++) {
+  #endif
       const GENERAL_NAME *gen = sk_GENERAL_NAME_value(gens, i);
+    #if 1 // hezhiwen
+      ASN1_STRING *cstr;
+    #endif
       if (gen->type != check_type) {
         continue;
       }
+    #if 0 // hezhiwen
       const ASN1_STRING *cstr;
+    #endif
       if (check_type == GEN_EMAIL) {
         cstr = gen->d.rfc822Name;
       } else if (check_type == GEN_DNS) {
@@ -1045,8 +1095,12 @@ static int do_x509_check(X509 *x, const char *chk, size_t chklen,
     return 0;
   }
 
+#if 1 // hezhiwen
+  name = X509_get_subject_name(x);
+#else
   int j = -1;
   const X509_NAME *name = X509_get_subject_name(x);
+#endif
   while ((j = X509_NAME_get_index_by_NID(name, cnid, j)) >= 0) {
     const X509_NAME_ENTRY *ne = X509_NAME_get_entry(name, j);
     const ASN1_STRING *str = X509_NAME_ENTRY_get_data(ne);
@@ -1330,10 +1384,15 @@ static int ipv6_cb(const char *elem, size_t len, void *usr) {
 // Convert a string of up to 4 hex digits into the corresponding IPv6 form.
 
 static int ipv6_hex(unsigned char *out, const char *in, size_t inlen) {
+#if 1 // hezhiwen
+  uint16_t num = 0;
+#endif
   if (inlen > 4) {
     return 0;
   }
+#if 0 // hezhiwen
   uint16_t num = 0;
+#endif
   while (inlen--) {
     unsigned char c = *in++;
     num <<= 4;

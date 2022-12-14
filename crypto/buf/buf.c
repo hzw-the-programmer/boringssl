@@ -87,25 +87,42 @@ void BUF_MEM_free(BUF_MEM *buf) {
 }
 
 int BUF_MEM_reserve(BUF_MEM *buf, size_t cap) {
+#if 1 // hezhiwen
+  size_t n;
+  size_t alloc_size;
+  char *new_buf;
+#endif
   if (buf->max >= cap) {
     return 1;
   }
 
+#if 1 // hezhiwen
+  n = cap + 3;
+#else
   size_t n = cap + 3;
+#endif
   if (n < cap) {
     // overflow
     OPENSSL_PUT_ERROR(BUF, ERR_R_MALLOC_FAILURE);
     return 0;
   }
   n = n / 3;
+#if 1 // hezhiwen
+  alloc_size = n * 4;
+#else
   size_t alloc_size = n * 4;
+#endif
   if (alloc_size / 4 != n) {
     // overflow
     OPENSSL_PUT_ERROR(BUF, ERR_R_MALLOC_FAILURE);
     return 0;
   }
 
+#if 1 // hezhiwen
+  new_buf = OPENSSL_realloc(buf->data, alloc_size);
+#else
   char *new_buf = OPENSSL_realloc(buf->data, alloc_size);
+#endif
   if (new_buf == NULL) {
     OPENSSL_PUT_ERROR(BUF, ERR_R_MALLOC_FAILURE);
     return 0;
@@ -132,11 +149,18 @@ size_t BUF_MEM_grow_clean(BUF_MEM *buf, size_t len) {
 }
 
 int BUF_MEM_append(BUF_MEM *buf, const void *in, size_t len) {
+#if 1 // hezhiwen
+  size_t new_len;
+#endif
   // Work around a C language bug. See https://crbug.com/1019588.
   if (len == 0) {
     return 1;
   }
+#if 1 // hezhiwen
+  new_len = buf->length + len;
+#else
   size_t new_len = buf->length + len;
+#endif
   if (new_len < len) {
     OPENSSL_PUT_ERROR(BUF, ERR_R_OVERFLOW);
     return 0;

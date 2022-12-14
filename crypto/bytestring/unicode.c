@@ -40,6 +40,11 @@ static int is_valid_code_point(uint32_t v) {
 
 int cbs_get_utf8(CBS *cbs, uint32_t *out) {
   uint8_t c;
+#if 1 // hezhiwen
+  uint32_t v, lower_bound;
+  size_t len;
+  size_t i;
+#endif
   if (!CBS_get_u8(cbs, &c)) {
     return 0;
   }
@@ -47,8 +52,10 @@ int cbs_get_utf8(CBS *cbs, uint32_t *out) {
     *out = c;
     return 1;
   }
+#if 0 // hezhiwen
   uint32_t v, lower_bound;
   size_t len;
+#endif
   if ((c & TOP_BITS(3)) == TOP_BITS(2)) {
     v = c & BOTTOM_BITS(5);
     len = 1;
@@ -64,7 +71,11 @@ int cbs_get_utf8(CBS *cbs, uint32_t *out) {
   } else {
     return 0;
   }
+#if 1 // hezhiwen
+  for (i = 0; i < len; i++) {
+#else
   for (size_t i = 0; i < len; i++) {
+#endif
     if (!CBS_get_u8(cbs, &c) ||
         (c & TOP_BITS(2)) != TOP_BITS(1)) {
       return 0;

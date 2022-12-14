@@ -67,8 +67,15 @@ static void aead_chacha20_poly1305_cleanup(EVP_AEAD_CTX *ctx) {}
 
 static void poly1305_update_length(poly1305_state *poly1305, size_t data_len) {
   uint8_t length_bytes[8];
+#if 1 // hezhiwen
+  unsigned i;
+#endif
 
+#if 1 // hezhiwen
+  for (i = 0; i < sizeof(length_bytes); i++) {
+#else
   for (unsigned i = 0; i < sizeof(length_bytes); i++) {
+#endif
     length_bytes[i] = data_len;
     data_len >>= 8;
   }
@@ -83,12 +90,19 @@ static void calc_tag(uint8_t tag[POLY1305_TAG_LEN], const uint8_t *key,
                      const uint8_t *ciphertext_extra,
                      size_t ciphertext_extra_len) {
   alignas(16) uint8_t poly1305_key[32];
+#if 1 // hezhiwen
+  static const uint8_t padding[16] = { 0 };  // Padding is all zeros.
+  poly1305_state ctx;
+  size_t ciphertext_total;
+#endif
   OPENSSL_memset(poly1305_key, 0, sizeof(poly1305_key));
   CRYPTO_chacha_20(poly1305_key, poly1305_key, sizeof(poly1305_key), key, nonce,
                    0);
 
+#if 0 // hezhiwen
   static const uint8_t padding[16] = { 0 };  // Padding is all zeros.
   poly1305_state ctx;
+#endif
   CRYPTO_poly1305_init(&ctx, poly1305_key);
   CRYPTO_poly1305_update(&ctx, ad, ad_len);
   if (ad_len % 16 != 0) {
@@ -96,7 +110,11 @@ static void calc_tag(uint8_t tag[POLY1305_TAG_LEN], const uint8_t *key,
   }
   CRYPTO_poly1305_update(&ctx, ciphertext, ciphertext_len);
   CRYPTO_poly1305_update(&ctx, ciphertext_extra, ciphertext_extra_len);
+#if 1 // hezhiwen
+  ciphertext_total = ciphertext_len + ciphertext_extra_len;
+#else
   const size_t ciphertext_total = ciphertext_len + ciphertext_extra_len;
+#endif
   if (ciphertext_total % 16 != 0) {
     CRYPTO_poly1305_update(&ctx, padding,
                            sizeof(padding) - (ciphertext_total % 16));
@@ -111,6 +129,10 @@ static int chacha20_poly1305_seal_scatter(
     size_t *out_tag_len, size_t max_out_tag_len, const uint8_t *nonce,
     size_t nonce_len, const uint8_t *in, size_t in_len, const uint8_t *extra_in,
     size_t extra_in_len, const uint8_t *ad, size_t ad_len, size_t tag_len) {
+#if 1 // hezhiwen
+  uint64_t in_len_64;
+  union chacha20_poly1305_seal_data data;
+#endif
   if (extra_in_len + tag_len < tag_len) {
     OPENSSL_PUT_ERROR(CIPHER, CIPHER_R_TOO_LARGE);
     return 0;
@@ -130,7 +152,11 @@ static int chacha20_poly1305_seal_scatter(
   // 32-bits and this produces a warning because it's always false.
   // Casting to uint64_t inside the conditional is not sufficient to stop
   // the warning.
+#if 1 // hezhiwen
+  in_len_64 = in_len;
+#else
   const uint64_t in_len_64 = in_len;
+#endif
   if (in_len_64 >= (UINT64_C(1) << 32) * 64 - 64) {
     OPENSSL_PUT_ERROR(CIPHER, CIPHER_R_TOO_LARGE);
     return 0;
@@ -149,19 +175,32 @@ static int chacha20_poly1305_seal_scatter(
     size_t offset = in_len % kChaChaBlockSize;
     uint8_t block[64 /* kChaChaBlockSize */];
 
+  #if 1 // hezhiwen
+    size_t i;
+    size_t done;
+    for (done = 0; done < extra_in_len; block_counter++) {
+  #else
     for (size_t done = 0; done < extra_in_len; block_counter++) {
+  #endif
       memset(block, 0, sizeof(block));
       CRYPTO_chacha_20(block, block, sizeof(block), key, nonce,
                        block_counter);
+    #if 1 // hezhiwen
+      for (i = offset; i < sizeof(block) && done < extra_in_len;
+           i++, done++) {
+    #else
       for (size_t i = offset; i < sizeof(block) && done < extra_in_len;
            i++, done++) {
+    #endif
         out_tag[done] = extra_in[done] ^ block[i];
       }
       offset = 0;
     }
   }
 
+#if 0 // hezhiwen
   union chacha20_poly1305_seal_data data;
+#endif
   if (chacha20_poly1305_asm_capable()) {
     OPENSSL_memcpy(data.in.key, key, 32);
     data.in.counter = 0;
@@ -200,14 +239,20 @@ static int aead_xchacha20_poly1305_seal_scatter(
     size_t extra_in_len, const uint8_t *ad, size_t ad_len) {
   const struct aead_chacha20_poly1305_ctx *c20_ctx =
       (struct aead_chacha20_poly1305_ctx *)&ctx->state;
+#if 1 // hezhiwen
+  alignas(4) uint8_t derived_key[32];
+  alignas(4) uint8_t derived_nonce[12];
+#endif
 
   if (nonce_len != 24) {
     OPENSSL_PUT_ERROR(CIPHER, CIPHER_R_UNSUPPORTED_NONCE_SIZE);
     return 0;
   }
 
+#if 0 // hezhiwen
   alignas(4) uint8_t derived_key[32];
   alignas(4) uint8_t derived_nonce[12];
+#endif
   CRYPTO_hchacha20(derived_key, c20_ctx->key, nonce);
   OPENSSL_memset(derived_nonce, 0, 4);
   OPENSSL_memcpy(&derived_nonce[4], &nonce[16], 8);
@@ -222,6 +267,10 @@ static int chacha20_poly1305_open_gather(
     const uint8_t *key, uint8_t *out, const uint8_t *nonce,
     size_t nonce_len, const uint8_t *in, size_t in_len, const uint8_t *in_tag,
     size_t in_tag_len, const uint8_t *ad, size_t ad_len, size_t tag_len) {
+#if 1 // hezhiwen
+  uint64_t in_len_64;
+  union chacha20_poly1305_open_data data;
+#endif
   if (nonce_len != 12) {
     OPENSSL_PUT_ERROR(CIPHER, CIPHER_R_UNSUPPORTED_NONCE_SIZE);
     return 0;
@@ -238,13 +287,19 @@ static int chacha20_poly1305_open_gather(
   // 32-bits and this produces a warning because it's always false.
   // Casting to uint64_t inside the conditional is not sufficient to stop
   // the warning.
+#if 1 // hezhiwen
+  in_len_64 = in_len;
+#else
   const uint64_t in_len_64 = in_len;
+#endif
   if (in_len_64 >= (UINT64_C(1) << 32) * 64 - 64) {
     OPENSSL_PUT_ERROR(CIPHER, CIPHER_R_TOO_LARGE);
     return 0;
   }
 
+#if 0 // hezhiwen
   union chacha20_poly1305_open_data data;
+#endif
   if (chacha20_poly1305_asm_capable()) {
     OPENSSL_memcpy(data.in.key, key, 32);
     data.in.counter = 0;
@@ -281,14 +336,20 @@ static int aead_xchacha20_poly1305_open_gather(
     size_t in_tag_len, const uint8_t *ad, size_t ad_len) {
   const struct aead_chacha20_poly1305_ctx *c20_ctx =
       (struct aead_chacha20_poly1305_ctx *)&ctx->state;
+#if 1 // hezhiwen
+  alignas(4) uint8_t derived_key[32];
+  alignas(4) uint8_t derived_nonce[12];
+#endif
 
   if (nonce_len != 24) {
     OPENSSL_PUT_ERROR(CIPHER, CIPHER_R_UNSUPPORTED_NONCE_SIZE);
     return 0;
   }
 
+#if 0 // hezhiwen
   alignas(4) uint8_t derived_key[32];
   alignas(4) uint8_t derived_nonce[12];
+#endif
   CRYPTO_hchacha20(derived_key, c20_ctx->key, nonce);
   OPENSSL_memset(derived_nonce, 0, 4);
   OPENSSL_memcpy(&derived_nonce[4], &nonce[16], 8);

@@ -135,6 +135,9 @@ static const uint8_t kBoringSSLBinaryTag[18] = {
 };
 
 void *OPENSSL_malloc(size_t size) {
+#if 1 // hezhiwen
+  void *ptr;
+#endif
   if (OPENSSL_memory_alloc != NULL) {
     assert(OPENSSL_memory_free != NULL);
     assert(OPENSSL_memory_get_size != NULL);
@@ -153,7 +156,11 @@ void *OPENSSL_malloc(size_t size) {
     return NULL;
   }
 
+#if 1 // hezhiwen
+  ptr = malloc(size + OPENSSL_MALLOC_PREFIX);
+#else
   void *ptr = malloc(size + OPENSSL_MALLOC_PREFIX);
+#endif
   if (ptr == NULL) {
     return NULL;
   }
@@ -165,6 +172,10 @@ void *OPENSSL_malloc(size_t size) {
 }
 
 void OPENSSL_free(void *orig_ptr) {
+#if 1 // hezhiwen
+  void *ptr;
+  size_t size;
+#endif
   if (orig_ptr == NULL) {
     return;
   }
@@ -174,10 +185,18 @@ void OPENSSL_free(void *orig_ptr) {
     return;
   }
 
+#if 1 // hezhiwen
+  ptr = ((uint8_t *)orig_ptr) - OPENSSL_MALLOC_PREFIX;
+#else
   void *ptr = ((uint8_t *)orig_ptr) - OPENSSL_MALLOC_PREFIX;
+#endif
   __asan_unpoison_memory_region(ptr, OPENSSL_MALLOC_PREFIX);
 
+#if 1 // hezhiwen
+  size = *(size_t *)ptr;
+#else
   size_t size = *(size_t *)ptr;
+#endif
   OPENSSL_cleanse(ptr, size + OPENSSL_MALLOC_PREFIX);
 
 // ASan knows to intercept malloc and free, but not sdallocx.
@@ -194,11 +213,18 @@ void OPENSSL_free(void *orig_ptr) {
 }
 
 void *OPENSSL_realloc(void *orig_ptr, size_t new_size) {
+#if 1 // hezhiwen
+  size_t old_size;
+  void *ret;
+  size_t to_copy;
+#endif
   if (orig_ptr == NULL) {
     return OPENSSL_malloc(new_size);
   }
 
+#if 0 // hezhiwen
   size_t old_size;
+#endif
   if (OPENSSL_memory_get_size != NULL) {
     old_size = OPENSSL_memory_get_size(orig_ptr);
   } else {
@@ -208,12 +234,20 @@ void *OPENSSL_realloc(void *orig_ptr, size_t new_size) {
     __asan_poison_memory_region(ptr, OPENSSL_MALLOC_PREFIX);
   }
 
+#if 1 // hezhiwen
+  ret = OPENSSL_malloc(new_size);
+#else
   void *ret = OPENSSL_malloc(new_size);
+#endif
   if (ret == NULL) {
     return NULL;
   }
 
+#if 1 // hezhiwen
+  to_copy = new_size;
+#else
   size_t to_copy = new_size;
+#endif
   if (old_size < to_copy) {
     to_copy = old_size;
   }
@@ -260,7 +294,12 @@ int CRYPTO_memcmp(const void *in_a, const void *in_b, size_t len) {
   const uint8_t *b = in_b;
   uint8_t x = 0;
 
+#if 1 // hezhiwen
+  size_t i;
+  for (i = 0; i < len; i++) {
+#else
   for (size_t i = 0; i < len; i++) {
+#endif
     x |= a[i] ^ b[i];
   }
 
@@ -275,7 +314,12 @@ uint32_t OPENSSL_hash32(const void *ptr, size_t len) {
   const uint8_t *in = ptr;
   uint32_t h = kOffsetBasis;
 
+#if 1 // hezhiwen
+  size_t i;
+  for (i = 0; i < len; i++) {
+#else
   for (size_t i = 0; i < len; i++) {
+#endif
     h ^= in[i];
     h *= kPrime;
   }
@@ -286,7 +330,12 @@ uint32_t OPENSSL_hash32(const void *ptr, size_t len) {
 uint32_t OPENSSL_strhash(const char *s) { return OPENSSL_hash32(s, strlen(s)); }
 
 size_t OPENSSL_strnlen(const char *s, size_t len) {
+#if 1 // hezhiwen
+  size_t i;
+  for (i = 0; i < len; i++) {
+#else
   for (size_t i = 0; i < len; i++) {
+#endif
     if (s[i] == 0) {
       return i;
     }
@@ -296,11 +345,20 @@ size_t OPENSSL_strnlen(const char *s, size_t len) {
 }
 
 char *OPENSSL_strdup(const char *s) {
+#if 1 // hezhiwen
+  size_t len;
+  char *ret;
+#endif
   if (s == NULL) {
     return NULL;
   }
+#if 1 // hezhiwen
+  len = strlen(s) + 1;
+  ret = OPENSSL_malloc(len);
+#else
   const size_t len = strlen(s) + 1;
   char *ret = OPENSSL_malloc(len);
+#endif
   if (ret == NULL) {
     return NULL;
   }
@@ -316,7 +374,12 @@ int OPENSSL_tolower(int c) {
 }
 
 int OPENSSL_strcasecmp(const char *a, const char *b) {
+#if 1 // hezhiwen
+  size_t i;
+  for (i = 0;; i++) {
+#else
   for (size_t i = 0;; i++) {
+#endif
     const int aa = OPENSSL_tolower(a[i]);
     const int bb = OPENSSL_tolower(b[i]);
 
@@ -331,7 +394,12 @@ int OPENSSL_strcasecmp(const char *a, const char *b) {
 }
 
 int OPENSSL_strncasecmp(const char *a, const char *b, size_t n) {
+#if 1 // hezhiwen
+  size_t i;
+  for (i = 0; i < n; i++) {
+#else
   for (size_t i = 0; i < n; i++) {
+#endif
     const int aa = OPENSSL_tolower(a[i]);
     const int bb = OPENSSL_tolower(b[i]);
 
@@ -349,8 +417,14 @@ int OPENSSL_strncasecmp(const char *a, const char *b, size_t n) {
 
 int BIO_snprintf(char *buf, size_t n, const char *format, ...) {
   va_list args;
+#if 1 // hezhiwen
+  int ret;
+  va_start(args, format);
+  ret = BIO_vsnprintf(buf, n, format, args);
+#else
   va_start(args, format);
   int ret = BIO_vsnprintf(buf, n, format, args);
+#endif
   va_end(args);
   return ret;
 }
@@ -360,15 +434,27 @@ int BIO_vsnprintf(char *buf, size_t n, const char *format, va_list args) {
 }
 
 char *OPENSSL_strndup(const char *str, size_t size) {
+#if 1 // hezhiwen
+  char *ret;
+  size_t alloc_size;
+
+  size = OPENSSL_strnlen(str, size);
+  alloc_size = size + 1;
+#else
   size = OPENSSL_strnlen(str, size);
 
   size_t alloc_size = size + 1;
+#endif
   if (alloc_size < size) {
     // overflow
     OPENSSL_PUT_ERROR(CRYPTO, ERR_R_MALLOC_FAILURE);
     return NULL;
   }
+#if 1 // hezhiwen
+  ret = OPENSSL_malloc(alloc_size);
+#else
   char *ret = OPENSSL_malloc(alloc_size);
+#endif
   if (ret == NULL) {
     OPENSSL_PUT_ERROR(CRYPTO, ERR_R_MALLOC_FAILURE);
     return NULL;
@@ -403,11 +489,18 @@ size_t OPENSSL_strlcat(char *dst, const char *src, size_t dst_size) {
 }
 
 void *OPENSSL_memdup(const void *data, size_t size) {
+#if 1 // hezhiwen
+  void *ret;
+#endif
   if (size == 0) {
     return NULL;
   }
 
+#if 1 // hezhiwen
+  ret = OPENSSL_malloc(size);
+#else
   void *ret = OPENSSL_malloc(size);
+#endif
   if (ret == NULL) {
     OPENSSL_PUT_ERROR(CRYPTO, ERR_R_MALLOC_FAILURE);
     return NULL;

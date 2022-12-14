@@ -90,12 +90,19 @@ static int hexdump_write(struct hexdump_ctx *ctx, const uint8_t *data,
                          size_t len) {
   char buf[10];
   unsigned l;
+#if 1 // hezhiwen
+  size_t i;
+#endif
 
   // Output lines look like:
   // 00000010  2e 2f 30 31 32 33 34 35  36 37 38 ... 3c 3d // |./0123456789:;<=|
   // ^ offset                          ^ extra space           ^ ASCII of line
 
+#if 1 // hezhiwen
+  for (i = 0; i < len; i++) {
+#else
   for (size_t i = 0; i < len; i++) {
+#endif
     if (ctx->used == 0) {
       // The beginning of a line.
       BIO_indent(ctx->bio, ctx->indent, UINT_MAX);

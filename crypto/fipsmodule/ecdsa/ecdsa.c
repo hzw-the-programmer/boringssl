@@ -75,6 +75,10 @@ static void digest_to_scalar(const EC_GROUP *group, EC_SCALAR *out,
   size_t num_bits = BN_num_bits(order);
   // Need to truncate digest if it is too long: first truncate whole bytes.
   size_t num_bytes = (num_bits + 7) / 8;
+#if 1 // hezhiwen
+  BN_ULONG tmp[EC_MAX_WORDS];
+#endif
+
   if (digest_len > num_bytes) {
     digest_len = num_bytes;
   }
@@ -90,7 +94,9 @@ static void digest_to_scalar(const EC_GROUP *group, EC_SCALAR *out,
   //
   // Montgomery multiplication accepts the looser bounds, so this isn't strictly
   // necessary, but it is a cleaner abstraction and has no performance impact.
+#if 0 // hezhiwen
   BN_ULONG tmp[EC_MAX_WORDS];
+#endif
   bn_reduce_once_in_place(out->words, 0 /* no carry */, order->d, tmp,
                           order->width);
 }
@@ -152,12 +158,19 @@ int ecdsa_do_verify_no_self_test(const uint8_t *digest, size_t digest_len,
                                  const ECDSA_SIG *sig, const EC_KEY *eckey) {
   const EC_GROUP *group = EC_KEY_get0_group(eckey);
   const EC_POINT *pub_key = EC_KEY_get0_public_key(eckey);
+#if 1 // hezhiwen
+  EC_SCALAR r, s, u1, u2, s_inv_mont, m;
+  EC_RAW_POINT point;
+#endif
+
   if (group == NULL || pub_key == NULL || sig == NULL) {
     OPENSSL_PUT_ERROR(ECDSA, ECDSA_R_MISSING_PARAMETERS);
     return 0;
   }
 
+#if 0 // hezhiwen
   EC_SCALAR r, s, u1, u2, s_inv_mont, m;
+#endif
   if (BN_is_zero(sig->r) ||
       !ec_bignum_to_scalar(group, &r, sig->r) ||
       BN_is_zero(sig->s) ||
@@ -181,7 +194,9 @@ int ecdsa_do_verify_no_self_test(const uint8_t *digest, size_t digest_len,
   ec_scalar_mul_montgomery(group, &u1, &m, &s_inv_mont);
   ec_scalar_mul_montgomery(group, &u2, &r, &s_inv_mont);
 
+#if 0 // hezhiwen
   EC_RAW_POINT point;
+#endif
   if (!ec_point_mul_scalar_public(group, &point, &u1, &pub_key->raw, &u2)) {
     OPENSSL_PUT_ERROR(ECDSA, ERR_R_EC_LIB);
     return 0;
@@ -205,19 +220,34 @@ int ECDSA_do_verify(const uint8_t *digest, size_t digest_len,
 static ECDSA_SIG *ecdsa_sign_impl(const EC_GROUP *group, int *out_retry,
                                   const EC_SCALAR *priv_key, const EC_SCALAR *k,
                                   const uint8_t *digest, size_t digest_len) {
+#if 1 // hezhiwen
+  const BIGNUM *order;
+  EC_RAW_POINT tmp_point;
+  EC_SCALAR r;
+  EC_SCALAR s;
+  EC_SCALAR tmp;
+  ECDSA_SIG *ret;
+#endif
+
   *out_retry = 0;
 
   // Check that the size of the group order is FIPS compliant (FIPS 186-4
   // B.5.2).
+#if 1 // hezhiwen
+  order = EC_GROUP_get0_order(group);
+#else
   const BIGNUM *order = EC_GROUP_get0_order(group);
+#endif
   if (BN_num_bits(order) < 160) {
     OPENSSL_PUT_ERROR(ECDSA, EC_R_INVALID_GROUP_ORDER);
     return NULL;
   }
 
   // Compute r, the x-coordinate of k * generator.
+#if 0 // hezhiwen
   EC_RAW_POINT tmp_point;
   EC_SCALAR r;
+#endif
   if (!ec_point_mul_scalar_base(group, &tmp_point, k) ||
       !ec_get_x_coordinate_as_scalar(group, &r, &tmp_point)) {
     return NULL;
@@ -231,12 +261,16 @@ static ECDSA_SIG *ecdsa_sign_impl(const EC_GROUP *group, int *out_retry,
   // s = priv_key * r. Note if only one parameter is in the Montgomery domain,
   // |ec_scalar_mod_mul_montgomery| will compute the answer in the normal
   // domain.
+#if 0 // hezhiwen
   EC_SCALAR s;
+#endif
   ec_scalar_to_montgomery(group, &s, &r);
   ec_scalar_mul_montgomery(group, &s, priv_key, &s);
 
   // s = m + priv_key * r.
+#if 0 // hezhiwen
   EC_SCALAR tmp;
+#endif
   digest_to_scalar(group, &tmp, digest, digest_len);
   ec_scalar_add(group, &s, &s, &tmp);
 
@@ -255,7 +289,11 @@ static ECDSA_SIG *ecdsa_sign_impl(const EC_GROUP *group, int *out_retry,
     return NULL;
   }
 
+#if 1 // hezhiwen
+  ret = ECDSA_SIG_new();
+#else
   ECDSA_SIG *ret = ECDSA_SIG_new();
+#endif
   if (ret == NULL ||  //
       !bn_set_words(ret->r, r.words, order->width) ||
       !bn_set_words(ret->s, s.words, order->width)) {
@@ -270,23 +308,39 @@ ECDSA_SIG *ecdsa_sign_with_nonce_for_known_answer_test(const uint8_t *digest,
                                                        const EC_KEY *eckey,
                                                        const uint8_t *nonce,
                                                        size_t nonce_len) {
+#if 1 // hezhiwen
+  const EC_GROUP *group;
+  const EC_SCALAR *priv_key;
+  EC_SCALAR k;
+  int retry_ignored;
+#endif
   if (eckey->ecdsa_meth && eckey->ecdsa_meth->sign) {
     OPENSSL_PUT_ERROR(ECDSA, ECDSA_R_NOT_IMPLEMENTED);
     return NULL;
   }
 
+#if 1 // hezhiwen
+  group = EC_KEY_get0_group(eckey);
+#else
   const EC_GROUP *group = EC_KEY_get0_group(eckey);
+#endif
   if (group == NULL || eckey->priv_key == NULL) {
     OPENSSL_PUT_ERROR(ECDSA, ERR_R_PASSED_NULL_PARAMETER);
     return NULL;
   }
+#if 1 // hezhiwen
+  priv_key = &eckey->priv_key->scalar;
+#else
   const EC_SCALAR *priv_key = &eckey->priv_key->scalar;
 
   EC_SCALAR k;
+#endif
   if (!ec_scalar_from_bytes(group, &k, nonce, nonce_len)) {
     return NULL;
   }
+#if 0 // hezhiwen
   int retry_ignored;
+#endif
   return ecdsa_sign_impl(group, &retry_ignored, priv_key, &k, digest,
                          digest_len);
 }
@@ -304,6 +358,15 @@ ECDSA_SIG *ECDSA_sign_with_nonce_and_leak_private_key_for_testing(
 
 ECDSA_SIG *ECDSA_do_sign(const uint8_t *digest, size_t digest_len,
                          const EC_KEY *eckey) {
+#if 1 // hezhiwen
+  const EC_GROUP *group;
+  const BIGNUM *order;
+  const EC_SCALAR *priv_key;
+  SHA512_CTX sha;
+  uint8_t additional_data[SHA512_DIGEST_LENGTH];
+  ECDSA_SIG *ret = NULL;
+#endif
+
   boringssl_ensure_ecc_self_test();
 
   if (eckey->ecdsa_meth && eckey->ecdsa_meth->sign) {
@@ -311,13 +374,22 @@ ECDSA_SIG *ECDSA_do_sign(const uint8_t *digest, size_t digest_len,
     return NULL;
   }
 
+#if 1 // hezhiwen
+  group = EC_KEY_get0_group(eckey);
+#else
   const EC_GROUP *group = EC_KEY_get0_group(eckey);
+#endif
   if (group == NULL || eckey->priv_key == NULL) {
     OPENSSL_PUT_ERROR(ECDSA, ERR_R_PASSED_NULL_PARAMETER);
     return NULL;
   }
+#if 1 // hezhiwen
+  order = EC_GROUP_get0_order(group);
+  priv_key = &eckey->priv_key->scalar;
+#else
   const BIGNUM *order = EC_GROUP_get0_order(group);
   const EC_SCALAR *priv_key = &eckey->priv_key->scalar;
+#endif
 
   // Pass a SHA512 hash of the private key and digest as additional data
   // into the RBG. This is a hardening measure against entropy failure.
@@ -326,22 +398,31 @@ ECDSA_SIG *ECDSA_do_sign(const uint8_t *digest, size_t digest_len,
 
   FIPS_service_indicator_lock_state();
 
+#if 0 // hezhiwen
   SHA512_CTX sha;
   uint8_t additional_data[SHA512_DIGEST_LENGTH];
+#endif
   SHA512_Init(&sha);
   SHA512_Update(&sha, priv_key->words, order->width * sizeof(BN_ULONG));
   SHA512_Update(&sha, digest, digest_len);
   SHA512_Final(additional_data, &sha);
 
+#if 0 // hezhiwen
   ECDSA_SIG *ret = NULL;
+#endif
   for (;;) {
     EC_SCALAR k;
+  #if 1 // hezhiwen
+    int retry;
+  #endif
     if (!ec_random_nonzero_scalar(group, &k, additional_data)) {
       ret = NULL;
       goto out;
     }
 
+  #if 0 // hezhiwen
     int retry;
+  #endif
     ret = ecdsa_sign_impl(group, &retry, priv_key, &k, digest, digest_len);
     if (ret != NULL || !retry) {
       goto out;

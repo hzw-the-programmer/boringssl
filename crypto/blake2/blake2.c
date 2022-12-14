@@ -61,6 +61,10 @@ static void blake2b_transform(
     size_t num_bytes, int is_final_block) {
   // https://tools.ietf.org/html/rfc7693#section-3.2
   uint64_t v[16];
+#if 1 // hezhiwen
+  int round;
+  size_t i;
+#endif
   static_assert(sizeof(v) == sizeof(b2b->h) + sizeof(kIV), "");
   OPENSSL_memcpy(v, b2b->h, sizeof(b2b->h));
   OPENSSL_memcpy(&v[8], kIV, sizeof(kIV));
@@ -76,7 +80,11 @@ static void blake2b_transform(
     v[14] = ~v[14];
   }
 
+#if 1 // hezhiwen
+  for (round = 0; round < 12; round++) {
+#else
   for (int round = 0; round < 12; round++) {
+#endif
     const uint8_t *const s = &kSigma[16 * (round % 10)];
     blake2b_mix(v, 0, 4, 8, 12, block_words[s[0]], block_words[s[1]]);
     blake2b_mix(v, 1, 5, 9, 13, block_words[s[2]], block_words[s[3]]);
@@ -88,7 +96,11 @@ static void blake2b_transform(
     blake2b_mix(v, 3, 4, 9, 14, block_words[s[14]], block_words[s[15]]);
   }
 
+#if 1 // hezhiwen
+  for (i = 0; i < OPENSSL_ARRAY_SIZE(b2b->h); i++) {
+#else
   for (size_t i = 0; i < OPENSSL_ARRAY_SIZE(b2b->h); i++) {
+#endif
     b2b->h[i] ^= v[i];
     b2b->h[i] ^= v[i + 8];
   }

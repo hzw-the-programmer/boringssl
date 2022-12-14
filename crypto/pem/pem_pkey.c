@@ -159,11 +159,18 @@ int PEM_write_bio_PrivateKey(BIO *bp, EVP_PKEY *x, const EVP_CIPHER *enc,
 EVP_PKEY *PEM_read_PrivateKey(FILE *fp, EVP_PKEY **x, pem_password_cb *cb,
                               void *u) {
   BIO *b = BIO_new_fp(fp, BIO_NOCLOSE);
+#if 1 // hezhiwen
+  EVP_PKEY *ret;
+#endif
   if (b == NULL) {
     OPENSSL_PUT_ERROR(PEM, ERR_R_BUF_LIB);
     return NULL;
   }
+#if 1 // hezhiwen
+  ret = PEM_read_bio_PrivateKey(b, x, cb, u);
+#else
   EVP_PKEY *ret = PEM_read_bio_PrivateKey(b, x, cb, u);
+#endif
   BIO_free(b);
   return ret;
 }
@@ -172,11 +179,18 @@ int PEM_write_PrivateKey(FILE *fp, EVP_PKEY *x, const EVP_CIPHER *enc,
                          unsigned char *kstr, int klen, pem_password_cb *cb,
                          void *u) {
   BIO *b = BIO_new_fp(fp, BIO_NOCLOSE);
+#if 1 // hezhiwen
+  int ret;
+#endif
   if (b == NULL) {
     OPENSSL_PUT_ERROR(PEM, ERR_R_BUF_LIB);
     return 0;
   }
+#if 1 // hezhiwen
+  ret = PEM_write_bio_PrivateKey(b, x, enc, kstr, klen, cb, u);
+#else
   int ret = PEM_write_bio_PrivateKey(b, x, enc, kstr, klen, cb, u);
+#endif
   BIO_free(b);
   return ret;
 }

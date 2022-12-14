@@ -121,11 +121,21 @@ int X509_REQ_extension_nid(int req_nid) {
 }
 
 STACK_OF(X509_EXTENSION) *X509_REQ_get_extensions(X509_REQ *req) {
+#if 1 // hezhiwen
+  int idx;
+  X509_ATTRIBUTE *attr;
+  ASN1_TYPE *ext;
+  const unsigned char *p;
+#endif
   if (req == NULL || req->req_info == NULL) {
     return NULL;
   }
 
+#if 1 // hezhiwen
+  idx = X509_REQ_get_attr_by_NID(req, NID_ext_req, -1);
+#else
   int idx = X509_REQ_get_attr_by_NID(req, NID_ext_req, -1);
+#endif
   if (idx == -1) {
     idx = X509_REQ_get_attr_by_NID(req, NID_ms_ext_req, -1);
   }
@@ -133,12 +143,21 @@ STACK_OF(X509_EXTENSION) *X509_REQ_get_extensions(X509_REQ *req) {
     return NULL;
   }
 
+#if 1 // hezhiwen
+  attr = X509_REQ_get_attr(req, idx);
+  ext = X509_ATTRIBUTE_get0_type(attr, 0);
+#else
   X509_ATTRIBUTE *attr = X509_REQ_get_attr(req, idx);
   ASN1_TYPE *ext = X509_ATTRIBUTE_get0_type(attr, 0);
+#endif
   if (!ext || ext->type != V_ASN1_SEQUENCE) {
     return NULL;
   }
+#if 1 // hezhiwen
+  p = ext->value.sequence->data;
+#else
   const unsigned char *p = ext->value.sequence->data;
+#endif
   return (STACK_OF(X509_EXTENSION) *)ASN1_item_d2i(
       NULL, &p, ext->value.sequence->length, ASN1_ITEM_rptr(X509_EXTENSIONS));
 }
@@ -152,10 +171,17 @@ int X509_REQ_add_extensions_nid(X509_REQ *req,
   unsigned char *ext = NULL;
   int ext_len =
       ASN1_item_i2d((ASN1_VALUE *)exts, &ext, ASN1_ITEM_rptr(X509_EXTENSIONS));
+#if 1 // hezhiwen
+  int ret;
+#endif
   if (ext_len <= 0) {
     return 0;
   }
+#if 1 // hezhiwen
+  ret = X509_REQ_add1_attr_by_NID(req, nid, V_ASN1_SEQUENCE, ext, ext_len);
+#else
   int ret = X509_REQ_add1_attr_by_NID(req, nid, V_ASN1_SEQUENCE, ext, ext_len);
+#endif
   OPENSSL_free(ext);
   return ret;
 }

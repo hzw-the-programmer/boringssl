@@ -92,10 +92,17 @@ int asn1_set_choice_selector(ASN1_VALUE **pval, int value,
 
 static CRYPTO_refcount_t *asn1_get_references(ASN1_VALUE **pval,
                                               const ASN1_ITEM *it) {
+#if 1 // hezhiwen
+  const ASN1_AUX *aux;
+#endif
   if (it->itype != ASN1_ITYPE_SEQUENCE) {
     return NULL;
   }
+#if 1 // hezhiwen
+  aux = it->funcs;
+#else
   const ASN1_AUX *aux = it->funcs;
+#endif
   if (!aux || !(aux->flags & ASN1_AFLG_REFCOUNT)) {
     return NULL;
   }
@@ -118,7 +125,9 @@ int asn1_refcount_dec_and_test_zero(ASN1_VALUE **pval, const ASN1_ITEM *it) {
 }
 
 static ASN1_ENCODING *asn1_get_enc_ptr(ASN1_VALUE **pval, const ASN1_ITEM *it) {
+#if 0 // hezhiwen
   assert(it->itype == ASN1_ITYPE_SEQUENCE);
+#endif
   const ASN1_AUX *aux;
   if (!pval || !*pval) {
     return NULL;
@@ -221,6 +230,9 @@ const ASN1_TEMPLATE *asn1_do_adb(ASN1_VALUE **pval, const ASN1_TEMPLATE *tt,
   const ASN1_ADB_TABLE *atbl;
   ASN1_VALUE **sfld;
   int i;
+#if 1 // hezhiwen
+  int selector;
+#endif
   if (!(tt->flags & ASN1_TFLG_ADB_MASK)) {
     return tt;
   }
@@ -243,7 +255,11 @@ const ASN1_TEMPLATE *asn1_do_adb(ASN1_VALUE **pval, const ASN1_TEMPLATE *tt,
   // NB: don't check for NID_undef here because it
   // might be a legitimate value in the table
   assert(tt->flags & ASN1_TFLG_ADB_OID);
+#if 1 // hezhiwen
+  selector = OBJ_obj2nid((ASN1_OBJECT *)*sfld);
+#else
   int selector = OBJ_obj2nid((ASN1_OBJECT *)*sfld);
+#endif
 
   // Try to find matching entry in table Maybe should check application types
   // first to allow application override? Might also be useful to have a flag

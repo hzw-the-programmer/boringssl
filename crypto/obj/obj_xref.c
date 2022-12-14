@@ -92,7 +92,12 @@ static const nid_triple kTriples[] = {
 };
 
 int OBJ_find_sigid_algs(int sign_nid, int *out_digest_nid, int *out_pkey_nid) {
+#if 1 // hezhiwen
+  size_t i;
+  for (i = 0; i < OPENSSL_ARRAY_SIZE(kTriples); i++) {
+#else
   for (size_t i = 0; i < OPENSSL_ARRAY_SIZE(kTriples); i++) {
+#endif
     if (kTriples[i].sign_nid == sign_nid) {
       if (out_digest_nid != NULL) {
         *out_digest_nid = kTriples[i].digest_nid;
@@ -108,7 +113,12 @@ int OBJ_find_sigid_algs(int sign_nid, int *out_digest_nid, int *out_pkey_nid) {
 }
 
 int OBJ_find_sigid_by_algs(int *out_sign_nid, int digest_nid, int pkey_nid) {
+#if 1 // hezhiwen
+  size_t i;
+  for (i = 0; i < OPENSSL_ARRAY_SIZE(kTriples); i++) {
+#else
   for (size_t i = 0; i < OPENSSL_ARRAY_SIZE(kTriples); i++) {
+#endif
     if (kTriples[i].digest_nid == digest_nid &&
         kTriples[i].pkey_nid == pkey_nid) {
       if (out_sign_nid != NULL) {

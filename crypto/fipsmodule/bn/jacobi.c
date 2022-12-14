@@ -67,6 +67,11 @@ int bn_jacobi(const BIGNUM *a, const BIGNUM *b, BN_CTX *ctx) {
   // is $(-1)^{(n^2-1)/8}$ (using TeX notation).
   // Note that the sign of n does not matter.
   static const int tab[8] = {0, 1, 0, -1, 0, -1, 0, 1};
+#if 1 // hezhiwen
+  int ret = -2;
+  BIGNUM *A;
+  BIGNUM *B;
+#endif
 
   // The Jacobi symbol is only defined for odd modulus.
   if (!BN_is_odd(b)) {
@@ -80,10 +85,16 @@ int bn_jacobi(const BIGNUM *a, const BIGNUM *b, BN_CTX *ctx) {
     return -2;
   }
 
+#if 1 // hezhiwen
+  BN_CTX_start(ctx);
+  A = BN_CTX_get(ctx);
+  B = BN_CTX_get(ctx);
+#else
   int ret = -2;
   BN_CTX_start(ctx);
   BIGNUM *A = BN_CTX_get(ctx);
   BIGNUM *B = BN_CTX_get(ctx);
+#endif
   if (B == NULL) {
     goto end;
   }
@@ -100,6 +111,10 @@ int bn_jacobi(const BIGNUM *a, const BIGNUM *b, BN_CTX *ctx) {
   ret = 1;
 
   while (1) {
+  #if 1 // hezhiwen
+    int i = 0;
+    BIGNUM *tmp;
+  #endif
     // Cohen's step 3:
 
     // B is positive and odd
@@ -109,7 +124,9 @@ int bn_jacobi(const BIGNUM *a, const BIGNUM *b, BN_CTX *ctx) {
     }
 
     // now A is non-zero
+  #if 0 // hezhiwen
     int i = 0;
+  #endif
     while (!BN_is_bit_set(A, i)) {
       i++;
     }
@@ -134,7 +151,11 @@ int bn_jacobi(const BIGNUM *a, const BIGNUM *b, BN_CTX *ctx) {
       ret = -2;
       goto end;
     }
+  #if 1 // hezhiwen
+    tmp = A;
+  #else
     BIGNUM *tmp = A;
+  #endif
     A = B;
     B = tmp;
     tmp->neg = 0;

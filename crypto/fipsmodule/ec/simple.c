@@ -101,15 +101,24 @@ void ec_GFp_simple_group_finish(EC_GROUP *group) {
 int ec_GFp_simple_group_set_curve(EC_GROUP *group, const BIGNUM *p,
                                   const BIGNUM *a, const BIGNUM *b,
                                   BN_CTX *ctx) {
+#if 1 // hezhiwen
+  int ret = 0;
+  BIGNUM *tmp;
+#endif
   // p must be a prime > 3
   if (BN_num_bits(p) <= 2 || !BN_is_odd(p)) {
     OPENSSL_PUT_ERROR(EC, EC_R_INVALID_FIELD);
     return 0;
   }
 
+#if 1 // hezhiwen
+  BN_CTX_start(ctx);
+  tmp = BN_CTX_get(ctx);
+#else
   int ret = 0;
   BN_CTX_start(ctx);
   BIGNUM *tmp = BN_CTX_get(ctx);
+#endif
   if (tmp == NULL) {
     goto err;
   }
@@ -198,12 +207,19 @@ int ec_GFp_simple_is_on_curve(const EC_GROUP *group,
                           const EC_FELEM *b) = group->meth->felem_mul;
   void (*const felem_sqr)(const EC_GROUP *, EC_FELEM *r, const EC_FELEM *a) =
       group->meth->felem_sqr;
+#if 1 // hezhiwen
+  EC_FELEM tmp, Z4, Z6;
+  BN_ULONG not_equal;
+  BN_ULONG not_infinity;
+#endif
 
   // rh := X^2
   EC_FELEM rh;
   felem_sqr(group, &rh, &point->X);
 
+#if 0 // hezhiwen
   EC_FELEM tmp, Z4, Z6;
+#endif
   felem_sqr(group, &tmp, &point->Z);
   felem_sqr(group, &Z4, &tmp);
   felem_mul(group, &Z6, &Z4, &tmp);
@@ -229,10 +245,18 @@ int ec_GFp_simple_is_on_curve(const EC_GROUP *group,
   felem_sqr(group, &tmp, &point->Y);
 
   ec_felem_sub(group, &tmp, &tmp, &rh);
+#if 1 // hezhiwen
+  not_equal = ec_felem_non_zero_mask(group, &tmp);
+#else
   BN_ULONG not_equal = ec_felem_non_zero_mask(group, &tmp);
+#endif
 
   // If Z = 0, the point is infinity, which is always on the curve.
+#if 1 // hezhiwen
+  not_infinity = ec_felem_non_zero_mask(group, &point->Z);
+#else
   BN_ULONG not_infinity = ec_felem_non_zero_mask(group, &point->Z);
+#endif
 
   return 1 & ~(not_infinity & not_equal);
 }
@@ -258,20 +282,47 @@ int ec_GFp_simple_points_equal(const EC_GROUP *group, const EC_RAW_POINT *a,
                           const EC_FELEM *b) = group->meth->felem_mul;
   void (*const felem_sqr)(const EC_GROUP *, EC_FELEM *r, const EC_FELEM *a) =
       group->meth->felem_sqr;
-
+#if 1 // hezhiwen
   EC_FELEM tmp1, tmp2, Za23, Zb23;
+  BN_ULONG x_not_equal;
+  BN_ULONG y_not_equal;
+  BN_ULONG x_and_y_equal;
+  BN_ULONG a_not_infinity;
+  BN_ULONG b_not_infinity;
+  BN_ULONG a_and_b_infinity;
+  BN_ULONG equal;
+#endif
+
+#if 0 // hezhiwen
+  EC_FELEM tmp1, tmp2, Za23, Zb23;
+#endif
   felem_sqr(group, &Zb23, &b->Z);         // Zb23 = Z_b^2
   felem_mul(group, &tmp1, &a->X, &Zb23);  // tmp1 = X_a * Z_b^2
   felem_sqr(group, &Za23, &a->Z);         // Za23 = Z_a^2
   felem_mul(group, &tmp2, &b->X, &Za23);  // tmp2 = X_b * Z_a^2
   ec_felem_sub(group, &tmp1, &tmp1, &tmp2);
+#if 1 // hezhiwen
+  x_not_equal = ec_felem_non_zero_mask(group, &tmp1);
+#else
   const BN_ULONG x_not_equal = ec_felem_non_zero_mask(group, &tmp1);
+#endif
 
   felem_mul(group, &Zb23, &Zb23, &b->Z);  // Zb23 = Z_b^3
   felem_mul(group, &tmp1, &a->Y, &Zb23);  // tmp1 = Y_a * Z_b^3
   felem_mul(group, &Za23, &Za23, &a->Z);  // Za23 = Z_a^3
   felem_mul(group, &tmp2, &b->Y, &Za23);  // tmp2 = Y_b * Z_a^3
   ec_felem_sub(group, &tmp1, &tmp1, &tmp2);
+#if 1 // hezhiwen
+  y_not_equal = ec_felem_non_zero_mask(group, &tmp1);
+  x_and_y_equal = ~(x_not_equal | y_not_equal);
+
+  a_not_infinity = ec_felem_non_zero_mask(group, &a->Z);
+  b_not_infinity = ec_felem_non_zero_mask(group, &b->Z);
+  a_and_b_infinity = ~(a_not_infinity | b_not_infinity);
+
+  equal =
+      a_and_b_infinity | (a_not_infinity & b_not_infinity & x_and_y_equal);
+#else
   const BN_ULONG y_not_equal = ec_felem_non_zero_mask(group, &tmp1);
   const BN_ULONG x_and_y_equal = ~(x_not_equal | y_not_equal);
 
@@ -281,6 +332,7 @@ int ec_GFp_simple_points_equal(const EC_GROUP *group, const EC_RAW_POINT *a,
 
   const BN_ULONG equal =
       a_and_b_infinity | (a_not_infinity & b_not_infinity & x_and_y_equal);
+#endif
   return equal & 1;
 }
 
@@ -297,32 +349,55 @@ int ec_affine_jacobian_equal(const EC_GROUP *group, const EC_AFFINE *a,
       group->meth->felem_sqr;
 
   EC_FELEM tmp, Zb2;
+#if 1 // hezhiwen
+  BN_ULONG x_not_equal;
+  BN_ULONG y_not_equal;
+  BN_ULONG x_and_y_equal;
+  BN_ULONG b_not_infinity;
+  BN_ULONG equal;
+#endif
   felem_sqr(group, &Zb2, &b->Z);        // Zb2 = Z_b^2
   felem_mul(group, &tmp, &a->X, &Zb2);  // tmp = X_a * Z_b^2
   ec_felem_sub(group, &tmp, &tmp, &b->X);
+#if 1 // hezhiwen
+  x_not_equal = ec_felem_non_zero_mask(group, &tmp);
+#else
   const BN_ULONG x_not_equal = ec_felem_non_zero_mask(group, &tmp);
+#endif
 
   felem_mul(group, &tmp, &a->Y, &Zb2);  // tmp = Y_a * Z_b^2
   felem_mul(group, &tmp, &tmp, &b->Z);  // tmp = Y_a * Z_b^3
   ec_felem_sub(group, &tmp, &tmp, &b->Y);
+#if 1 // hezhiwen
+  y_not_equal = ec_felem_non_zero_mask(group, &tmp);
+  x_and_y_equal = ~(x_not_equal | y_not_equal);
+  b_not_infinity = ec_felem_non_zero_mask(group, &b->Z);
+  equal = b_not_infinity & x_and_y_equal;
+#else
   const BN_ULONG y_not_equal = ec_felem_non_zero_mask(group, &tmp);
   const BN_ULONG x_and_y_equal = ~(x_not_equal | y_not_equal);
 
   const BN_ULONG b_not_infinity = ec_felem_non_zero_mask(group, &b->Z);
 
   const BN_ULONG equal = b_not_infinity & x_and_y_equal;
+#endif
   return equal & 1;
 }
 
 int ec_GFp_simple_cmp_x_coordinate(const EC_GROUP *group, const EC_RAW_POINT *p,
                                    const EC_SCALAR *r) {
+#if 1 // hezhiwen
+  EC_SCALAR x;
+#endif
   if (ec_GFp_simple_is_at_infinity(group, p)) {
     // |ec_get_x_coordinate_as_scalar| will check this internally, but this way
     // we do not push to the error queue.
     return 0;
   }
 
+#if 0 // hezhiwen
   EC_SCALAR x;
+#endif
   return ec_get_x_coordinate_as_scalar(group, &x, p) &&
          ec_scalar_equal_vartime(group, &x, r);
 }

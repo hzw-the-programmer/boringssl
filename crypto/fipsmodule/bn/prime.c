@@ -494,7 +494,12 @@ err:
 
 static int bn_trial_division(uint16_t *out, const BIGNUM *bn) {
   const size_t num_primes = num_trial_division_primes(bn);
+#if 1 // hezhiwen
+  size_t i;
+  for (i = 1; i < num_primes; i++) {
+#else
   for (size_t i = 1; i < num_primes; i++) {
+#endif
     if (bn_mod_u16_consttime(bn, kPrimes[i]) == 0) {
       *out = kPrimes[i];
       return 1;
@@ -552,12 +557,23 @@ int bn_miller_rabin_iteration(const BN_MILLER_RABIN *miller_rabin,
                               const BN_MONT_CTX *mont, BN_CTX *ctx) {
   // This function corresponds to steps 4.3 through 4.5 of FIPS 186-4, C.3.1.
   int ret = 0;
+#if 1 // hezhiwen
+  const BIGNUM *w;
+  BIGNUM *z;
+  crypto_word_t is_possibly_prime = 0;
+  int j;
+#endif
   BN_CTX_start(ctx);
 
   // Step 4.3. We use Montgomery-encoding for better performance and to avoid
   // timing leaks.
+#if 1 // hezhiwen
+  w = &mont->N;
+  z = BN_CTX_get(ctx);
+#else
   const BIGNUM *w = &mont->N;
   BIGNUM *z = BN_CTX_get(ctx);
+#endif
   if (z == NULL ||
       !BN_mod_exp_mont_consttime(z, b, miller_rabin->m, w, ctx, mont) ||
       !BN_to_montgomery(z, z, mont, ctx)) {
@@ -568,7 +584,9 @@ int bn_miller_rabin_iteration(const BN_MILLER_RABIN *miller_rabin,
   // witness for |w|. This is equivalent to going to step 4.7 in the original
   // algorithm. To avoid timing leaks, we run the algorithm to the end for prime
   // inputs.
+#if 0 // hezhiwen
   crypto_word_t is_possibly_prime = 0;
+#endif
 
   // Step 4.4. If z = 1 or z = w-1, b is not a composite witness and w is still
   // possibly prime.
@@ -580,7 +598,12 @@ int bn_miller_rabin_iteration(const BN_MILLER_RABIN *miller_rabin,
   //
   // To avoid leaking |a|, we run the loop to |w_bits| and mask off all
   // iterations once |j| = |a|.
+#if 1 // hezhiwen
+  for (j = 1; j < miller_rabin->w_bits; j++) {
+    crypto_word_t z_is_w1_mont;
+#else
   for (int j = 1; j < miller_rabin->w_bits; j++) {
+#endif
     if (constant_time_eq_int(j, miller_rabin->a) & ~is_possibly_prime) {
       // If the loop is done and we haven't seen z = 1 or z = w-1 yet, the
       // value is composite and we can break in variable time.
@@ -594,7 +617,11 @@ int bn_miller_rabin_iteration(const BN_MILLER_RABIN *miller_rabin,
 
     // Step 4.5.2. If z = w-1 and the loop is not done, this is not a composite
     // witness.
+  #if 1 // hezhiwen
+    z_is_w1_mont = BN_equal_consttime(z, miller_rabin->w1_mont);
+  #else
     crypto_word_t z_is_w1_mont = BN_equal_consttime(z, miller_rabin->w1_mont);
+  #endif
     z_is_w1_mont = 0 - z_is_w1_mont;    // Make it all zeros or all ones.
     is_possibly_prime |= z_is_w1_mont;  // Go to step 4.7 if |z_is_w1_mont|.
 
@@ -657,7 +684,15 @@ int BN_primality_test(int *out_is_probably_prime, const BIGNUM *w, int checks,
   //
   // 5. After the primes are chosen, RSA keys derive some values from the
   //    primes, but this cost is negligible in comparison.
-
+#if 1 // hezhiwen
+  BN_CTX *new_ctx = NULL;
+  int ret = 0;
+  BIGNUM *b;
+  BN_MONT_CTX *mont;
+  BN_MILLER_RABIN miller_rabin;
+  crypto_word_t uniform_iterations = 0;
+  int i;
+#endif
   *out_is_probably_prime = 0;
 
   if (BN_cmp(w, BN_value_one()) <= 0) {
@@ -692,7 +727,9 @@ int BN_primality_test(int *out_is_probably_prime, const BIGNUM *w, int checks,
     checks = BN_prime_checks_for_size(BN_num_bits(w));
   }
 
+#if 0 // hezhiwen
   BN_CTX *new_ctx = NULL;
+#endif
   if (ctx == NULL) {
     new_ctx = BN_CTX_new();
     if (new_ctx == NULL) {
@@ -702,11 +739,17 @@ int BN_primality_test(int *out_is_probably_prime, const BIGNUM *w, int checks,
   }
 
   // See C.3.1 from FIPS 186-4.
+#if 1 // hezhiwen
+  BN_CTX_start(ctx);
+  b = BN_CTX_get(ctx);
+  mont = BN_MONT_CTX_new_consttime(w, ctx);
+#else
   int ret = 0;
   BN_CTX_start(ctx);
   BIGNUM *b = BN_CTX_get(ctx);
   BN_MONT_CTX *mont = BN_MONT_CTX_new_consttime(w, ctx);
   BN_MILLER_RABIN miller_rabin;
+#endif
   if (b == NULL || mont == NULL ||
       // Steps 1-3.
       !bn_miller_rabin_init(&miller_rabin, mont, ctx)) {
@@ -741,21 +784,32 @@ int BN_primality_test(int *out_is_probably_prime, const BIGNUM *w, int checks,
   // Note this blinding does not impact most calls when picking primes because
   // composites are rejected early. Only the two secret primes see extra work.
 
+#if 0 // hezhiwen
   crypto_word_t uniform_iterations = 0;
+#endif
   // Using |constant_time_lt_w| seems to prevent the compiler from optimizing
   // this into two jumps.
+#if 1 // hezhiwen
+  for (i = 1; (i <= BN_PRIME_CHECKS_BLINDED) |
+#else
   for (int i = 1; (i <= BN_PRIME_CHECKS_BLINDED) |
+#endif
                   constant_time_lt_w(uniform_iterations, checks);
        i++) {
     // Step 4.1-4.2
     int is_uniform;
+  #if 1 // hezhiwen
+    int is_possibly_prime = 0;
+  #endif
     if (!bn_rand_secret_range(b, &is_uniform, 2, miller_rabin.w1)) {
         goto err;
     }
     uniform_iterations += is_uniform;
 
     // Steps 4.3-4.5
+  #if 0 // hezhiwen
     int is_possibly_prime = 0;
+  #endif
     if (!bn_miller_rabin_iteration(&miller_rabin, &is_possibly_prime, b, mont,
                                    ctx)) {
       goto err;
@@ -803,6 +857,19 @@ int BN_is_prime_fasttest_ex(const BIGNUM *a, int checks, BN_CTX *ctx,
 int BN_enhanced_miller_rabin_primality_test(
     enum bn_primality_result_t *out_result, const BIGNUM *w, int checks,
     BN_CTX *ctx, BN_GENCB *cb) {
+#if 1 // hezhiwen
+  int ret = 0;
+  BN_MONT_CTX *mont = NULL;
+  BIGNUM *w1;
+  int a = 0;
+  BIGNUM *m;
+  BIGNUM *b;
+  BIGNUM *g;
+  BIGNUM *z;
+  BIGNUM *x;
+  BIGNUM *x1;
+  int i;
+#endif
   // Enhanced Miller-Rabin is only valid on odd integers greater than 3.
   if (!BN_is_odd(w) || BN_cmp_word(w, 3) <= 0) {
     OPENSSL_PUT_ERROR(BN, BN_R_INVALID_INPUT);
@@ -813,12 +880,17 @@ int BN_enhanced_miller_rabin_primality_test(
     checks = BN_prime_checks_for_size(BN_num_bits(w));
   }
 
+#if 1 // hezhiwen
+  BN_CTX_start(ctx);
+  w1 = BN_CTX_get(ctx);
+#else
   int ret = 0;
   BN_MONT_CTX *mont = NULL;
 
   BN_CTX_start(ctx);
 
   BIGNUM *w1 = BN_CTX_get(ctx);
+#endif
   if (w1 == NULL ||
       !BN_copy(w1, w) ||
       !BN_sub_word(w1, 1)) {
@@ -826,21 +898,35 @@ int BN_enhanced_miller_rabin_primality_test(
   }
 
   // Write w1 as m*2^a (Steps 1 and 2).
+#if 0 // hezhiwen
   int a = 0;
+#endif
   while (!BN_is_bit_set(w1, a)) {
     a++;
   }
+#if 1 // hezhiwen
+  m = BN_CTX_get(ctx);
+#else
   BIGNUM *m = BN_CTX_get(ctx);
+#endif
   if (m == NULL ||
       !BN_rshift(m, w1, a)) {
     goto err;
   }
 
+#if 1 // hezhiwen
+  b = BN_CTX_get(ctx);
+  g = BN_CTX_get(ctx);
+  z = BN_CTX_get(ctx);
+  x = BN_CTX_get(ctx);
+  x1 = BN_CTX_get(ctx);
+#else
   BIGNUM *b = BN_CTX_get(ctx);
   BIGNUM *g = BN_CTX_get(ctx);
   BIGNUM *z = BN_CTX_get(ctx);
   BIGNUM *x = BN_CTX_get(ctx);
   BIGNUM *x1 = BN_CTX_get(ctx);
+#endif
   if (b == NULL ||
       g == NULL ||
       z == NULL ||
@@ -857,7 +943,12 @@ int BN_enhanced_miller_rabin_primality_test(
 
   // The following loop performs in inner iteration of the Enhanced Miller-Rabin
   // Primality test (Step 4).
+#if 1 // hezhiwen
+  for (i = 1; i <= checks; i++) {
+    int j;
+#else
   for (int i = 1; i <= checks; i++) {
+#endif
     // Step 4.1-4.2
     if (!BN_rand_range_ex(b, 2, w1)) {
       goto err;
@@ -884,7 +975,11 @@ int BN_enhanced_miller_rabin_primality_test(
     }
 
     // Step 4.7
+  #if 1 // hezhiwen
+    for (j = 1; j < a; j++) {
+  #else
     for (int j = 1; j < a; j++) {
+  #endif
       if (!BN_copy(x, z) || !BN_mod_mul(z, x, x, w, ctx)) {
         goto err;
       }
@@ -952,6 +1047,10 @@ static int probable_prime_dh(BIGNUM *rnd, int bits, const BIGNUM *add,
                              const BIGNUM *rem, BN_CTX *ctx) {
   int ret = 0;
   BIGNUM *t1;
+#if 1 // hezhiwen
+  size_t num_primes;
+  size_t i;
+#endif
 
   BN_CTX_start(ctx);
   if ((t1 = BN_CTX_get(ctx)) == NULL) {
@@ -981,9 +1080,17 @@ static int probable_prime_dh(BIGNUM *rnd, int bits, const BIGNUM *add,
   }
   // we now have a random number 'rand' to test.
 
+#if 1 // hezhiwen
+  num_primes = num_trial_division_primes(rnd);
+#else
   const size_t num_primes = num_trial_division_primes(rnd);
+#endif
 loop:
+#if 1 // hezhiwen
+  for (i = 1; i < num_primes; i++) {
+#else
   for (size_t i = 1; i < num_primes; i++) {
+#endif
     // check that rnd is a prime
     if (bn_mod_u16_consttime(rnd, kPrimes[i]) <= 1) {
       if (!BN_add(rnd, rnd, add)) {
@@ -1004,6 +1111,10 @@ static int probable_prime_dh_safe(BIGNUM *p, int bits, const BIGNUM *padd,
                                   const BIGNUM *rem, BN_CTX *ctx) {
   int ret = 0;
   BIGNUM *t1, *qadd, *q;
+#if 1 // hezhiwen
+  size_t num_primes;
+  size_t i;
+#endif
 
   bits--;
   BN_CTX_start(ctx);
@@ -1052,9 +1163,17 @@ static int probable_prime_dh_safe(BIGNUM *p, int bits, const BIGNUM *padd,
     goto err;
   }
 
+#if 1 // hezhiwen
+  num_primes = num_trial_division_primes(p);
+#else
   const size_t num_primes = num_trial_division_primes(p);
+#endif
 loop:
+#if 1 // hezhiwen
+  for (i = 1; i < num_primes; i++) {
+#else
   for (size_t i = 1; i < num_primes; i++) {
+#endif
     // check that p and q are prime
     // check that for p and q
     // gcd(p-1,primes) == 1 (except for 2)

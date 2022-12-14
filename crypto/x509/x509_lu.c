@@ -315,11 +315,20 @@ int X509_STORE_get_by_subject(X509_STORE_CTX *vs, int type, X509_NAME *name,
 }
 
 static int x509_store_add(X509_STORE *ctx, void *x, int is_crl) {
+#if 1 // hezhiwen
+  X509_OBJECT *obj;
+  int ret = 1;
+  int added = 0;
+#endif
   if (x == NULL) {
     return 0;
   }
 
+#if 1 // hezhiwen
+  obj = (X509_OBJECT *)OPENSSL_malloc(sizeof(X509_OBJECT));
+#else
   X509_OBJECT *const obj = (X509_OBJECT *)OPENSSL_malloc(sizeof(X509_OBJECT));
+#endif
   if (obj == NULL) {
     OPENSSL_PUT_ERROR(X509, ERR_R_MALLOC_FAILURE);
     return 0;
@@ -336,8 +345,10 @@ static int x509_store_add(X509_STORE *ctx, void *x, int is_crl) {
 
   CRYPTO_MUTEX_lock_write(&ctx->objs_lock);
 
+#if 0 // hezhiwen
   int ret = 1;
   int added = 0;
+#endif
   // Duplicates are silently ignored
   if (!X509_OBJECT_retrieve_match(ctx->objs, obj)) {
     ret = added = (sk_X509_OBJECT_push(ctx->objs, obj) != 0);
@@ -400,6 +411,9 @@ static int x509_object_idx_cnt(STACK_OF(X509_OBJECT) *h, int type,
   X509_CINF cinf_s;
   X509_CRL crl_s;
   X509_CRL_INFO crl_info_s;
+#if 1 // hezhiwen
+  size_t idx;
+#endif
 
   stmp.type = type;
   switch (type) {
@@ -418,7 +432,9 @@ static int x509_object_idx_cnt(STACK_OF(X509_OBJECT) *h, int type,
       return -1;
   }
 
+#if 0 // hezhiwen
   size_t idx;
+#endif
   sk_X509_OBJECT_sort(h);
   if (!sk_X509_OBJECT_find(h, &idx, &stmp)) {
     return -1;

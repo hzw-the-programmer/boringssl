@@ -91,6 +91,9 @@ ASN1_BOOLEAN d2i_ASN1_BOOLEAN(ASN1_BOOLEAN *a, const unsigned char **pp,
   const unsigned char *p = *pp;
   long len;
   int inf, tag, xclass;
+#if 1 // hezhiwen
+  ASN1_BOOLEAN ret;
+#endif
   inf = ASN1_get_object(&p, &len, &tag, &xclass, length);
   if (inf & 0x80) {
     OPENSSL_PUT_ERROR(ASN1, ASN1_R_BAD_OBJECT_HEADER);
@@ -111,7 +114,11 @@ ASN1_BOOLEAN d2i_ASN1_BOOLEAN(ASN1_BOOLEAN *a, const unsigned char **pp,
     OPENSSL_PUT_ERROR(ASN1, ASN1_R_BOOLEAN_IS_WRONG_LENGTH);
     return -1;
   }
+#if 1 // hezhiwen
+  ret = (ASN1_BOOLEAN) * (p++);
+#else
   ASN1_BOOLEAN ret = (ASN1_BOOLEAN) * (p++);
+#endif
   if (a != NULL) {
     (*a) = ret;
   }

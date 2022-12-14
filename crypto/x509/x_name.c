@@ -198,6 +198,10 @@ static int x509_name_ex_d2i(ASN1_VALUE **val, const unsigned char **in,
   int ret;
   STACK_OF(X509_NAME_ENTRY) *entries;
   X509_NAME_ENTRY *entry;
+#if 1 // hezhiwen
+  ASN1_VALUE *intname_val;
+  ASN1_VALUE *nm_val;
+#endif
   // Bound the size of an X509_NAME we are willing to parse.
   if (len > X509_NAME_MAX) {
     len = X509_NAME_MAX;
@@ -205,7 +209,9 @@ static int x509_name_ex_d2i(ASN1_VALUE **val, const unsigned char **in,
   q = p;
 
   // Get internal representation of Name
+#if 0 // hezhiwen
   ASN1_VALUE *intname_val = NULL;
+#endif
   ret = ASN1_item_ex_d2i(&intname_val, &p, len,
                          ASN1_ITEM_rptr(X509_NAME_INTERNAL), tag, aclass, opt,
                          ctx);
@@ -217,7 +223,9 @@ static int x509_name_ex_d2i(ASN1_VALUE **val, const unsigned char **in,
   if (*val) {
     x509_name_ex_free(val, NULL);
   }
+#if 0 // hezhiwen
   ASN1_VALUE *nm_val = NULL;
+#endif
   if (!x509_name_ex_new(&nm_val, NULL)) {
     goto err;
   }
@@ -260,10 +268,17 @@ err:
 static int x509_name_ex_i2d(ASN1_VALUE **val, unsigned char **out,
                             const ASN1_ITEM *it, int tag, int aclass) {
   X509_NAME *a = (X509_NAME *)*val;
+#if 1 // hezhiwen
+  int ret;
+#endif
   if (a->modified && (!x509_name_encode(a) || !x509_name_canon(a))) {
     return -1;
   }
+#if 1 // hezhiwen
+  ret = a->bytes->length;
+#else
   int ret = a->bytes->length;
+#endif
   if (out != NULL) {
     OPENSSL_memcpy(*out, a->bytes->data, ret);
     *out += ret;
@@ -280,6 +295,9 @@ static int x509_name_encode(X509_NAME *a) {
   size_t i;
   STACK_OF(STACK_OF_X509_NAME_ENTRY) *intname =
       sk_STACK_OF_X509_NAME_ENTRY_new_null();
+#if 1 // hezhiwen
+  ASN1_VALUE *intname_val;
+#endif
   if (!intname) {
     goto memerr;
   }
@@ -300,7 +318,11 @@ static int x509_name_encode(X509_NAME *a) {
       goto memerr;
     }
   }
+#if 1 // hezhiwen
+  intname_val = (ASN1_VALUE *)intname;
+#else
   ASN1_VALUE *intname_val = (ASN1_VALUE *)intname;
+#endif
   len = ASN1_item_ex_i2d(&intname_val, NULL, ASN1_ITEM_rptr(X509_NAME_INTERNAL),
                          /*tag=*/-1, /*aclass=*/0);
   if (len <= 0) {

@@ -277,6 +277,9 @@ static int str_copy(CONF *conf, char *section, char **pto, char *from) {
     } else if (IS_EOF(conf, *from)) {
       break;
     } else if (*from == '$') {
+    #if 1 // hezhiwen
+      size_t newsize;
+    #endif
       // try to expand it
       rrp = NULL;
       s = &(from[1]);
@@ -334,7 +337,11 @@ static int str_copy(CONF *conf, char *section, char **pto, char *from) {
         OPENSSL_PUT_ERROR(CONF, CONF_R_VARIABLE_HAS_NO_VALUE);
         goto err;
       }
+    #if 1 // hezhiwen
+      newsize = strlen(p) + buf->length - (e - from);
+    #else
       size_t newsize = strlen(p) + buf->length - (e - from);
+    #endif
       if (newsize > MAX_CONF_VALUE_LENGTH) {
         OPENSSL_PUT_ERROR(CONF, CONF_R_VARIABLE_EXPANSION_TOO_LONG);
         goto err;

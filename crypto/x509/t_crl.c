@@ -65,18 +65,32 @@
 
 int X509_CRL_print_fp(FILE *fp, X509_CRL *x) {
   BIO *b = BIO_new_fp(fp, BIO_NOCLOSE);
+#if 1 // hezhiwen
+  int ret;
+#endif
   if (b == NULL) {
     OPENSSL_PUT_ERROR(X509, ERR_R_BUF_LIB);
     return 0;
   }
+#if 1 // hezhiwen
+  ret = X509_CRL_print(b, x);
+#else
   int ret = X509_CRL_print(b, x);
+#endif
   BIO_free(b);
   return ret;
 }
 
 int X509_CRL_print(BIO *out, X509_CRL *x) {
   long version = X509_CRL_get_version(x);
+#if 1 // hezhiwen
+  char *issuer;
+  int ok;
+  const STACK_OF(X509_REVOKED) *rev;
+  size_t i;
+#else
   assert(X509_CRL_VERSION_1 <= version && version <= X509_CRL_VERSION_2);
+#endif
   const X509_ALGOR *sig_alg;
   const ASN1_BIT_STRING *signature;
   X509_CRL_get0_signature(x, &signature, &sig_alg);
@@ -90,8 +104,13 @@ int X509_CRL_print(BIO *out, X509_CRL *x) {
     return 0;
   }
 
+#if 1 // hezhiwen
+  issuer = X509_NAME_oneline(X509_CRL_get_issuer(x), NULL, 0);
+  ok = issuer != NULL && BIO_printf(out, "%8sIssuer: %s\n", "", issuer) > 0;
+#else
   char *issuer = X509_NAME_oneline(X509_CRL_get_issuer(x), NULL, 0);
   int ok = issuer != NULL && BIO_printf(out, "%8sIssuer: %s\n", "", issuer) > 0;
+#endif
   OPENSSL_free(issuer);
   if (!ok) {
     return 0;
@@ -118,7 +137,11 @@ int X509_CRL_print(BIO *out, X509_CRL *x) {
     return 0;
   }
 
+#if 1 // hezhiwen
+  rev = X509_CRL_get_REVOKED(x);
+#else
   const STACK_OF(X509_REVOKED) *rev = X509_CRL_get_REVOKED(x);
+#endif
   if (sk_X509_REVOKED_num(rev) > 0) {
     if (BIO_printf(out, "Revoked Certificates:\n") <= 0) {
       return 0;
@@ -129,7 +152,11 @@ int X509_CRL_print(BIO *out, X509_CRL *x) {
     }
   }
 
+#if 1 // hezhiwen
+  for (i = 0; i < sk_X509_REVOKED_num(rev); i++) {
+#else
   for (size_t i = 0; i < sk_X509_REVOKED_num(rev); i++) {
+#endif
     const X509_REVOKED *r = sk_X509_REVOKED_value(rev, i);
     if (BIO_printf(out, "    Serial Number: ") <= 0 ||
         i2a_ASN1_INTEGER(out, X509_REVOKED_get0_serialNumber(r)) <= 0 ||

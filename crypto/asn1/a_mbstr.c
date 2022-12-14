@@ -90,6 +90,19 @@ int ASN1_mbstring_ncopy(ASN1_STRING **out, const unsigned char *in, int len,
   ASN1_STRING *dest;
   size_t nchar = 0;
   char strbuf[32];
+#if 1 // hezhiwen
+  int (*decode_func)(CBS *, uint32_t *);
+  int error;
+  CBS cbs;
+  size_t utf8_len = 0;
+  int (*encode_func)(CBB *, uint32_t);
+  size_t size_estimate;
+  int outform = MBSTRING_ASC;
+  CBB cbb;
+  uint8_t *data = NULL;
+  size_t data_len;
+#endif
+
   if (len == -1) {
     len = strlen((const char *)in);
   }
@@ -97,8 +110,10 @@ int ASN1_mbstring_ncopy(ASN1_STRING **out, const unsigned char *in, int len,
     mask = DIRSTRING_TYPE;
   }
 
+#if 0 // hezhiwen
   int (*decode_func)(CBS *, uint32_t *);
   int error;
+#endif
   switch (inform) {
     case MBSTRING_BMP:
       decode_func = cbs_get_ucs2_be;
@@ -126,9 +141,13 @@ int ASN1_mbstring_ncopy(ASN1_STRING **out, const unsigned char *in, int len,
   }
 
   // Check |minsize| and |maxsize| and work out the minimal type, if any.
+#if 1 // hezhiwen
+  CBS_init(&cbs, in, len);
+#else
   CBS cbs;
   CBS_init(&cbs, in, len);
   size_t utf8_len = 0;
+#endif
   while (CBS_len(&cbs) != 0) {
     uint32_t c;
     if (!decode_func(&cbs, &c)) {
@@ -184,9 +203,15 @@ int ASN1_mbstring_ncopy(ASN1_STRING **out, const unsigned char *in, int len,
   }
 
   // Now work out output format and string type
+#if 1 // hezhiwen
+  encode_func = cbb_add_latin1;
+  size_estimate = nchar;
+  outform = MBSTRING_ASC;
+#else
   int (*encode_func)(CBB *, uint32_t) = cbb_add_latin1;
   size_t size_estimate = nchar;
   int outform = MBSTRING_ASC;
+#endif
   if (mask & B_ASN1_PRINTABLESTRING) {
     str_type = V_ASN1_PRINTABLESTRING;
   } else if (mask & B_ASN1_IA5STRING) {
@@ -244,7 +269,9 @@ int ASN1_mbstring_ncopy(ASN1_STRING **out, const unsigned char *in, int len,
     return str_type;
   }
 
+#if 0 // hezhiwen
   CBB cbb;
+#endif
   if (!CBB_init(&cbb, size_estimate + 1)) {
     OPENSSL_PUT_ERROR(ASN1, ERR_R_MALLOC_FAILURE);
     goto err;
@@ -257,8 +284,10 @@ int ASN1_mbstring_ncopy(ASN1_STRING **out, const unsigned char *in, int len,
       goto err;
     }
   }
+#if 0 // hezhiwen
   uint8_t *data = NULL;
   size_t data_len;
+#endif
   if (// OpenSSL historically NUL-terminated this value with a single byte,
       // even for |MBSTRING_BMP| and |MBSTRING_UNIV|.
       !CBB_add_u8(&cbb, 0) || !CBB_finish(&cbb, &data, &data_len) ||

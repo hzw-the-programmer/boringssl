@@ -387,11 +387,18 @@ static int setup_dp(X509 *x, DIST_POINT *dp) {
 
 static int setup_crldp(X509 *x) {
   int j;
+#if 1 // hezhiwen
+  size_t i;
+#endif
   x->crldp = X509_get_ext_d2i(x, NID_crl_distribution_points, &j, NULL);
   if (x->crldp == NULL && j != -1) {
     return 0;
   }
+#if 1 // hezhiwen
+  for (i = 0; i < sk_DIST_POINT_num(x->crldp); i++) {
+#else
   for (size_t i = 0; i < sk_DIST_POINT_num(x->crldp); i++) {
+#endif
     if (!setup_dp(x, sk_DIST_POINT_value(x->crldp, i))) {
       return 0;
     }
@@ -407,9 +414,16 @@ int x509v3_cache_extensions(X509 *x) {
   EXTENDED_KEY_USAGE *extusage;
   size_t i;
   int j;
+#if 1 // hezhiwen
+  int is_set;
+#endif
 
   CRYPTO_MUTEX_lock_read(&x->lock);
+#if 1 // hezhiwen
+  is_set = x->ex_flags & EXFLAG_SET;
+#else
   const int is_set = x->ex_flags & EXFLAG_SET;
+#endif
   CRYPTO_MUTEX_unlock_read(&x->lock);
 
   if (is_set) {

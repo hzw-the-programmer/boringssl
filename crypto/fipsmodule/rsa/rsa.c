@@ -472,6 +472,9 @@ static const struct pkcs1_sig_prefix kPKCS1SigPrefixes[] = {
 };
 
 static int rsa_check_digest_size(int hash_nid, size_t digest_len) {
+#if 1 // hezhiwen
+  size_t i;
+#endif
   if (hash_nid == NID_md5_sha1) {
     if (digest_len != SSL_SIG_LENGTH) {
       OPENSSL_PUT_ERROR(RSA, RSA_R_INVALID_MESSAGE_LENGTH);
@@ -480,7 +483,11 @@ static int rsa_check_digest_size(int hash_nid, size_t digest_len) {
     return 1;
   }
 
+#if 1 // hezhiwen
+  for (i = 0; kPKCS1SigPrefixes[i].nid != NID_undef; i++) {
+#else
   for (size_t i = 0; kPKCS1SigPrefixes[i].nid != NID_undef; i++) {
+#endif
     const struct pkcs1_sig_prefix *sig_prefix = &kPKCS1SigPrefixes[i];
     if (sig_prefix->nid == hash_nid) {
       if (digest_len != sig_prefix->hash_len) {
@@ -499,6 +506,9 @@ static int rsa_check_digest_size(int hash_nid, size_t digest_len) {
 int RSA_add_pkcs1_prefix(uint8_t **out_msg, size_t *out_msg_len,
                          int *is_alloced, int hash_nid, const uint8_t *digest,
                          size_t digest_len) {
+#if 1 // hezhiwen
+  size_t i;
+#endif
   if (!rsa_check_digest_size(hash_nid, digest_len)) {
     return 0;
   }
@@ -512,7 +522,15 @@ int RSA_add_pkcs1_prefix(uint8_t **out_msg, size_t *out_msg_len,
     return 1;
   }
 
+#if 1 // hezhiwen
+  for (i = 0; kPKCS1SigPrefixes[i].nid != NID_undef; i++) {
+    const uint8_t* prefix;
+    size_t prefix_len;
+    size_t signed_msg_len;
+    uint8_t *signed_msg;
+#else
   for (size_t i = 0; kPKCS1SigPrefixes[i].nid != NID_undef; i++) {
+#endif
     const struct pkcs1_sig_prefix *sig_prefix = &kPKCS1SigPrefixes[i];
     if (sig_prefix->nid != hash_nid) {
       continue;
@@ -520,15 +538,25 @@ int RSA_add_pkcs1_prefix(uint8_t **out_msg, size_t *out_msg_len,
 
     // The length should already have been checked.
     assert(digest_len == sig_prefix->hash_len);
+  #if 1 // hezhiwen
+    prefix = sig_prefix->bytes;
+    prefix_len = sig_prefix->len;
+    signed_msg_len = prefix_len + digest_len;
+  #else
     const uint8_t* prefix = sig_prefix->bytes;
     size_t prefix_len = sig_prefix->len;
     size_t signed_msg_len = prefix_len + digest_len;
+  #endif
     if (signed_msg_len < prefix_len) {
       OPENSSL_PUT_ERROR(RSA, RSA_R_TOO_LONG);
       return 0;
     }
 
+  #if 1 // hezhiwen
+    signed_msg = OPENSSL_malloc(signed_msg_len);
+  #else
     uint8_t *signed_msg = OPENSSL_malloc(signed_msg_len);
+  #endif
     if (!signed_msg) {
       OPENSSL_PUT_ERROR(RSA, ERR_R_MALLOC_FAILURE);
       return 0;
@@ -551,6 +579,14 @@ int RSA_add_pkcs1_prefix(uint8_t **out_msg, size_t *out_msg_len,
 int rsa_sign_no_self_test(int hash_nid, const uint8_t *digest,
                           size_t digest_len, uint8_t *out, unsigned *out_len,
                           RSA *rsa) {
+#if 1 // hezhiwen
+  unsigned rsa_size;
+  int ret = 0;
+  uint8_t *signed_msg = NULL;
+  size_t signed_msg_len = 0;
+  int signed_msg_is_alloced = 0;
+  size_t size_t_out_len;
+#endif
   if (rsa->meth->sign) {
     if (!rsa_check_digest_size(hash_nid, digest_len)) {
       return 0;
@@ -562,12 +598,16 @@ int rsa_sign_no_self_test(int hash_nid, const uint8_t *digest,
                            rsa);
   }
 
+#if 1 // hezhiwen
+  rsa_size = RSA_size(rsa);
+#else
   const unsigned rsa_size = RSA_size(rsa);
   int ret = 0;
   uint8_t *signed_msg = NULL;
   size_t signed_msg_len = 0;
   int signed_msg_is_alloced = 0;
   size_t size_t_out_len;
+#endif
   if (!RSA_add_pkcs1_prefix(&signed_msg, &signed_msg_len,
                             &signed_msg_is_alloced, hash_nid, digest,
                             digest_len) ||
@@ -602,22 +642,39 @@ int RSA_sign(int hash_nid, const uint8_t *digest, size_t digest_len,
 int RSA_sign_pss_mgf1(RSA *rsa, size_t *out_len, uint8_t *out, size_t max_out,
                       const uint8_t *digest, size_t digest_len,
                       const EVP_MD *md, const EVP_MD *mgf1_md, int salt_len) {
+#if 1 // hezhiwen
+  size_t padded_len;
+  uint8_t *padded;
+  int ret;
+#endif
   if (digest_len != EVP_MD_size(md)) {
     OPENSSL_PUT_ERROR(RSA, RSA_R_INVALID_MESSAGE_LENGTH);
     return 0;
   }
 
+#if 1 // hezhiwen
+  padded_len = RSA_size(rsa);
+  padded = OPENSSL_malloc(padded_len);
+#else
   size_t padded_len = RSA_size(rsa);
   uint8_t *padded = OPENSSL_malloc(padded_len);
+#endif
   if (padded == NULL) {
     OPENSSL_PUT_ERROR(RSA, ERR_R_MALLOC_FAILURE);
     return 0;
   }
 
+#if 1 // hezhiwen
+  ret = RSA_padding_add_PKCS1_PSS_mgf1(rsa, padded, digest, md, mgf1_md,
+                                       salt_len) &&
+        RSA_sign_raw(rsa, out_len, out, max_out, padded, padded_len,
+                     RSA_NO_PADDING);
+#else
   int ret = RSA_padding_add_PKCS1_PSS_mgf1(rsa, padded, digest, md, mgf1_md,
                                            salt_len) &&
             RSA_sign_raw(rsa, out_len, out, max_out, padded, padded_len,
                          RSA_NO_PADDING);
+#endif
   OPENSSL_free(padded);
   return ret;
 }
@@ -625,17 +682,29 @@ int RSA_sign_pss_mgf1(RSA *rsa, size_t *out_len, uint8_t *out, size_t max_out,
 int rsa_verify_no_self_test(int hash_nid, const uint8_t *digest,
                             size_t digest_len, const uint8_t *sig,
                             size_t sig_len, RSA *rsa) {
+#if 1 // hezhiwen
+  size_t rsa_size;
+  uint8_t *buf = NULL;
+  int ret = 0;
+  uint8_t *signed_msg = NULL;
+  size_t signed_msg_len = 0, len;
+  int signed_msg_is_alloced = 0;
+#endif
   if (rsa->n == NULL || rsa->e == NULL) {
     OPENSSL_PUT_ERROR(RSA, RSA_R_VALUE_MISSING);
     return 0;
   }
 
+#if 1 // hezhiwen
+  rsa_size = RSA_size(rsa);
+#else
   const size_t rsa_size = RSA_size(rsa);
   uint8_t *buf = NULL;
   int ret = 0;
   uint8_t *signed_msg = NULL;
   size_t signed_msg_len = 0, len;
   int signed_msg_is_alloced = 0;
+#endif
 
   if (hash_nid == NID_md5_sha1 && digest_len != SSL_SIG_LENGTH) {
     OPENSSL_PUT_ERROR(RSA, RSA_R_INVALID_MESSAGE_LENGTH);
@@ -683,19 +752,31 @@ int RSA_verify(int hash_nid, const uint8_t *digest, size_t digest_len,
 int RSA_verify_pss_mgf1(RSA *rsa, const uint8_t *digest, size_t digest_len,
                         const EVP_MD *md, const EVP_MD *mgf1_md, int salt_len,
                         const uint8_t *sig, size_t sig_len) {
+#if 1 // hezhiwen
+  size_t em_len;
+  uint8_t *em;
+  int ret = 0;
+#endif
   if (digest_len != EVP_MD_size(md)) {
     OPENSSL_PUT_ERROR(RSA, RSA_R_INVALID_MESSAGE_LENGTH);
     return 0;
   }
 
+#if 1 // hezhiwen
+  em_len = RSA_size(rsa);
+  em = OPENSSL_malloc(em_len);
+#else
   size_t em_len = RSA_size(rsa);
   uint8_t *em = OPENSSL_malloc(em_len);
+#endif
   if (em == NULL) {
     OPENSSL_PUT_ERROR(RSA, ERR_R_MALLOC_FAILURE);
     return 0;
   }
 
+#if 0 // hezhiwen
   int ret = 0;
+#endif
   if (!RSA_verify_raw(rsa, &em_len, em, em_len, sig, sig_len, RSA_NO_PADDING)) {
     goto err;
   }
@@ -715,6 +796,10 @@ err:
 static int check_mod_inverse(int *out_ok, const BIGNUM *a, const BIGNUM *ainv,
                              const BIGNUM *m, unsigned m_min_bits,
                              BN_CTX *ctx) {
+#if 1 // hezhiwen
+  BIGNUM *tmp;
+  int ret;
+#endif
   if (BN_is_negative(ainv) || BN_cmp(ainv, m) >= 0) {
     *out_ok = 0;
     return 1;
@@ -724,10 +809,17 @@ static int check_mod_inverse(int *out_ok, const BIGNUM *a, const BIGNUM *ainv,
   // checking |ainv| is in range bounds the running time, assuming |m|'s bounds
   // were checked by the caller.
   BN_CTX_start(ctx);
+#if 1 // hezhiwen
+  tmp = BN_CTX_get(ctx);
+  ret = tmp != NULL &&
+        bn_mul_consttime(tmp, a, ainv, ctx) &&
+        bn_div_consttime(NULL, tmp, tmp, m, m_min_bits, ctx);
+#else
   BIGNUM *tmp = BN_CTX_get(ctx);
   int ret = tmp != NULL &&
             bn_mul_consttime(tmp, a, ainv, ctx) &&
             bn_div_consttime(NULL, tmp, tmp, m, m_min_bits, ctx);
+#endif
   if (ret) {
     *out_ok = BN_is_one(tmp);
   }
@@ -741,6 +833,14 @@ int RSA_check_key(const RSA *key) {
   // |BN_MONT_CTX_set_locked| as a result of API issues. See
   // https://crbug.com/boringssl/316. As a result, we inconsistently check RSA
   // invariants. We should fix this and integrate that logic.
+#if 1 // hezhiwen
+  BN_CTX *ctx;
+  BIGNUM tmp, de, pm1, qm1, dmp1, dmq1;
+  int ok = 0;
+  unsigned pm1_bits;
+  unsigned qm1_bits;
+  int has_crt_values;
+#endif
 
   if (RSA_is_opaque(key)) {
     // Opaque keys can't be checked.
@@ -770,14 +870,20 @@ int RSA_check_key(const RSA *key) {
     return 1;
   }
 
+#if 1 // hezhiwen
+  ctx = BN_CTX_new();
+#else
   BN_CTX *ctx = BN_CTX_new();
+#endif
   if (ctx == NULL) {
     OPENSSL_PUT_ERROR(RSA, ERR_R_MALLOC_FAILURE);
     return 0;
   }
 
+#if 0 // hezhiwen
   BIGNUM tmp, de, pm1, qm1, dmp1, dmq1;
   int ok = 0;
+#endif
   BN_init(&tmp);
   BN_init(&de);
   BN_init(&pm1);
@@ -811,8 +917,13 @@ int RSA_check_key(const RSA *key) {
     OPENSSL_PUT_ERROR(RSA, ERR_LIB_BN);
     goto out;
   }
+#if 1 // hezhiwen
+  pm1_bits = BN_num_bits(&pm1);
+  qm1_bits = BN_num_bits(&qm1);
+#else
   const unsigned pm1_bits = BN_num_bits(&pm1);
   const unsigned qm1_bits = BN_num_bits(&qm1);
+#endif
   if (!bn_mul_consttime(&de, key->d, key->e, ctx) ||
       !bn_div_consttime(NULL, &tmp, &de, &pm1, pm1_bits, ctx) ||
       !bn_div_consttime(NULL, &de, &de, &qm1, qm1_bits, ctx)) {
@@ -825,7 +936,11 @@ int RSA_check_key(const RSA *key) {
     goto out;
   }
 
+#if 1 // hezhiwen
+  has_crt_values = key->dmp1 != NULL;
+#else
   int has_crt_values = key->dmp1 != NULL;
+#endif
   if (has_crt_values != (key->dmq1 != NULL) ||
       has_crt_values != (key->iqmp != NULL)) {
     OPENSSL_PUT_ERROR(RSA, RSA_R_INCONSISTENT_SET_OF_CRT_VALUES);
@@ -887,6 +1002,15 @@ DEFINE_LOCAL_DATA(BIGNUM, g_small_factors) {
 }
 
 int RSA_check_fips(RSA *key) {
+#if 1 // hezhiwen
+  BN_CTX *ctx;
+  BIGNUM small_gcd;
+  int ret = 1;
+  enum bn_primality_result_t primality_result;
+  uint8_t data[32] = {0};
+  unsigned sig_len;
+  uint8_t *sig;
+#endif
   if (RSA_is_opaque(key)) {
     // Opaque keys can't be checked.
     OPENSSL_PUT_ERROR(RSA, RSA_R_PUBLIC_KEY_VALIDATION_FAILED);
@@ -897,16 +1021,24 @@ int RSA_check_fips(RSA *key) {
     return 0;
   }
 
+#if 1 // hezhiwen
+  ctx = BN_CTX_new();
+#else
   BN_CTX *ctx = BN_CTX_new();
+#endif
   if (ctx == NULL) {
     OPENSSL_PUT_ERROR(RSA, ERR_R_MALLOC_FAILURE);
     return 0;
   }
 
+#if 0 // hezhiwen
   BIGNUM small_gcd;
+#endif
   BN_init(&small_gcd);
 
+#if 0 // hezhiwen
   int ret = 1;
+#endif
 
   // Perform partial public key validation of RSA keys (SP 800-89 5.3.3).
   // Although this is not for primality testing, SP 800-89 cites an RSA
@@ -914,7 +1046,9 @@ int RSA_check_fips(RSA *key) {
   // match. This is only a plausibility test and we expect the value to be
   // composite, so too few iterations will cause us to reject the key, not use
   // an implausible one.
+#if 0 // hezhiwen
   enum bn_primality_result_t primality_result;
+#endif
   if (BN_num_bits(key->e) <= 16 ||
       BN_num_bits(key->e) > 256 ||
       !BN_is_odd(key->n) ||
@@ -942,9 +1076,14 @@ int RSA_check_fips(RSA *key) {
   // section 9.9, it is not known whether |rsa| will be used for signing or
   // encryption, so either pair-wise consistency self-test is acceptable. We
   // perform a signing test.
+#if 1 // hezhiwen
+  sig_len = RSA_size(key);
+  sig = OPENSSL_malloc(sig_len);
+#else
   uint8_t data[32] = {0};
   unsigned sig_len = RSA_size(key);
   uint8_t *sig = OPENSSL_malloc(sig_len);
+#endif
   if (sig == NULL) {
     OPENSSL_PUT_ERROR(RSA, ERR_R_MALLOC_FAILURE);
     return 0;

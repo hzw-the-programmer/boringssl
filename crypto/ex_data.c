@@ -180,6 +180,9 @@ err:
 }
 
 int CRYPTO_set_ex_data(CRYPTO_EX_DATA *ad, int index, void *val) {
+#if 1 // hezhiwen
+  size_t i;
+#endif
   if (index < 0) {
     // A caller that can accidentally pass in an invalid index into this
     // function will hit an memory error if |index| happened to be valid, and
@@ -196,7 +199,11 @@ int CRYPTO_set_ex_data(CRYPTO_EX_DATA *ad, int index, void *val) {
   }
 
   // Add NULL values until the stack is long enough.
+#if 1 // hezhiwen
+  for (i = sk_void_num(ad->sk); i <= (size_t)index; i++) {
+#else
   for (size_t i = sk_void_num(ad->sk); i <= (size_t)index; i++) {
+#endif
     if (!sk_void_push(ad->sk, NULL)) {
       OPENSSL_PUT_ERROR(CRYPTO, ERR_R_MALLOC_FAILURE);
       return 0;
@@ -248,12 +255,18 @@ void CRYPTO_new_ex_data(CRYPTO_EX_DATA *ad) {
 
 void CRYPTO_free_ex_data(CRYPTO_EX_DATA_CLASS *ex_data_class, void *obj,
                          CRYPTO_EX_DATA *ad) {
+#if 1 // hezhiwen
+  STACK_OF(CRYPTO_EX_DATA_FUNCS) *func_pointers;
+  int i;
+#endif
   if (ad->sk == NULL) {
     // Nothing to do.
     return;
   }
 
+#if 0 // hezhiwen
   STACK_OF(CRYPTO_EX_DATA_FUNCS) *func_pointers;
+#endif
   if (!get_func_pointers(&func_pointers, ex_data_class)) {
     // TODO(davidben): This leaks memory on malloc error.
     return;
@@ -262,7 +275,11 @@ void CRYPTO_free_ex_data(CRYPTO_EX_DATA_CLASS *ex_data_class, void *obj,
   // |CRYPTO_get_ex_new_index| will not allocate indices beyond |INT_MAX|.
   assert(sk_CRYPTO_EX_DATA_FUNCS_num(func_pointers) <=
          (size_t)(INT_MAX - ex_data_class->num_reserved));
+#if 1 // hezhiwen
+  for (i = 0; i < (int)sk_CRYPTO_EX_DATA_FUNCS_num(func_pointers); i++) {
+#else
   for (int i = 0; i < (int)sk_CRYPTO_EX_DATA_FUNCS_num(func_pointers); i++) {
+#endif
     CRYPTO_EX_DATA_FUNCS *func_pointer =
         sk_CRYPTO_EX_DATA_FUNCS_value(func_pointers, i);
     if (func_pointer->free_func) {

@@ -262,6 +262,9 @@ static int get_cert_by_subject(X509_LOOKUP *xl, int type, X509_NAME *name,
   BUF_MEM *b = NULL;
   X509_OBJECT stmp, *tmp;
   const char *postfix = "";
+#if 1 // hezhiwen
+  BY_DIR *ctx;
+#endif
 
   if (name == NULL) {
     return 0;
@@ -288,7 +291,11 @@ static int get_cert_by_subject(X509_LOOKUP *xl, int type, X509_NAME *name,
     goto finish;
   }
 
+#if 1 // hezhiwen
+  ctx = xl->method_data;
+#else
   BY_DIR *ctx = xl->method_data;
+#endif
 
   hash_array[0] = X509_NAME_hash(name);
   hash_array[1] = X509_NAME_hash_old(name);

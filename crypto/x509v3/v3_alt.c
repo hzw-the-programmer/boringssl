@@ -97,7 +97,12 @@ STACK_OF(CONF_VALUE) *i2v_GENERAL_NAMES(const X509V3_EXT_METHOD *method,
                                         GENERAL_NAMES *gens,
                                         STACK_OF(CONF_VALUE) *ret) {
   int ret_was_null = ret == NULL;
+#if 1 // hezhiwen
+  size_t i;
+  for (i = 0; i < sk_GENERAL_NAME_num(gens); i++) {
+#else
   for (size_t i = 0; i < sk_GENERAL_NAME_num(gens); i++) {
+#endif
     GENERAL_NAME *gen = sk_GENERAL_NAME_value(gens, i);
     STACK_OF(CONF_VALUE) *tmp = i2v_GENERAL_NAME(method, gen, ret);
     if (tmp == NULL) {
@@ -300,6 +305,13 @@ err:
 // Append subject altname of issuer to issuer alt name of subject
 
 static int copy_issuer(X509V3_CTX *ctx, GENERAL_NAMES *gens) {
+#if 1 // hezhiwen
+  int i;
+  int ret = 0;
+  GENERAL_NAMES *ialt = NULL;
+  X509_EXTENSION *ext;
+  size_t j;
+#endif
   if (ctx && (ctx->flags == CTX_TEST)) {
     return 1;
   }
@@ -307,21 +319,31 @@ static int copy_issuer(X509V3_CTX *ctx, GENERAL_NAMES *gens) {
     OPENSSL_PUT_ERROR(X509V3, X509V3_R_NO_ISSUER_DETAILS);
     return 0;
   }
+#if 1 // hezhiwen
+  i = X509_get_ext_by_NID(ctx->issuer_cert, NID_subject_alt_name, -1);
+#else
   int i = X509_get_ext_by_NID(ctx->issuer_cert, NID_subject_alt_name, -1);
+#endif
   if (i < 0) {
     return 1;
   }
 
+#if 0 // hezhiwen
   int ret = 0;
   GENERAL_NAMES *ialt = NULL;
   X509_EXTENSION *ext;
+#endif
   if (!(ext = X509_get_ext(ctx->issuer_cert, i)) ||
       !(ialt = X509V3_EXT_d2i(ext))) {
     OPENSSL_PUT_ERROR(X509V3, X509V3_R_ISSUER_DECODE_ERROR);
     goto err;
   }
 
+#if 1 // hezhiwen
+  for (j = 0; j < sk_GENERAL_NAME_num(ialt); j++) {
+#else
   for (size_t j = 0; j < sk_GENERAL_NAME_num(ialt); j++) {
+#endif
     GENERAL_NAME *gen = sk_GENERAL_NAME_value(ialt, j);
     if (!sk_GENERAL_NAME_push(gens, gen)) {
       OPENSSL_PUT_ERROR(X509V3, ERR_R_MALLOC_FAILURE);

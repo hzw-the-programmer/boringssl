@@ -106,13 +106,22 @@ const EVP_CIPHER *EVP_des_cbc(void) { return &evp_des_cbc; }
 
 static int des_ecb_cipher(EVP_CIPHER_CTX *ctx, uint8_t *out, const uint8_t *in,
                           size_t in_len) {
+#if 1 // hezhiwen
+  EVP_DES_KEY *dat;
+  size_t i;
+#endif
   if (in_len < ctx->cipher->block_size) {
     return 1;
   }
   in_len -= ctx->cipher->block_size;
 
+#if 1 // hezhiwen
+  dat = (EVP_DES_KEY *)ctx->cipher_data;
+  for (i = 0; i <= in_len; i += ctx->cipher->block_size) {
+#else
   EVP_DES_KEY *dat = (EVP_DES_KEY *)ctx->cipher_data;
   for (size_t i = 0; i <= in_len; i += ctx->cipher->block_size) {
+#endif
     DES_ecb_encrypt((DES_cblock *)(in + i), (DES_cblock *)(out + i),
                     &dat->ks.ks, ctx->encrypt);
   }
@@ -210,13 +219,22 @@ const EVP_CIPHER *EVP_des_ede_cbc(void) { return &evp_des_ede_cbc; }
 
 static int des_ede_ecb_cipher(EVP_CIPHER_CTX *ctx, uint8_t *out,
                               const uint8_t *in, size_t in_len) {
+#if 1 // hezhiwen
+  DES_EDE_KEY *dat;
+  size_t i;
+#endif
   if (in_len < ctx->cipher->block_size) {
     return 1;
   }
   in_len -= ctx->cipher->block_size;
 
+#if 1 // hezhiwen
+  dat = (DES_EDE_KEY *) ctx->cipher_data;
+  for (i = 0; i <= in_len; i += ctx->cipher->block_size) {
+#else
   DES_EDE_KEY *dat = (DES_EDE_KEY *) ctx->cipher_data;
   for (size_t i = 0; i <= in_len; i += ctx->cipher->block_size) {
+#endif
     DES_ecb3_encrypt((DES_cblock *) (in + i), (DES_cblock *) (out + i),
                      &dat->ks.ks[0], &dat->ks.ks[1], &dat->ks.ks[2],
                      ctx->encrypt);

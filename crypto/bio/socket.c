@@ -93,15 +93,26 @@ static int sock_free(BIO *bio) {
 }
 
 static int sock_read(BIO *b, char *out, int outl) {
+#if 1 // hezhiwen
+  int ret;
+#endif
   if (out == NULL) {
     return 0;
   }
 
   bio_clear_socket_error();
+#if 1 // hezhiwen
+#if defined(OPENSSL_WINDOWS)
+  ret = recv(b->num, out, outl, 0);
+#else
+  ret = (int)read(b->num, out, outl);
+#endif
+#else
 #if defined(OPENSSL_WINDOWS)
   int ret = recv(b->num, out, outl, 0);
 #else
   int ret = (int)read(b->num, out, outl);
+#endif
 #endif
   BIO_clear_retry_flags(b);
   if (ret <= 0) {
@@ -113,11 +124,22 @@ static int sock_read(BIO *b, char *out, int outl) {
 }
 
 static int sock_write(BIO *b, const char *in, int inl) {
+#if 1 // hezhiwen
+  int ret;
+#endif
   bio_clear_socket_error();
+#if 1 // hezhiwen
+#if defined(OPENSSL_WINDOWS)
+  ret = send(b->num, in, inl, 0);
+#else
+  ret = (int)write(b->num, in, inl);
+#endif
+#else
 #if defined(OPENSSL_WINDOWS)
   int ret = send(b->num, in, inl, 0);
 #else
   int ret = (int)write(b->num, in, inl);
+#endif
 #endif
   BIO_clear_retry_flags(b);
   if (ret <= 0) {

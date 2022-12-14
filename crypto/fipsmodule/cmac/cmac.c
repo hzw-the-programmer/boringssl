@@ -86,6 +86,11 @@ static void CMAC_CTX_cleanup(CMAC_CTX *ctx) {
 int AES_CMAC(uint8_t out[16], const uint8_t *key, size_t key_len,
              const uint8_t *in, size_t in_len) {
   const EVP_CIPHER *cipher;
+#if 1 // hezhiwen
+  size_t scratch_out_len;
+  CMAC_CTX ctx;
+  int ok;
+#endif
   switch (key_len) {
     // WARNING: this code assumes that all supported key sizes are FIPS
     // Approved.
@@ -99,16 +104,24 @@ int AES_CMAC(uint8_t out[16], const uint8_t *key, size_t key_len,
       return 0;
   }
 
+#if 0 // hezhiwen
   size_t scratch_out_len;
   CMAC_CTX ctx;
+#endif
   CMAC_CTX_init(&ctx);
 
   // We have to verify that all the CMAC services actually succeed before
   // updating the indicator state, so we lock the state here.
   FIPS_service_indicator_lock_state();
+#if 1 // hezhiwen
+  ok = CMAC_Init(&ctx, key, key_len, cipher, NULL /* engine */) &&
+       CMAC_Update(&ctx, in, in_len) &&
+       CMAC_Final(&ctx, out, &scratch_out_len);
+#else
   const int ok = CMAC_Init(&ctx, key, key_len, cipher, NULL /* engine */) &&
                  CMAC_Update(&ctx, in, in_len) &&
                  CMAC_Final(&ctx, out, &scratch_out_len);
+#endif
   FIPS_service_indicator_unlock_state();
 
   if (ok) {
@@ -152,6 +165,9 @@ int CMAC_CTX_copy(CMAC_CTX *out, const CMAC_CTX *in) {
 // See https://tools.ietf.org/html/rfc4493#section-2.3
 static void binary_field_mul_x_128(uint8_t out[16], const uint8_t in[16]) {
   unsigned i;
+#if 1 // hezhiwen
+  uint8_t carry;
+#endif
 
   // Shift |in| to left, including carry.
   for (i = 0; i < 15; i++) {
@@ -159,7 +175,11 @@ static void binary_field_mul_x_128(uint8_t out[16], const uint8_t in[16]) {
   }
 
   // If MSB set fixup with R.
+#if 1 // hezhiwen
+  carry = in[0] >> 7;
+#else
   const uint8_t carry = in[0] >> 7;
+#endif
   out[i] = (in[i] << 1) ^ ((0 - carry) & 0x87);
 }
 
@@ -169,6 +189,9 @@ static void binary_field_mul_x_128(uint8_t out[16], const uint8_t in[16]) {
 // See https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-38b.pdf
 static void binary_field_mul_x_64(uint8_t out[8], const uint8_t in[8]) {
   unsigned i;
+#if 1 // hezhiwen
+  uint8_t carry;
+#endif
 
   // Shift |in| to left, including carry.
   for (i = 0; i < 7; i++) {
@@ -176,7 +199,11 @@ static void binary_field_mul_x_64(uint8_t out[8], const uint8_t in[8]) {
   }
 
   // If MSB set fixup with R.
+#if 1 // hezhiwen
+  carry = in[0] >> 7;
+#else
   const uint8_t carry = in[0] >> 7;
+#endif
   out[i] = (in[i] << 1) ^ ((0 - carry) & 0x1b);
 }
 
@@ -186,12 +213,19 @@ int CMAC_Init(CMAC_CTX *ctx, const void *key, size_t key_len,
               const EVP_CIPHER *cipher, ENGINE *engine) {
   int ret = 0;
   uint8_t scratch[AES_BLOCK_SIZE];
+#if 1 // hezhiwen
+  size_t block_size;
+#endif
 
   // We have to avoid the underlying AES-CBC |EVP_CIPHER| services updating the
   // indicator state, so we lock the state here.
   FIPS_service_indicator_lock_state();
 
+#if 1 // hezhiwen
+  block_size = EVP_CIPHER_block_size(cipher);
+#else
   size_t block_size = EVP_CIPHER_block_size(cipher);
+#endif
   if ((block_size != AES_BLOCK_SIZE && block_size != 8 /* 3-DES */) ||
       EVP_CIPHER_key_length(cipher) != key_len ||
       !EVP_EncryptInit_ex(&ctx->cipher_ctx, cipher, NULL, key, kZeroIV) ||
@@ -223,14 +257,23 @@ int CMAC_Reset(CMAC_CTX *ctx) {
 
 int CMAC_Update(CMAC_CTX *ctx, const uint8_t *in, size_t in_len) {
   int ret = 0;
+#if 1 // hezhiwen
+  size_t block_size;
+  uint8_t scratch[AES_BLOCK_SIZE];
+#endif
 
   // We have to avoid the underlying AES-CBC |EVP_Cipher| services updating the
   // indicator state, so we lock the state here.
   FIPS_service_indicator_lock_state();
 
+#if 1 // hezhiwen
+  block_size = EVP_CIPHER_CTX_block_size(&ctx->cipher_ctx);
+  assert(block_size <= AES_BLOCK_SIZE);
+#else
   size_t block_size = EVP_CIPHER_CTX_block_size(&ctx->cipher_ctx);
   assert(block_size <= AES_BLOCK_SIZE);
   uint8_t scratch[AES_BLOCK_SIZE];
+#endif
 
   if (ctx->block_used > 0) {
     size_t todo = block_size - ctx->block_used;
@@ -284,6 +327,10 @@ out:
 int CMAC_Final(CMAC_CTX *ctx, uint8_t *out, size_t *out_len) {
   int ret = 0;
   size_t block_size = EVP_CIPHER_CTX_block_size(&ctx->cipher_ctx);
+#if 1 // hezhiwen
+  const uint8_t *mask;
+  unsigned i;
+#endif
   assert(block_size <= AES_BLOCK_SIZE);
 
   // We have to avoid the underlying AES-CBC |EVP_Cipher| services updating the
@@ -296,7 +343,11 @@ int CMAC_Final(CMAC_CTX *ctx, uint8_t *out, size_t *out_len) {
     goto out;
   }
 
+#if 1 // hezhiwen
+  mask = ctx->k1;
+#else
   const uint8_t *mask = ctx->k1;
+#endif
 
   if (ctx->block_used != block_size) {
     // If the last block is incomplete, terminate it with a single 'one' bit
@@ -308,7 +359,11 @@ int CMAC_Final(CMAC_CTX *ctx, uint8_t *out, size_t *out_len) {
     mask = ctx->k2;
   }
 
+#if 1 // hezhiwen
+  for (i = 0; i < block_size; i++) {
+#else
   for (unsigned i = 0; i < block_size; i++) {
+#endif
     out[i] = ctx->block[i] ^ mask[i];
   }
   ret = EVP_Cipher(&ctx->cipher_ctx, out, out, block_size);

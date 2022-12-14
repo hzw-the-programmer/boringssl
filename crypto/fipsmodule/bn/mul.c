@@ -80,15 +80,29 @@ static void bn_abs_sub_words(BN_ULONG *r, const BN_ULONG *a, const BN_ULONG *b,
 
 static void bn_mul_normal(BN_ULONG *r, const BN_ULONG *a, size_t na,
                           const BN_ULONG *b, size_t nb) {
+#if 1 // hezhiwen
+  BN_ULONG *rr;
+#endif
   if (na < nb) {
     size_t itmp = na;
+  #if 1 // hezhiwen
+    const BN_ULONG *ltmp;
+  #endif
     na = nb;
     nb = itmp;
+  #if 1 // hezhiwen
+    ltmp = a;
+  #else
     const BN_ULONG *ltmp = a;
+  #endif
     a = b;
     b = ltmp;
   }
+#if 1 // hezhiwen
+  rr = &(r[na]);
+#else
   BN_ULONG *rr = &(r[na]);
+#endif
   if (nb == 0) {
     OPENSSL_memset(r, 0, na * sizeof(BN_ULONG));
     return;
@@ -128,7 +142,12 @@ static void bn_mul_normal(BN_ULONG *r, const BN_ULONG *a, size_t na,
 // is confusing.
 static BN_ULONG bn_sub_part_words(BN_ULONG *r, const BN_ULONG *a,
                                   const BN_ULONG *b, int cl, int dl) {
+#if 1 // hezhiwen
+  int i;
+#else
   assert(cl >= 0);
+#endif
+
   BN_ULONG borrow = bn_sub_words(r, a, b, cl);
   if (dl == 0) {
     return borrow;
@@ -142,14 +161,22 @@ static BN_ULONG bn_sub_part_words(BN_ULONG *r, const BN_ULONG *a,
     // |a| is shorter than |b|. Complete the subtraction as if the excess words
     // in |a| were zeros.
     dl = -dl;
+  #if 1 // hezhiwen
+    for (i = 0; i < dl; i++) {
+  #else
     for (int i = 0; i < dl; i++) {
+  #endif
       r[i] = 0u - b[i] - borrow;
       borrow |= r[i] != 0;
     }
   } else {
     // |b| is shorter than |a|. Complete the subtraction as if the excess words
     // in |b| were zeros.
+  #if 1 // hezhiwen
+    for (i = 0; i < dl; i++) {
+  #else
     for (int i = 0; i < dl; i++) {
+  #endif
       // |r| and |a| may alias, so use a temporary.
       BN_ULONG tmp = a[i];
       r[i] = a[i] - borrow;
@@ -170,9 +197,16 @@ static BN_ULONG bn_sub_part_words(BN_ULONG *r, const BN_ULONG *a,
 static BN_ULONG bn_abs_sub_part_words(BN_ULONG *r, const BN_ULONG *a,
                                       const BN_ULONG *b, int cl, int dl,
                                       BN_ULONG *tmp) {
+#if 1 // hezhiwen
+  int r_len;
+#endif
   BN_ULONG borrow = bn_sub_part_words(tmp, a, b, cl, dl);
   bn_sub_part_words(r, b, a, cl, -dl);
+#if 1 // hezhiwen
+  r_len = cl + (dl < 0 ? -dl : dl);
+#else
   int r_len = cl + (dl < 0 ? -dl : dl);
+#endif
   borrow = 0 - borrow;
   bn_select_words(r, borrow, r /* tmp < 0 */, tmp /* tmp >= 0 */, r_len);
   return borrow;
@@ -183,11 +217,22 @@ int bn_abs_sub_consttime(BIGNUM *r, const BIGNUM *a, const BIGNUM *b,
   int cl = a->width < b->width ? a->width : b->width;
   int dl = a->width - b->width;
   int r_len = a->width < b->width ? b->width : a->width;
+#if 1 // hezhiwen
+  BIGNUM *tmp;
+  int ok;
+#endif
   BN_CTX_start(ctx);
+#if 1 // hezhiwen
+  tmp = BN_CTX_get(ctx);
+ ok = tmp != NULL &&
+      bn_wexpand(r, r_len) &&
+      bn_wexpand(tmp, r_len);
+#else
   BIGNUM *tmp = BN_CTX_get(ctx);
   int ok = tmp != NULL &&
            bn_wexpand(r, r_len) &&
            bn_wexpand(tmp, r_len);
+#endif
   if (ok) {
     bn_abs_sub_part_words(r->d, a->d, b->d, cl, dl, tmp->d);
     r->width = r_len;
@@ -209,6 +254,14 @@ int bn_abs_sub_consttime(BIGNUM *r, const BIGNUM *a, const BIGNUM *b,
 // here.
 static void bn_mul_recursive(BN_ULONG *r, const BN_ULONG *a, const BN_ULONG *b,
                              int n2, int dna, int dnb, BN_ULONG *t) {
+#if 1 // hezhiwen
+  int n, tna, tnb;
+  BN_ULONG neg;
+  BN_ULONG c;
+  BN_ULONG c_neg;
+  BN_ULONG c_pos;
+  int i;
+#endif
   // |n2| is a power of two.
   assert(n2 != 0 && (n2 & (n2 - 1)) == 0);
   // Check |dna| and |dnb| are in range.
@@ -242,12 +295,22 @@ static void bn_mul_recursive(BN_ULONG *r, const BN_ULONG *a, const BN_ULONG *b,
   //
   // Note that we know |n| >= |BN_MUL_RECURSIVE_SIZE_NORMAL|/2 above, so
   // |tna| and |tnb| are non-negative.
+#if 1 // hezhiwen
+  n = n2 / 2;
+  tna = n + dna;
+  tnb = n + dnb;
+#else
   int n = n2 / 2, tna = n + dna, tnb = n + dnb;
+#endif
 
   // t0 = a0 - a1 and t1 = b1 - b0. The result will be multiplied, so we XOR
   // their sign masks, giving the sign of (a0 - a1)*(b1 - b0). t0 and t1
   // themselves store the absolute value.
+#if 1 // hezhiwen
+  neg = bn_abs_sub_part_words(t, a, &a[n], tna, n - tna, &t[n2]);
+#else
   BN_ULONG neg = bn_abs_sub_part_words(t, a, &a[n], tna, n - tna, &t[n2]);
+#endif
   neg ^= bn_abs_sub_part_words(&t[n], &b[n], b, tnb, tnb - n, &t[n2]);
 
   // Compute:
@@ -272,13 +335,22 @@ static void bn_mul_recursive(BN_ULONG *r, const BN_ULONG *a, const BN_ULONG *b,
   }
 
   // t0,t1,c = r0,r1 + r2,r3 = a0*b0 + a1*b1
+#if 1 // hezhiwen
+  c = bn_add_words(t, r, &r[n2], n2);
+#else
   BN_ULONG c = bn_add_words(t, r, &r[n2], n2);
+#endif
 
   // t2,t3,c = t0,t1,c + neg*t2,t3 = (a0 - a1)*(b1 - b0) + a1*b1 + a0*b0.
   // The second term is stored as the absolute value, so we do this with a
   // constant-time select.
+#if 1 // hezhiwen
+  c_neg = c - bn_sub_words(&t[n2 * 2], t, &t[n2], n2);
+  c_pos = c + bn_add_words(&t[n2], t, &t[n2], n2);
+#else
   BN_ULONG c_neg = c - bn_sub_words(&t[n2 * 2], t, &t[n2], n2);
   BN_ULONG c_pos = c + bn_add_words(&t[n2], t, &t[n2], n2);
+#endif
   bn_select_words(&t[n2], neg, &t[n2 * 2], &t[n2], n2);
   static_assert(sizeof(BN_ULONG) <= sizeof(crypto_word_t),
                 "crypto_word_t is too small");
@@ -289,7 +361,11 @@ static void bn_mul_recursive(BN_ULONG *r, const BN_ULONG *a, const BN_ULONG *b,
   c += bn_add_words(&r[n], &r[n], &t[n2], n2);
 
   // Propagate the carry bit to the end.
+#if 1 // hezhiwen
+  for (i = n + n2; i < n2 + n2; i++) {
+#else
   for (int i = n + n2; i < n2 + n2; i++) {
+#endif
     BN_ULONG old = r[i];
     r[i] = old + c;
     c = r[i] < old;
@@ -310,6 +386,14 @@ static void bn_mul_recursive(BN_ULONG *r, const BN_ULONG *a, const BN_ULONG *b,
 static void bn_mul_part_recursive(BN_ULONG *r, const BN_ULONG *a,
                                   const BN_ULONG *b, int n, int tna, int tnb,
                                   BN_ULONG *t) {
+#if 1 // hezhiwen
+  int n2;
+  BN_ULONG neg;
+  BN_ULONG c;
+  BN_ULONG c_neg;
+  BN_ULONG c_pos;
+  int i;
+#endif
   // |n| is a power of two.
   assert(n != 0 && (n & (n - 1)) == 0);
   // Check |tna| and |tnb| are in range.
@@ -317,7 +401,11 @@ static void bn_mul_part_recursive(BN_ULONG *r, const BN_ULONG *a,
   assert(0 <= tnb && tnb < n);
   assert(-1 <= tna - tnb && tna - tnb <= 1);
 
+#if 1 // hezhiwen
+  n2 = n * 2;
+#else
   int n2 = n * 2;
+#endif
   if (n < 8) {
     bn_mul_normal(r, a, n + tna, b, n + tnb);
     OPENSSL_memset(r + n2 + tna + tnb, 0, n2 - tna - tnb);
@@ -336,7 +424,11 @@ static void bn_mul_part_recursive(BN_ULONG *r, const BN_ULONG *a,
   // t0 = a0 - a1 and t1 = b1 - b0. The result will be multiplied, so we XOR
   // their sign masks, giving the sign of (a0 - a1)*(b1 - b0). t0 and t1
   // themselves store the absolute value.
+#if 1 // hezhiwen
+  neg = bn_abs_sub_part_words(t, a, &a[n], tna, n - tna, &t[n2]);
+#else
   BN_ULONG neg = bn_abs_sub_part_words(t, a, &a[n], tna, n - tna, &t[n2]);
+#endif
   neg ^= bn_abs_sub_part_words(&t[n], &b[n], b, tnb, tnb - n, &t[n2]);
 
   // Compute:
@@ -386,13 +478,22 @@ static void bn_mul_part_recursive(BN_ULONG *r, const BN_ULONG *a,
   }
 
   // t0,t1,c = r0,r1 + r2,r3 = a0*b0 + a1*b1
+#if 1 // hezhiwen
+  c = bn_add_words(t, r, &r[n2], n2);
+#else
   BN_ULONG c = bn_add_words(t, r, &r[n2], n2);
+#endif
 
   // t2,t3,c = t0,t1,c + neg*t2,t3 = (a0 - a1)*(b1 - b0) + a1*b1 + a0*b0.
   // The second term is stored as the absolute value, so we do this with a
   // constant-time select.
+#if 1 // hezhiwen
+  c_neg = c - bn_sub_words(&t[n2 * 2], t, &t[n2], n2);
+  c_pos = c + bn_add_words(&t[n2], t, &t[n2], n2);
+#else
   BN_ULONG c_neg = c - bn_sub_words(&t[n2 * 2], t, &t[n2], n2);
   BN_ULONG c_pos = c + bn_add_words(&t[n2], t, &t[n2], n2);
+#endif
   bn_select_words(&t[n2], neg, &t[n2 * 2], &t[n2], n2);
   static_assert(sizeof(BN_ULONG) <= sizeof(crypto_word_t),
                 "crypto_word_t is too small");
@@ -403,7 +504,11 @@ static void bn_mul_part_recursive(BN_ULONG *r, const BN_ULONG *a,
   c += bn_add_words(&r[n], &r[n], &t[n2], n2);
 
   // Propagate the carry bit to the end.
+#if 1 // hezhiwen
+  for (i = n + n2; i < n2 + n2; i++) {
+#else
   for (int i = n + n2; i < n2 + n2; i++) {
+#endif
     BN_ULONG old = r[i];
     r[i] = old + c;
     c = r[i] < old;
@@ -420,13 +525,22 @@ static int bn_mul_impl(BIGNUM *r, const BIGNUM *a, const BIGNUM *b,
                        BN_CTX *ctx) {
   int al = a->width;
   int bl = b->width;
+#if 1 // hezhiwen
+  int ret = 0;
+  BIGNUM *rr;
+  int i;
+  int top;
+  static const int kMulNormalSize = 16;
+#endif
   if (al == 0 || bl == 0) {
     BN_zero(r);
     return 1;
   }
 
+#if 0 // hezhiwen
   int ret = 0;
   BIGNUM *rr;
+#endif
   BN_CTX_start(ctx);
   if (r == a || r == b) {
     rr = BN_CTX_get(ctx);
@@ -438,7 +552,11 @@ static int bn_mul_impl(BIGNUM *r, const BIGNUM *a, const BIGNUM *b,
   }
   rr->neg = a->neg ^ b->neg;
 
+#if 1 // hezhiwen
+  i = al - bl;
+#else
   int i = al - bl;
+#endif
   if (i == 0) {
     if (al == 8) {
       if (!bn_wexpand(rr, 16)) {
@@ -450,12 +568,19 @@ static int bn_mul_impl(BIGNUM *r, const BIGNUM *a, const BIGNUM *b,
     }
   }
 
+#if 1 // hezhiwen
+  top = al + bl;
+#else
   int top = al + bl;
   static const int kMulNormalSize = 16;
+#endif
   if (al >= kMulNormalSize && bl >= kMulNormalSize) {
     if (-1 <= i && i <= 1) {
       // Find the largest power of two less than or equal to the larger length.
       int j;
+    #if 1 // hezhiwen
+      BIGNUM *t;
+    #endif
       if (i >= 0) {
         j = BN_num_bits_word((BN_ULONG)al);
       } else {
@@ -463,7 +588,11 @@ static int bn_mul_impl(BIGNUM *r, const BIGNUM *a, const BIGNUM *b,
       }
       j = 1 << (j - 1);
       assert(j <= al || j <= bl);
+    #if 1 // hezhiwen
+      t = BN_CTX_get(ctx);
+    #else
       BIGNUM *t = BN_CTX_get(ctx);
+    #endif
       if (t == NULL) {
         goto err;
       }
@@ -549,13 +678,24 @@ void bn_mul_small(BN_ULONG *r, size_t num_r, const BN_ULONG *a, size_t num_a,
 // tmp must have 2*n words
 static void bn_sqr_normal(BN_ULONG *r, const BN_ULONG *a, size_t n,
                           BN_ULONG *tmp) {
+#if 1 // hezhiwen
+  size_t max;
+  const BN_ULONG *ap;
+  BN_ULONG *rp;
+#endif
   if (n == 0) {
     return;
   }
 
+#if 1 // hezhiwen
+  max = n * 2;
+  ap = a;
+  rp = r;
+#else
   size_t max = n * 2;
   const BN_ULONG *ap = a;
   BN_ULONG *rp = r;
+#endif
   rp[0] = rp[max - 1] = 0;
   rp++;
 
@@ -566,7 +706,12 @@ static void bn_sqr_normal(BN_ULONG *r, const BN_ULONG *a, size_t n,
     rp += 2;
   }
   if (n > 2) {
+  #if 1 // hezhiwen
+    size_t i;
+    for (i = n - 2; i > 0; i--) {
+  #else
     for (size_t i = n - 2; i > 0; i--) {
+  #endif
       ap++;
       rp[i] = bn_mul_add_words(rp, ap, i, ap[-1]);
       rp += 2;
@@ -589,6 +734,12 @@ static void bn_sqr_normal(BN_ULONG *r, const BN_ULONG *a, size_t n,
 // a power of two.
 static void bn_sqr_recursive(BN_ULONG *r, const BN_ULONG *a, size_t n2,
                              BN_ULONG *t) {
+#if 1 // hezhiwen
+  size_t n;
+  BN_ULONG *t_recursive;
+  BN_ULONG c;
+  size_t i;
+#endif
   // |n2| is a power of two.
   assert(n2 != 0 && (n2 & (n2 - 1)) == 0);
 
@@ -610,8 +761,13 @@ static void bn_sqr_recursive(BN_ULONG *r, const BN_ULONG *a, size_t n2,
   // for recursive calls.
   // Split |r| into r0,r1,r2,r3. We must contribute a0^2 to r0,r1, 2*a0*a1 to
   // r1,r2, and a1^2 to r2,r3.
+#if 1 // hezhiwen
+  n = n2 / 2;
+  t_recursive = &t[n2 * 2];
+#else
   size_t n = n2 / 2;
   BN_ULONG *t_recursive = &t[n2 * 2];
+#endif
 
   // t0 = |a0 - a1|.
   bn_abs_sub_words(t, a, &a[n], n, &t[n]);
@@ -625,7 +781,11 @@ static void bn_sqr_recursive(BN_ULONG *r, const BN_ULONG *a, size_t n2,
   bn_sqr_recursive(&r[n2], &a[n], n, t_recursive);
 
   // t0,t1,c = r0,r1 + r2,r3 = a0^2 + a1^2
+#if 1 // hezhiwen
+  c = bn_add_words(t, r, &r[n2], n2);
+#else
   BN_ULONG c = bn_add_words(t, r, &r[n2], n2);
+#endif
   // t2,t3,c = t0,t1,c - t2,t3 = 2*a0*a1
   c -= bn_sub_words(&t[n2], t, &t[n2], n2);
 
@@ -634,7 +794,11 @@ static void bn_sqr_recursive(BN_ULONG *r, const BN_ULONG *a, size_t n2,
   c += bn_add_words(&r[n], &r[n], &t[n2], n2);
 
   // Propagate the carry bit to the end.
+#if 1 // hezhiwen
+  for (i = n + n2; i < n2 + n2; i++) {
+#else
   for (size_t i = n + n2; i < n2 + n2; i++) {
+#endif
     BN_ULONG old = r[i];
     r[i] = old + c;
     c = r[i] < old;
@@ -645,6 +809,9 @@ static void bn_sqr_recursive(BN_ULONG *r, const BN_ULONG *a, size_t n2,
 }
 
 int BN_mul_word(BIGNUM *bn, BN_ULONG w) {
+#if 1 // hezhiwen
+  BN_ULONG ll;
+#endif
   if (!bn->width) {
     return 1;
   }
@@ -654,7 +821,11 @@ int BN_mul_word(BIGNUM *bn, BN_ULONG w) {
     return 1;
   }
 
+#if 1 // hezhiwen
+  ll = bn_mul_words(bn->d, bn->d, bn->width, w);
+#else
   BN_ULONG ll = bn_mul_words(bn->d, bn->d, bn->width, w);
+#endif
   if (ll) {
     if (!bn_wexpand(bn, bn->width + 1)) {
       return 0;
@@ -667,21 +838,37 @@ int BN_mul_word(BIGNUM *bn, BN_ULONG w) {
 
 int bn_sqr_consttime(BIGNUM *r, const BIGNUM *a, BN_CTX *ctx) {
   int al = a->width;
+#if 1 // hezhiwen
+  int ret = 0;
+  BIGNUM *rr;
+  BIGNUM *tmp;
+  int max;
+#endif
   if (al <= 0) {
     r->width = 0;
     r->neg = 0;
     return 1;
   }
 
+#if 1 // hezhiwen
+  BN_CTX_start(ctx);
+  rr = (a != r) ? r : BN_CTX_get(ctx);
+  tmp = BN_CTX_get(ctx);
+#else
   int ret = 0;
   BN_CTX_start(ctx);
   BIGNUM *rr = (a != r) ? r : BN_CTX_get(ctx);
   BIGNUM *tmp = BN_CTX_get(ctx);
+#endif
   if (!rr || !tmp) {
     goto err;
   }
 
+#if 1 // hezhiwen
+  max = 2 * al;
+#else
   int max = 2 * al;  // Non-zero (from above)
+#endif
   if (!bn_wexpand(rr, max)) {
     goto err;
   }

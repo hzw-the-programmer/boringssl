@@ -135,13 +135,20 @@ static int eckey_pub_cmp(const EVP_PKEY *a, const EVP_PKEY *b) {
 static int eckey_priv_decode(EVP_PKEY *out, CBS *params, CBS *key) {
   // See RFC 5915.
   EC_GROUP *group = EC_KEY_parse_parameters(params);
+#if 1 // hezhiwen
+  EC_KEY *ec_key;
+#endif
   if (group == NULL || CBS_len(params) != 0) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_DECODE_ERROR);
     EC_GROUP_free(group);
     return 0;
   }
 
+#if 1 // hezhiwen
+  ec_key = EC_KEY_parse_private_key(key, group);
+#else
   EC_KEY *ec_key = EC_KEY_parse_private_key(key, group);
+#endif
   EC_GROUP_free(group);
   if (ec_key == NULL || CBS_len(key) != 0) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_DECODE_ERROR);
@@ -220,11 +227,18 @@ static int ec_missing_parameters(const EVP_PKEY *pkey) {
 }
 
 static int ec_copy_parameters(EVP_PKEY *to, const EVP_PKEY *from) {
+#if 1 // hezhiwen
+  const EC_GROUP *group;
+#endif
   if (from->pkey.ec == NULL) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_NO_KEY_SET);
     return 0;
   }
+#if 1 // hezhiwen
+  group = EC_KEY_get0_group(from->pkey.ec);
+#else
   const EC_GROUP *group = EC_KEY_get0_group(from->pkey.ec);
+#endif
   if (group == NULL) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_MISSING_PARAMETERS);
     return 0;
@@ -239,11 +253,19 @@ static int ec_copy_parameters(EVP_PKEY *to, const EVP_PKEY *from) {
 }
 
 static int ec_cmp_parameters(const EVP_PKEY *a, const EVP_PKEY *b) {
+#if 1 // hezhiwen
+  const EC_GROUP *group_a, *group_b;
+#endif
   if (a->pkey.ec == NULL || b->pkey.ec == NULL) {
     return -2;
   }
+#if 1 // hezhiwen
+  group_a = EC_KEY_get0_group(a->pkey.ec);
+  group_b = EC_KEY_get0_group(b->pkey.ec);
+#else
   const EC_GROUP *group_a = EC_KEY_get0_group(a->pkey.ec),
                  *group_b = EC_KEY_get0_group(b->pkey.ec);
+#endif
   if (group_a == NULL || group_b == NULL) {
     return -2;
   }

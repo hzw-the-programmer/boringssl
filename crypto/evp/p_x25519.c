@@ -46,13 +46,22 @@ static int pkey_x25519_keygen(EVP_PKEY_CTX *ctx, EVP_PKEY *pkey) {
 
 static int pkey_x25519_derive(EVP_PKEY_CTX *ctx, uint8_t *out,
                               size_t *out_len) {
+#if 1 // hezhiwen
+  const X25519_KEY *our_key;
+  const X25519_KEY *peer_key;
+#endif
   if (ctx->pkey == NULL || ctx->peerkey == NULL) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_KEYS_NOT_SET);
     return 0;
   }
 
+#if 1 // hezhiwen
+  our_key = ctx->pkey->pkey.ptr;
+  peer_key = ctx->peerkey->pkey.ptr;
+#else
   const X25519_KEY *our_key = ctx->pkey->pkey.ptr;
   const X25519_KEY *peer_key = ctx->peerkey->pkey.ptr;
+#endif
   if (our_key == NULL || peer_key == NULL) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_KEYS_NOT_SET);
     return 0;

@@ -116,11 +116,18 @@ static int mem_new(BIO *bio) {
 }
 
 static int mem_free(BIO *bio) {
+#if 1 // hezhiwen
+  BUF_MEM *b;
+#endif
   if (!bio->shutdown || !bio->init || bio->ptr == NULL) {
     return 1;
   }
 
+#if 1 // hezhiwen
+  b = (BUF_MEM *)bio->ptr;
+#else
   BUF_MEM *b = (BUF_MEM *)bio->ptr;
+#endif
   if (bio->flags & BIO_FLAGS_MEM_RDONLY) {
     b->data = NULL;
   }

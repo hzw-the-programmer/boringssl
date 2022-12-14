@@ -29,12 +29,20 @@ static void ed25519_free(EVP_PKEY *pkey) {
 }
 
 static int ed25519_set_priv_raw(EVP_PKEY *pkey, const uint8_t *in, size_t len) {
+#if 1 // hezhiwen
+  ED25519_KEY *key;
+  uint8_t pubkey_unused[32];
+#endif
   if (len != 32) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_DECODE_ERROR);
     return 0;
   }
 
+#if 1 // hezhiwen
+  key = OPENSSL_malloc(sizeof(ED25519_KEY));
+#else
   ED25519_KEY *key = OPENSSL_malloc(sizeof(ED25519_KEY));
+#endif
   if (key == NULL) {
     OPENSSL_PUT_ERROR(EVP, ERR_R_MALLOC_FAILURE);
     return 0;
@@ -42,7 +50,9 @@ static int ed25519_set_priv_raw(EVP_PKEY *pkey, const uint8_t *in, size_t len) {
 
   // The RFC 8032 encoding stores only the 32-byte seed, so we must recover the
   // full representation which we use from it.
+#if 0 // hezhiwen
   uint8_t pubkey_unused[32];
+#endif
   ED25519_keypair_from_seed(pubkey_unused, key->key, in);
   key->has_private = 1;
 
@@ -52,12 +62,19 @@ static int ed25519_set_priv_raw(EVP_PKEY *pkey, const uint8_t *in, size_t len) {
 }
 
 static int ed25519_set_pub_raw(EVP_PKEY *pkey, const uint8_t *in, size_t len) {
+#if 1 // hezhiwen
+  ED25519_KEY *key;
+#endif
   if (len != 32) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_DECODE_ERROR);
     return 0;
   }
 
+#if 1 // hezhiwen
+  key = OPENSSL_malloc(sizeof(ED25519_KEY));
+#else
   ED25519_KEY *key = OPENSSL_malloc(sizeof(ED25519_KEY));
+#endif
   if (key == NULL) {
     OPENSSL_PUT_ERROR(EVP, ERR_R_MALLOC_FAILURE);
     return 0;
@@ -171,13 +188,18 @@ static int ed25519_priv_decode(EVP_PKEY *out, CBS *params, CBS *key) {
 
 static int ed25519_priv_encode(CBB *out, const EVP_PKEY *pkey) {
   ED25519_KEY *key = pkey->pkey.ptr;
+#if 1 // hezhiwen
+  CBB pkcs8, algorithm, oid, private_key, inner;
+#endif
   if (!key->has_private) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_NOT_A_PRIVATE_KEY);
     return 0;
   }
 
   // See RFC 8410, section 7.
+#if 0 // hezhiwen
   CBB pkcs8, algorithm, oid, private_key, inner;
+#endif
   if (!CBB_add_asn1(out, &pkcs8, CBS_ASN1_SEQUENCE) ||
       !CBB_add_asn1_uint64(&pkcs8, 0 /* version */) ||
       !CBB_add_asn1(&pkcs8, &algorithm, CBS_ASN1_SEQUENCE) ||

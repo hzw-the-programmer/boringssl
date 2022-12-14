@@ -87,6 +87,9 @@ static int rsa_pub_encode(CBB *out, const EVP_PKEY *key) {
 
 static int rsa_pub_decode(EVP_PKEY *out, CBS *params, CBS *key) {
   // See RFC 3279, section 2.3.1.
+#if 1 // hezhiwen
+  RSA *rsa;
+#endif
 
   // The parameters must be NULL.
   CBS null;
@@ -97,7 +100,11 @@ static int rsa_pub_decode(EVP_PKEY *out, CBS *params, CBS *key) {
     return 0;
   }
 
+#if 1 // hezhiwen
+  rsa = RSA_parse_public_key(key);
+#else
   RSA *rsa = RSA_parse_public_key(key);
+#endif
   if (rsa == NULL || CBS_len(key) != 0) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_DECODE_ERROR);
     RSA_free(rsa);
@@ -133,6 +140,9 @@ static int rsa_priv_encode(CBB *out, const EVP_PKEY *key) {
 
 static int rsa_priv_decode(EVP_PKEY *out, CBS *params, CBS *key) {
   // Per RFC 3447, A.1, the parameters have type NULL.
+#if 1 // hezhiwen
+  RSA *rsa;
+#endif
   CBS null;
   if (!CBS_get_asn1(params, &null, CBS_ASN1_NULL) ||
       CBS_len(&null) != 0 ||
@@ -141,7 +151,11 @@ static int rsa_priv_decode(EVP_PKEY *out, CBS *params, CBS *key) {
     return 0;
   }
 
+#if 1 // hezhiwen
+  rsa = RSA_parse_private_key(key);
+#else
   RSA *rsa = RSA_parse_private_key(key);
+#endif
   if (rsa == NULL || CBS_len(key) != 0) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_DECODE_ERROR);
     RSA_free(rsa);

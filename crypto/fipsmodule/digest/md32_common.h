@@ -100,11 +100,19 @@ static inline void crypto_md32_update(crypto_md32_block_func block_func,
                                       size_t block_size, unsigned *num,
                                       uint32_t *Nh, uint32_t *Nl,
                                       const uint8_t *in, size_t len) {
+#if 1 // hezhiwen
+  uint32_t l;
+  size_t n;
+#endif
   if (len == 0) {
     return;
   }
 
+#if 1 // hezhiwen
+  l = *Nl + (((uint32_t)len) << 3);
+#else
   uint32_t l = *Nl + (((uint32_t)len) << 3);
+#endif
   if (l < *Nl) {
     // Handle carries.
     (*Nh)++;
@@ -112,7 +120,11 @@ static inline void crypto_md32_update(crypto_md32_block_func block_func,
   *Nh += (uint32_t)(len >> 29);
   *Nl = l;
 
+#if 1 // hezhiwen
+  n = *num;
+#else
   size_t n = *num;
+#endif
   if (n != 0) {
     if (len >= block_size || len + n >= block_size) {
       OPENSSL_memcpy(data + n, in, block_size - n);

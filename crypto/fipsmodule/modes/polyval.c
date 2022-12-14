@@ -52,10 +52,11 @@ static void reverse_and_mulX_ghash(polyval_block *b) {
 
 void CRYPTO_POLYVAL_init(struct polyval_ctx *ctx, const uint8_t key[16]) {
   polyval_block H;
+  int is_avx; // hezhiwen
   OPENSSL_memcpy(H.c, key, 16);
   reverse_and_mulX_ghash(&H);
 
-  int is_avx;
+  // int is_avx; // hezhiwen
   CRYPTO_ghash_init(&ctx->gmult, &ctx->ghash, &ctx->H, ctx->Htable, &is_avx,
                     H.c);
   OPENSSL_memset(&ctx->S, 0, sizeof(ctx->S));
@@ -63,11 +64,14 @@ void CRYPTO_POLYVAL_init(struct polyval_ctx *ctx, const uint8_t key[16]) {
 
 void CRYPTO_POLYVAL_update_blocks(struct polyval_ctx *ctx, const uint8_t *in,
                                   size_t in_len) {
-  assert((in_len & 15) == 0);
+  // assert((in_len & 15) == 0); // hezhiwen
   polyval_block reversed[32];
 
   while (in_len > 0) {
     size_t todo = in_len;
+  #if 1 // hezhiwen
+    size_t blocks, i;
+  #endif
     if (todo > sizeof(reversed)) {
       todo = sizeof(reversed);
     }
@@ -75,8 +79,13 @@ void CRYPTO_POLYVAL_update_blocks(struct polyval_ctx *ctx, const uint8_t *in,
     in += todo;
     in_len -= todo;
 
+  #if 1 // hezhiwen
+    blocks = todo / sizeof(polyval_block);
+    for (i = 0; i < blocks; i++) {
+  #else
     size_t blocks = todo / sizeof(polyval_block);
     for (size_t i = 0; i < blocks; i++) {
+  #endif
       byte_reverse(&reversed[i]);
     }
 

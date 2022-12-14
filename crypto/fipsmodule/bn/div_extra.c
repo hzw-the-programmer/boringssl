@@ -60,20 +60,38 @@ static uint16_t shift_and_add_mod_u16(uint16_t r, uint32_t a, uint16_t d,
 }
 
 uint16_t bn_mod_u16_consttime(const BIGNUM *bn, uint16_t d) {
+#if 1 // hezhiwen
+  uint32_t p;
+  uint32_t m;
+  uint16_t ret = 0;
+  int i;
+#endif
   if (d <= 1) {
     return 0;
   }
 
   // Compute the "magic numbers" for |d|. See steps 1 and 2.
   // This computes p = ceil(log_2(d)).
+#if 1 // hezhiwen
+  p = BN_num_bits_word(d - 1);
+#else
   uint32_t p = BN_num_bits_word(d - 1);
+#endif
   // This operation is not constant-time, but |p| and |d| are public values.
   // Note that |p| is at most 16, so the computation fits in |uint64_t|.
   assert(p <= 16);
+#if 1 // hezhiwen
+  m = (uint32_t)(((UINT64_C(1) << (32 + p)) + d - 1) / d);
+#else
   uint32_t m = (uint32_t)(((UINT64_C(1) << (32 + p)) + d - 1) / d);
+#endif
 
+#if 1 // hezhiwen
+  for (i = bn->width - 1; i >= 0; i--) {
+#else
   uint16_t ret = 0;
   for (int i = bn->width - 1; i >= 0; i--) {
+#endif
 #if BN_BITS2 == 32
     ret = shift_and_add_mod_u16(ret, bn->d[i], d, p, m);
 #elif BN_BITS2 == 64

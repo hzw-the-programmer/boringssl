@@ -98,6 +98,11 @@ static int ccm128_init_state(const struct ccm128_context *ctx,
   const block128_f block = ctx->block;
   const unsigned M = ctx->M;
   const unsigned L = ctx->L;
+#if 1 // hezhiwen
+  unsigned i;
+  size_t blocks = 1;
+  size_t remaining_blocks;
+#endif
 
   // |L| determines the expected |nonce_len| and the limit for |plaintext_len|.
   if (plaintext_len > CRYPTO_ccm128_max_input(ctx) ||
@@ -112,12 +117,18 @@ static int ccm128_init_state(const struct ccm128_context *ctx,
     state->nonce.c[0] |= 0x40;  // Set AAD Flag
   }
   OPENSSL_memcpy(&state->nonce.c[1], nonce, nonce_len);
+#if 1 // hezhiwen
+  for (i = 0; i < L; i++) {
+#else
   for (unsigned i = 0; i < L; i++) {
+#endif
     state->nonce.c[15 - i] = (uint8_t)(plaintext_len >> (8 * i));
   }
 
   (*block)(state->nonce.c, state->cmac.c, key);
+#if 0 // hezhiwen
   size_t blocks = 1;
+#endif
 
   if (aad_len != 0) {
     unsigned i;
@@ -164,7 +175,11 @@ static int ccm128_init_state(const struct ccm128_context *ctx,
   // Per RFC 3610, section 2.6, the total number of block cipher operations done
   // must not exceed 2^61. There are two block cipher operations remaining per
   // message block, plus one block at the end to encrypt the MAC.
+#if 1 // hezhiwen
+  remaining_blocks = 2 * ((plaintext_len + 15) / 16) + 1;
+#else
   size_t remaining_blocks = 2 * ((plaintext_len + 15) / 16) + 1;
+#endif
   if (plaintext_len + 15 < plaintext_len ||
       remaining_blocks + blocks < blocks ||
       (uint64_t) remaining_blocks + blocks > UINT64_C(1) << 61) {
@@ -181,14 +196,25 @@ static int ccm128_init_state(const struct ccm128_context *ctx,
 static int ccm128_encrypt(const struct ccm128_context *ctx,
                           struct ccm128_state *state, const AES_KEY *key,
                           uint8_t *out, const uint8_t *in, size_t len) {
+#if 1 // hezhiwen
+  uint8_t partial_buf[16];
+  unsigned num = 0;
+  unsigned i;
+#endif
   // The counter for encryption begins at one.
+#if 1 // hezhiwen
+  for (i = 0; i < ctx->L; i++) {
+#else
   for (unsigned i = 0; i < ctx->L; i++) {
+#endif
     state->nonce.c[15 - i] = 0;
   }
   state->nonce.c[15] = 1;
 
+#if 0 // hezhiwen
   uint8_t partial_buf[16];
   unsigned num = 0;
+#endif
   if (ctx->ctr != NULL) {
     CRYPTO_ctr128_encrypt_ctr32(in, out, len, key, state->nonce.c, partial_buf,
                                 &num, ctx->ctr);
@@ -204,15 +230,24 @@ static int ccm128_compute_mac(const struct ccm128_context *ctx,
                               uint8_t *out_tag, size_t tag_len,
                               const uint8_t *in, size_t len) {
   block128_f block = ctx->block;
+#if 1 // hezhiwen
+  union {
+    uint64_t u[2];
+    uint8_t c[16];
+  } tmp;
+  size_t i;
+#endif
   if (tag_len != ctx->M) {
     return 0;
   }
 
   // Incorporate |in| into the MAC.
+#if 0 // hezhiwen
   union {
     uint64_t u[2];
     uint8_t c[16];
   } tmp;
+#endif
   while (len >= 16) {
     OPENSSL_memcpy(tmp.c, in, 16);
     state->cmac.u[0] ^= tmp.u[0];
@@ -222,14 +257,22 @@ static int ccm128_compute_mac(const struct ccm128_context *ctx,
     len -= 16;
   }
   if (len > 0) {
+  #if 1 // hezhiwen
+    for (i = 0; i < len; i++) {
+  #else
     for (size_t i = 0; i < len; i++) {
+  #endif
       state->cmac.c[i] ^= in[i];
     }
     (*block)(state->cmac.c, state->cmac.c, key);
   }
 
   // Encrypt the MAC with counter zero.
+#if 1 // hezhiwen
+  for (i = 0; i < ctx->L; i++) {
+#else
   for (unsigned i = 0; i < ctx->L; i++) {
+#endif
     state->nonce.c[15 - i] = 0;
   }
   (*block)(state->nonce.c, tmp.c, key);
@@ -286,6 +329,11 @@ static_assert(alignof(union evp_aead_ctx_st_state) >=
 static int aead_aes_ccm_init(EVP_AEAD_CTX *ctx, const uint8_t *key,
                              size_t key_len, size_t tag_len, unsigned M,
                              unsigned L) {
+#if 1 // hezhiwen
+  struct aead_aes_ccm_ctx *ccm_ctx;
+  block128_f block;
+  ctr128_f ctr;
+#endif
   assert(M == EVP_AEAD_max_overhead(ctx->aead));
   assert(M == EVP_AEAD_max_tag_len(ctx->aead));
   assert(15 - L == EVP_AEAD_nonce_length(ctx->aead));
@@ -304,10 +352,15 @@ static int aead_aes_ccm_init(EVP_AEAD_CTX *ctx, const uint8_t *key,
     return 0;
   }
 
+#if 1 // hezhiwen
+  ccm_ctx = (struct aead_aes_ccm_ctx *)&ctx->state;
+  ctr = aes_ctr_set_key(&ccm_ctx->ks.ks, NULL, &block, key, key_len);
+#else
   struct aead_aes_ccm_ctx *ccm_ctx = (struct aead_aes_ccm_ctx *)&ctx->state;
 
   block128_f block;
   ctr128_f ctr = aes_ctr_set_key(&ccm_ctx->ks.ks, NULL, &block, key, key_len);
+#endif
   ctx->tag_len = tag_len;
   if (!CRYPTO_ccm128_init(&ccm_ctx->ccm, &ccm_ctx->ks.ks, block, ctr, M, L)) {
     OPENSSL_PUT_ERROR(CIPHER, ERR_R_INTERNAL_ERROR);
@@ -361,6 +414,9 @@ static int aead_aes_ccm_open_gather(const EVP_AEAD_CTX *ctx, uint8_t *out,
                                     const uint8_t *ad, size_t ad_len) {
   const struct aead_aes_ccm_ctx *ccm_ctx =
       (struct aead_aes_ccm_ctx *)&ctx->state;
+#if 1 // hezhiwen
+  uint8_t tag[EVP_AEAD_AES_CCM_MAX_TAG_LEN];
+#endif
 
   if (in_len > CRYPTO_ccm128_max_input(&ccm_ctx->ccm)) {
     OPENSSL_PUT_ERROR(CIPHER, CIPHER_R_TOO_LARGE);
@@ -377,7 +433,9 @@ static int aead_aes_ccm_open_gather(const EVP_AEAD_CTX *ctx, uint8_t *out,
     return 0;
   }
 
+#if 0 // hezhiwen
   uint8_t tag[EVP_AEAD_AES_CCM_MAX_TAG_LEN];
+#endif
   assert(ctx->tag_len <= EVP_AEAD_AES_CCM_MAX_TAG_LEN);
   if (!CRYPTO_ccm128_decrypt(&ccm_ctx->ccm, &ccm_ctx->ks.ks, out, tag,
                              ctx->tag_len, nonce, nonce_len, in, in_len, ad,

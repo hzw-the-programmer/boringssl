@@ -132,6 +132,10 @@ uint32_t EVP_MD_meth_get_flags(const EVP_MD *md) { return EVP_MD_flags(md); }
 void EVP_MD_CTX_set_flags(EVP_MD_CTX *ctx, int flags) {}
 
 int EVP_MD_CTX_copy_ex(EVP_MD_CTX *out, const EVP_MD_CTX *in) {
+#if 1 // hezhiwen
+  EVP_PKEY_CTX *pctx = NULL;
+  uint8_t *tmp_buf = NULL;
+#endif
   // |in->digest| may be NULL if this is a signing |EVP_MD_CTX| for, e.g.,
   // Ed25519 which does not hash with |EVP_MD_CTX|.
   if (in == NULL || (in->pctx == NULL && in->digest == NULL)) {
@@ -139,7 +143,9 @@ int EVP_MD_CTX_copy_ex(EVP_MD_CTX *out, const EVP_MD_CTX *in) {
     return 0;
   }
 
+#if 0 // hezhiwen
   EVP_PKEY_CTX *pctx = NULL;
+#endif
   assert(in->pctx == NULL || in->pctx_ops != NULL);
   if (in->pctx) {
     pctx = in->pctx_ops->dup(in->pctx);
@@ -149,7 +155,9 @@ int EVP_MD_CTX_copy_ex(EVP_MD_CTX *out, const EVP_MD_CTX *in) {
     }
   }
 
+#if 0 // hezhiwen
   uint8_t *tmp_buf = NULL;
+#endif
   if (in->digest != NULL) {
     if (out->digest != in->digest) {
       assert(in->digest->ctx_size != 0);
@@ -204,7 +212,9 @@ int EVP_MD_CTX_reset(EVP_MD_CTX *ctx) {
 
 int EVP_DigestInit_ex(EVP_MD_CTX *ctx, const EVP_MD *type, ENGINE *engine) {
   if (ctx->digest != type) {
+  #if 0 // hezhiwen
     assert(type->ctx_size != 0);
+  #endif
     uint8_t *md_data = OPENSSL_malloc(type->ctx_size);
     if (md_data == NULL) {
       OPENSSL_PUT_ERROR(DIGEST, ERR_R_MALLOC_FAILURE);

@@ -129,8 +129,15 @@ static STACK_OF(CONF_VALUE) *i2v_AUTHORITY_INFO_ACCESS(
   char objtmp[80], *ntmp;
   CONF_VALUE *vtmp;
   STACK_OF(CONF_VALUE) *tret = ret;
+#if 1 // hezhiwen
+  size_t i;
+#endif
 
+#if 1 // hezhiwen
+  for (i = 0; i < sk_ACCESS_DESCRIPTION_num(ainfo); i++) {
+#else
   for (size_t i = 0; i < sk_ACCESS_DESCRIPTION_num(ainfo); i++) {
+#endif
     STACK_OF(CONF_VALUE) *tmp;
 
     desc = sk_ACCESS_DESCRIPTION_value(ainfo, i);
@@ -171,12 +178,23 @@ static void *v2i_AUTHORITY_INFO_ACCESS(const X509V3_EXT_METHOD *method,
   AUTHORITY_INFO_ACCESS *ainfo = NULL;
   ACCESS_DESCRIPTION *acc;
   char *objtmp, *ptmp;
+#if 1 // hezhiwen
+  size_t i;
+#endif
   if (!(ainfo = sk_ACCESS_DESCRIPTION_new_null())) {
     OPENSSL_PUT_ERROR(X509V3, ERR_R_MALLOC_FAILURE);
     return NULL;
   }
+#if 1 // hezhiwen
+  for (i = 0; i < sk_CONF_VALUE_num(nval); i++) {
+#else
   for (size_t i = 0; i < sk_CONF_VALUE_num(nval); i++) {
+#endif
     CONF_VALUE *cnf = sk_CONF_VALUE_value(nval, i);
+  #if 1 // hezhiwen
+    int objlen;
+    CONF_VALUE ctmp;
+  #endif
     if (!(acc = ACCESS_DESCRIPTION_new()) ||
         !sk_ACCESS_DESCRIPTION_push(ainfo, acc)) {
       OPENSSL_PUT_ERROR(X509V3, ERR_R_MALLOC_FAILURE);
@@ -187,8 +205,12 @@ static void *v2i_AUTHORITY_INFO_ACCESS(const X509V3_EXT_METHOD *method,
       OPENSSL_PUT_ERROR(X509V3, X509V3_R_INVALID_SYNTAX);
       goto err;
     }
+  #if 1 // hezhiwen
+    objlen = ptmp - cnf->name;
+  #else
     int objlen = ptmp - cnf->name;
     CONF_VALUE ctmp;
+  #endif
     ctmp.name = ptmp + 1;
     ctmp.value = cnf->value;
     if (!v2i_GENERAL_NAME_ex(acc->location, method, ctx, &ctmp, 0)) {

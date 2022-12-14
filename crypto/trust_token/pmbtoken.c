@@ -68,6 +68,9 @@ static int pmbtoken_init_method(PMBTOKEN_METHOD *method, int curve_nid,
                                 hash_c_func_t hash_c,
                                 hash_to_scalar_func_t hash_to_scalar,
                                 int prefix_point) {
+#if 1 // hezhiwen
+  EC_AFFINE h;
+#endif
   method->group = EC_GROUP_new_by_curve_name(curve_nid);
   if (method->group == NULL) {
     return 0;
@@ -79,7 +82,9 @@ static int pmbtoken_init_method(PMBTOKEN_METHOD *method, int curve_nid,
   method->hash_to_scalar = hash_to_scalar;
   method->prefix_point = prefix_point;
 
+#if 0 // hezhiwen
   EC_AFFINE h;
+#endif
   if (!ec_point_from_uncompressed(method->group, &h, h_bytes, h_len)) {
     return 0;
   }
@@ -100,9 +105,14 @@ static int derive_scalar_from_secret(const PMBTOKEN_METHOD *method,
 
   int ok = 0;
   CBB cbb;
+#if 0 // hezhiwen
   CBB_zero(&cbb);
+#endif
   uint8_t *buf = NULL;
   size_t len;
+#if 1 // hezhiwen
+  CBB_zero(&cbb);
+#endif
   if (!CBB_init(&cbb, 0) ||
       !CBB_add_bytes(&cbb, kKeygenLabel, sizeof(kKeygenLabel)) ||
       !CBB_add_u8(&cbb, scalar_id) ||
@@ -124,10 +134,15 @@ err:
 static int point_to_cbb(CBB *out, const EC_GROUP *group,
                         const EC_AFFINE *point) {
   size_t len = ec_point_byte_len(group, POINT_CONVERSION_UNCOMPRESSED);
+#if 1 // hezhiwen
+  uint8_t *p;
+#endif
   if (len == 0) {
     return 0;
   }
+#if 0 // hezhiwen
   uint8_t *p;
+#endif
   return CBB_add_space(out, &p, len) &&
          ec_point_to_bytes(group, point, POINT_CONVERSION_UNCOMPRESSED, p,
                            len) == len;
@@ -177,8 +192,21 @@ static int mul_public_3(const EC_GROUP *group, EC_RAW_POINT *out,
                         const EC_RAW_POINT *p0, const EC_SCALAR *scalar0,
                         const EC_RAW_POINT *p1, const EC_SCALAR *scalar1,
                         const EC_RAW_POINT *p2, const EC_SCALAR *scalar2) {
+#if 1 // hezhiwen
+  EC_RAW_POINT points[3] = {0};
+  EC_SCALAR scalars[3] = {0};
+
+  points[0] = *p0;
+  points[1] = *p1;
+  points[2] = *p2;
+
+  scalars[0] = *scalar0;
+  scalars[1] = *scalar1;
+  scalars[2] = *scalar2;
+#else
   EC_RAW_POINT points[3] = {*p0, *p1, *p2};
   EC_SCALAR scalars[3] = {*scalar0, *scalar1, *scalar2};
+#endif
   return ec_point_mul_scalar_public_batch(group, out, /*g_scalar=*/NULL, points,
                                           scalars, 3);
 }
@@ -190,6 +218,12 @@ static int pmbtoken_compute_keys(const PMBTOKEN_METHOD *method,
                                  const EC_SCALAR *xs, const EC_SCALAR *ys) {
   const EC_GROUP *group = method->group;
   EC_RAW_POINT pub[3];
+#if 1 // hezhiwen
+  const EC_SCALAR *scalars[6] = {0};
+  size_t scalar_len;
+  size_t i;
+  EC_AFFINE pub_affine[3];
+#endif
   if (!ec_point_mul_scalar_precomp(group, &pub[0], &method->g_precomp,
                                    x0, &method->h_precomp, y0, NULL, NULL) ||
       !ec_point_mul_scalar_precomp(group, &pub[1], &method->g_precomp,
@@ -200,9 +234,20 @@ static int pmbtoken_compute_keys(const PMBTOKEN_METHOD *method,
     return 0;
   }
 
+#if 1 // hezhiwen
+  scalars[0] = x0;
+  scalars[1] = y0;
+  scalars[2] = x1;
+  scalars[3] = y1;
+  scalars[4] = xs;
+  scalars[5] = ys;
+  scalar_len = BN_num_bytes(&group->order);
+  for (i = 0; i < OPENSSL_ARRAY_SIZE(scalars); i++) {
+#else
   const EC_SCALAR *scalars[] = {x0, y0, x1, y1, xs, ys};
   size_t scalar_len = BN_num_bytes(&group->order);
   for (size_t i = 0; i < OPENSSL_ARRAY_SIZE(scalars); i++) {
+#endif
     uint8_t *buf;
     if (!CBB_add_space(out_private, &buf, scalar_len)) {
       OPENSSL_PUT_ERROR(TRUST_TOKEN, TRUST_TOKEN_R_BUFFER_TOO_SMALL);
@@ -211,7 +256,9 @@ static int pmbtoken_compute_keys(const PMBTOKEN_METHOD *method,
     ec_scalar_to_bytes(group, buf, &scalar_len, scalars[i]);
   }
 
+#if 0 // hezhiwen
   EC_AFFINE pub_affine[3];
+#endif
   if (!ec_jacobian_to_affine_batch(group, pub_affine, pub, 3)) {
     return 0;
   }
@@ -289,11 +336,21 @@ static int pmbtoken_issuer_key_from_bytes(const PMBTOKEN_METHOD *method,
                                           const uint8_t *in, size_t len) {
   const EC_GROUP *group = method->group;
   CBS cbs, tmp;
+#if 0 // hezhiwen
   CBS_init(&cbs, in, len);
+#endif
   size_t scalar_len = BN_num_bytes(&group->order);
   EC_SCALAR *scalars[] = {&key->x0, &key->y0, &key->x1,
                           &key->y1, &key->xs, &key->ys};
+#if 1 // hezhiwen
+  size_t i;
+  EC_RAW_POINT pub[3];
+  EC_AFFINE pub_affine[3];
+  CBS_init(&cbs, in, len);
+  for (i = 0; i < OPENSSL_ARRAY_SIZE(scalars); i++) {
+#else
   for (size_t i = 0; i < OPENSSL_ARRAY_SIZE(scalars); i++) {
+#endif
     if (!CBS_get_bytes(&cbs, &tmp, scalar_len) ||
         !ec_scalar_from_bytes(group, scalars[i], CBS_data(&tmp),
                               CBS_len(&tmp))) {
@@ -303,8 +360,10 @@ static int pmbtoken_issuer_key_from_bytes(const PMBTOKEN_METHOD *method,
   }
 
   // Recompute the public key.
+#if 0 // hezhiwen
   EC_RAW_POINT pub[3];
   EC_AFFINE pub_affine[3];
+#endif
   if (!ec_point_mul_scalar_precomp(group, &pub[0], &method->g_precomp, &key->x0,
                                    &method->h_precomp, &key->y0, NULL, NULL) ||
       !ec_init_precomp(group, &key->pub0_precomp, &pub[0]) ||
@@ -328,14 +387,25 @@ static STACK_OF(TRUST_TOKEN_PRETOKEN) *
     pmbtoken_blind(const PMBTOKEN_METHOD *method, CBB *cbb, size_t count) {
   const EC_GROUP *group = method->group;
   STACK_OF(TRUST_TOKEN_PRETOKEN) *pretokens = sk_TRUST_TOKEN_PRETOKEN_new_null();
+#if 1 // hezhiwen
+  size_t i;
+#endif
   if (pretokens == NULL) {
     OPENSSL_PUT_ERROR(TRUST_TOKEN, ERR_R_MALLOC_FAILURE);
     goto err;
   }
 
+#if 1 // hezhiwen
+  for (i = 0; i < count; i++) {
+#else
   for (size_t i = 0; i < count; i++) {
+#endif
     // Insert |pretoken| into |pretokens| early to simplify error-handling.
     TRUST_TOKEN_PRETOKEN *pretoken = OPENSSL_malloc(sizeof(TRUST_TOKEN_PRETOKEN));
+  #if 1 // hezhiwen
+    EC_SCALAR rinv;
+    EC_RAW_POINT T, Tp;
+  #endif
     if (pretoken == NULL ||
         !sk_TRUST_TOKEN_PRETOKEN_push(pretokens, pretoken)) {
       OPENSSL_PUT_ERROR(TRUST_TOKEN, ERR_R_MALLOC_FAILURE);
@@ -352,13 +422,17 @@ static STACK_OF(TRUST_TOKEN_PRETOKEN) *
       goto err;
     }
 
+  #if 0 // hezhiwen
     EC_SCALAR rinv;
+  #endif
     ec_scalar_inv0_montgomery(group, &rinv, &pretoken->r);
     // Convert both out of Montgomery form.
     ec_scalar_from_montgomery(group, &pretoken->r, &pretoken->r);
     ec_scalar_from_montgomery(group, &rinv, &rinv);
 
+  #if 0 // hezhiwen
     EC_RAW_POINT T, Tp;
+  #endif
     if (!method->hash_t(group, &T, pretoken->t) ||
         !ec_point_mul_scalar(group, &Tp, &T, &rinv) ||
         !ec_jacobian_to_affine(group, &pretoken->Tp, &Tp)) {
@@ -410,9 +484,14 @@ static int hash_c_dleq(const PMBTOKEN_METHOD *method, EC_SCALAR *out,
 
   int ok = 0;
   CBB cbb;
+#if 0 // hezhiwen
   CBB_zero(&cbb);
+#endif
   uint8_t *buf = NULL;
   size_t len;
+#if 1 // hezhiwen
+  CBB_zero(&cbb);
+#endif
   if (!CBB_init(&cbb, 0) ||
       !CBB_add_bytes(&cbb, kDLEQ2Label, sizeof(kDLEQ2Label)) ||
       !point_to_cbb(&cbb, method->group, X) ||
@@ -445,9 +524,14 @@ static int hash_c_dleqor(const PMBTOKEN_METHOD *method, EC_SCALAR *out,
 
   int ok = 0;
   CBB cbb;
+#if 0 // hezhiwen
   CBB_zero(&cbb);
+#endif
   uint8_t *buf = NULL;
   size_t len;
+#if 1 // hezhiwen
+  CBB_zero(&cbb);
+#endif
   if (!CBB_init(&cbb, 0) ||
       !CBB_add_bytes(&cbb, kDLEQOR2Label, sizeof(kDLEQOR2Label)) ||
       !point_to_cbb(&cbb, method->group, X0) ||
@@ -476,17 +560,27 @@ err:
 static int hash_c_batch(const PMBTOKEN_METHOD *method, EC_SCALAR *out,
                         const CBB *points, size_t index) {
   static const uint8_t kDLEQBatchLabel[] = "DLEQ BATCH";
+#if 1 // hezhiwen
+  int ok = 0;
+  CBB cbb;
+  uint8_t *buf = NULL;
+  size_t len;
+#endif
   if (index > 0xffff) {
     // The protocol supports only two-byte batches.
     OPENSSL_PUT_ERROR(TRUST_TOKEN, ERR_R_OVERFLOW);
     return 0;
   }
 
+#if 1 // hezhiwen
+  CBB_zero(&cbb);
+#else
   int ok = 0;
   CBB cbb;
   CBB_zero(&cbb);
   uint8_t *buf = NULL;
   size_t len;
+#endif
   if (!CBB_init(&cbb, 0) ||
       !CBB_add_bytes(&cbb, kDLEQBatchLabel, sizeof(kDLEQBatchLabel)) ||
       !CBB_add_bytes(&cbb, CBB_data(points), CBB_len(points)) ||
@@ -533,6 +627,20 @@ static int dleq_generate(const PMBTOKEN_METHOD *method, CBB *cbb,
     num_idx,
   };
   EC_RAW_POINT jacobians[num_idx];
+#if 1 // hezhiwen
+  BN_ULONG mask;
+  EC_PRECOMP pubo_precomp;
+  EC_SCALAR xb, yb;
+  EC_SCALAR k0, k1, minus_co, uo, vo;
+  EC_AFFINE affines[num_idx];
+  EC_AFFINE K00, K01, K10, K11;
+  EC_SCALAR cs, c;
+  EC_SCALAR cs_mont;
+  EC_SCALAR us, vs;
+  EC_SCALAR cb, ub, vb;
+  EC_SCALAR cb_mont;
+  EC_SCALAR co, c0, c1, u0, u1, v0, v1;
+#endif
 
   // Setup the DLEQ proof.
   EC_SCALAR ks0, ks1;
@@ -551,15 +659,21 @@ static int dleq_generate(const PMBTOKEN_METHOD *method, CBB *cbb,
   // Setup the DLEQOR proof. First, select values of xb, yb (keys corresponding
   // to the private metadata value) and pubo (public key corresponding to the
   // other value) in constant time.
+#if 1 // hezhiwen
+  mask = ((BN_ULONG)0) - (private_metadata & 1);
+#else
   BN_ULONG mask = ((BN_ULONG)0) - (private_metadata & 1);
   EC_PRECOMP pubo_precomp;
   EC_SCALAR xb, yb;
+#endif
   ec_scalar_select(group, &xb, mask, &priv->x1, &priv->x0);
   ec_scalar_select(group, &yb, mask, &priv->y1, &priv->y0);
   ec_precomp_select(group, &pubo_precomp, mask, &priv->pub0_precomp,
                     &priv->pub1_precomp);
 
+#if 0 // hezhiwen
   EC_SCALAR k0, k1, minus_co, uo, vo;
+#endif
   if (// k0, k1 <- Zp
       !ec_random_nonzero_scalar(group, &k0, kDefaultAdditionalData) ||
       !ec_random_nonzero_scalar(group, &k1, kDefaultAdditionalData) ||
@@ -582,7 +696,9 @@ static int dleq_generate(const PMBTOKEN_METHOD *method, CBB *cbb,
     return 0;
   }
 
+#if 0 // hezhiwen
   EC_AFFINE affines[num_idx];
+#endif
   jacobians[idx_T] = *T;
   jacobians[idx_S] = *S;
   jacobians[idx_W] = *W;
@@ -592,14 +708,18 @@ static int dleq_generate(const PMBTOKEN_METHOD *method, CBB *cbb,
   }
 
   // Select the K corresponding to K0 and K1 in constant-time.
+#if 0 // hezhiwen
   EC_AFFINE K00, K01, K10, K11;
+#endif
   ec_affine_select(group, &K00, mask, &affines[idx_Ko0], &affines[idx_Kb0]);
   ec_affine_select(group, &K01, mask, &affines[idx_Ko1], &affines[idx_Kb1]);
   ec_affine_select(group, &K10, mask, &affines[idx_Kb0], &affines[idx_Ko0]);
   ec_affine_select(group, &K11, mask, &affines[idx_Kb1], &affines[idx_Ko1]);
 
   // Compute c = Hc(...) for the two proofs.
+#if 0 // hezhiwen
   EC_SCALAR cs, c;
+#endif
   if (!hash_c_dleq(method, &cs, &priv->pubs, &affines[idx_T], &affines[idx_S],
                    &affines[idx_Ws], &affines[idx_Ks0], &affines[idx_Ks1]) ||
       !hash_c_dleqor(method, &c, &priv->pub0, &priv->pub1, &affines[idx_T],
@@ -612,11 +732,15 @@ static int dleq_generate(const PMBTOKEN_METHOD *method, CBB *cbb,
   // one operand is in Montgomery form, so the product does not need to be
   // converted.
 
+#if 0 // hezhiwen
   EC_SCALAR cs_mont;
+#endif
   ec_scalar_to_montgomery(group, &cs_mont, &cs);
 
   // us = ks0 + cs*xs
+#if 0 // hezhiwen
   EC_SCALAR us, vs;
+#endif
   ec_scalar_mul_montgomery(group, &us, &priv->xs, &cs_mont);
   ec_scalar_add(group, &us, &ks0, &us);
 
@@ -633,10 +757,14 @@ static int dleq_generate(const PMBTOKEN_METHOD *method, CBB *cbb,
   }
 
   // cb = c - co
+#if 0 // hezhiwen
   EC_SCALAR cb, ub, vb;
+#endif
   ec_scalar_add(group, &cb, &c, &minus_co);
 
+#if 0 // hezhiwen
   EC_SCALAR cb_mont;
+#endif
   ec_scalar_to_montgomery(group, &cb_mont, &cb);
 
   // ub = k0 + cb*xb
@@ -648,7 +776,9 @@ static int dleq_generate(const PMBTOKEN_METHOD *method, CBB *cbb,
   ec_scalar_add(group, &vb, &k1, &vb);
 
   // Select c, u, v in constant-time.
+#if 0 // hezhiwen
   EC_SCALAR co, c0, c1, u0, u1, v0, v1;
+#endif
   ec_scalar_neg(group, &co, &minus_co);
   ec_scalar_select(group, &c0, mask, &co, &cb);
   ec_scalar_select(group, &u0, mask, &uo, &ub);
@@ -697,6 +827,16 @@ static int dleq_verify(const PMBTOKEN_METHOD *method, CBS *cbs,
     num_idx,
   };
   EC_RAW_POINT jacobians[num_idx];
+#if 1 // hezhiwen
+  EC_RAW_POINT pubs;
+  EC_SCALAR minus_cs;
+  EC_SCALAR c0, c1, u0, u1, v0, v1;
+  EC_RAW_POINT pub0, pub1;
+  EC_SCALAR minus_c0, minus_c1;
+  EC_AFFINE affines[num_idx];
+  EC_SCALAR calculated;
+  EC_SCALAR c;
+#endif
 
   // Decode the DLEQ proof.
   EC_SCALAR cs, us, vs;
@@ -708,9 +848,13 @@ static int dleq_verify(const PMBTOKEN_METHOD *method, CBS *cbs,
   }
 
   // Ks = us*(G;T) + vs*(H;S) - cs*(pubs;Ws)
+#if 0 // hezhiwen
   EC_RAW_POINT pubs;
+#endif
   ec_affine_to_jacobian(group, &pubs, &pub->pubs);
+#if 0 // hezhiwen
   EC_SCALAR minus_cs;
+#endif
   ec_scalar_neg(group, &minus_cs, &cs);
   if (!mul_public_3(group, &jacobians[idx_Ks0], g, &us, &method->h, &vs, &pubs,
                     &minus_cs) ||
@@ -720,7 +864,9 @@ static int dleq_verify(const PMBTOKEN_METHOD *method, CBS *cbs,
   }
 
   // Decode the DLEQOR proof.
+#if 0 // hezhiwen
   EC_SCALAR c0, c1, u0, u1, v0, v1;
+#endif
   if (!scalar_from_cbs(cbs, group, &c0) ||
       !scalar_from_cbs(cbs, group, &c1) ||
       !scalar_from_cbs(cbs, group, &u0) ||
@@ -731,10 +877,14 @@ static int dleq_verify(const PMBTOKEN_METHOD *method, CBS *cbs,
     return 0;
   }
 
+#if 0 // hezhiwen
   EC_RAW_POINT pub0, pub1;
+#endif
   ec_affine_to_jacobian(group, &pub0, &pub->pub0);
   ec_affine_to_jacobian(group, &pub1, &pub->pub1);
+#if 0 // hezhiwen
   EC_SCALAR minus_c0, minus_c1;
+#endif
   ec_scalar_neg(group, &minus_c0, &c0);
   ec_scalar_neg(group, &minus_c1, &c1);
   if (// K0 = u0*(G;T) + v0*(H;S) - c0*(pub0;W)
@@ -748,7 +898,9 @@ static int dleq_verify(const PMBTOKEN_METHOD *method, CBS *cbs,
     return 0;
   }
 
+#if 0 // hezhiwen
   EC_AFFINE affines[num_idx];
+#endif
   jacobians[idx_T] = *T;
   jacobians[idx_S] = *S;
   jacobians[idx_W] = *W;
@@ -758,7 +910,9 @@ static int dleq_verify(const PMBTOKEN_METHOD *method, CBS *cbs,
   }
 
   // Check the DLEQ proof.
+#if 0 // hezhiwen
   EC_SCALAR calculated;
+#endif
   if (!hash_c_dleq(method, &calculated, &pub->pubs, &affines[idx_T],
                    &affines[idx_S], &affines[idx_Ws], &affines[idx_Ks0],
                    &affines[idx_Ks1])) {
@@ -780,7 +934,9 @@ static int dleq_verify(const PMBTOKEN_METHOD *method, CBS *cbs,
   }
 
   // c0 + c1 == calculated
+#if 0 // hezhiwen
   EC_SCALAR c;
+#endif
   ec_scalar_add(group, &c, &c0, &c1);
   if (!ec_scalar_equal_vartime(group, &c, &calculated)) {
     OPENSSL_PUT_ERROR(TRUST_TOKEN, TRUST_TOKEN_R_INVALID_PROOF);
@@ -795,6 +951,20 @@ static int pmbtoken_sign(const PMBTOKEN_METHOD *method,
                          size_t num_requested, size_t num_to_issue,
                          uint8_t private_metadata) {
   const EC_GROUP *group = method->group;
+#if 1 // hezhiwen
+  int ret = 0;
+  EC_RAW_POINT *Tps;
+  EC_RAW_POINT *Sps;
+  EC_RAW_POINT *Wps;
+  EC_RAW_POINT *Wsps;
+  EC_SCALAR *es;
+  CBB batch_cbb;
+  size_t i;
+  EC_RAW_POINT Tp_batch, Sp_batch, Wp_batch, Wsp_batch;
+  CBB proof;
+  size_t point_len;
+  size_t token_len;
+#endif
   if (num_requested < num_to_issue) {
     OPENSSL_PUT_ERROR(TRUST_TOKEN, ERR_R_INTERNAL_ERROR);
     return 0;
@@ -806,6 +976,13 @@ static int pmbtoken_sign(const PMBTOKEN_METHOD *method,
     return 0;
   }
 
+#if 1 // hezhiwen
+  Tps = OPENSSL_malloc(num_to_issue * sizeof(EC_RAW_POINT));
+  Sps = OPENSSL_malloc(num_to_issue * sizeof(EC_RAW_POINT));
+  Wps = OPENSSL_malloc(num_to_issue * sizeof(EC_RAW_POINT));
+  Wsps = OPENSSL_malloc(num_to_issue * sizeof(EC_RAW_POINT));
+  es = OPENSSL_malloc(num_to_issue * sizeof(EC_SCALAR));
+#else
   int ret = 0;
   EC_RAW_POINT *Tps = OPENSSL_malloc(num_to_issue * sizeof(EC_RAW_POINT));
   EC_RAW_POINT *Sps = OPENSSL_malloc(num_to_issue * sizeof(EC_RAW_POINT));
@@ -813,6 +990,7 @@ static int pmbtoken_sign(const PMBTOKEN_METHOD *method,
   EC_RAW_POINT *Wsps = OPENSSL_malloc(num_to_issue * sizeof(EC_RAW_POINT));
   EC_SCALAR *es = OPENSSL_malloc(num_to_issue * sizeof(EC_SCALAR));
   CBB batch_cbb;
+#endif
   CBB_zero(&batch_cbb);
   if (!Tps ||
       !Sps ||
@@ -827,25 +1005,44 @@ static int pmbtoken_sign(const PMBTOKEN_METHOD *method,
     goto err;
   }
 
+#if 1 // hezhiwen
+  for (i = 0; i < num_to_issue; i++) {
+#else
   for (size_t i = 0; i < num_to_issue; i++) {
+#endif
     EC_AFFINE Tp_affine;
     EC_RAW_POINT Tp;
+  #if 1 // hezhiwen
+    EC_SCALAR xb, yb;
+    BN_ULONG mask;
+    uint8_t s[TRUST_TOKEN_NONCE_SIZE];
+    EC_RAW_POINT jacobians[3];
+    EC_AFFINE affines[3];
+  #endif
     if (!cbs_get_prefixed_point(cbs, group, &Tp_affine, method->prefix_point)) {
       OPENSSL_PUT_ERROR(TRUST_TOKEN, TRUST_TOKEN_R_DECODE_FAILURE);
       goto err;
     }
     ec_affine_to_jacobian(group, &Tp, &Tp_affine);
 
+  #if 1 // hezhiwen
+    mask = ((BN_ULONG)0) - (private_metadata & 1);
+  #else
     EC_SCALAR xb, yb;
     BN_ULONG mask = ((BN_ULONG)0) - (private_metadata & 1);
+  #endif
     ec_scalar_select(group, &xb, mask, &key->x1, &key->x0);
     ec_scalar_select(group, &yb, mask, &key->y1, &key->y0);
 
+  #if 0 // hezhiwen
     uint8_t s[TRUST_TOKEN_NONCE_SIZE];
+  #endif
     RAND_bytes(s, TRUST_TOKEN_NONCE_SIZE);
     // The |jacobians| and |affines| contain Sp, Wp, and Wsp.
+  #if 0 // hezhiwen
     EC_RAW_POINT jacobians[3];
     EC_AFFINE affines[3];
+  #endif
     if (!method->hash_s(group, &jacobians[0], &Tp_affine, s) ||
         !ec_point_mul_scalar_batch(group, &jacobians[1], &Tp, &xb,
                                    &jacobians[0], &yb, NULL, NULL) ||
@@ -880,13 +1077,19 @@ static int pmbtoken_sign(const PMBTOKEN_METHOD *method,
   // The DLEQ batching construction is described in appendix B of
   // https://eprint.iacr.org/2020/072/20200324:214215. Note the additional
   // computations all act on public inputs.
+#if 1 // hezhiwen
+  for (i = 0; i < num_to_issue; i++) {
+#else
   for (size_t i = 0; i < num_to_issue; i++) {
+#endif
     if (!hash_c_batch(method, &es[i], &batch_cbb, i)) {
       goto err;
     }
   }
 
+#if 0 // hezhiwen
   EC_RAW_POINT Tp_batch, Sp_batch, Wp_batch, Wsp_batch;
+#endif
   if (!ec_point_mul_scalar_public_batch(group, &Tp_batch,
                                         /*g_scalar=*/NULL, Tps, es,
                                         num_to_issue) ||
@@ -902,7 +1105,9 @@ static int pmbtoken_sign(const PMBTOKEN_METHOD *method,
     goto err;
   }
 
+#if 0 // hezhiwen
   CBB proof;
+#endif
   if (!CBB_add_u16_length_prefixed(cbb, &proof) ||
       !dleq_generate(method, &proof, key, &Tp_batch, &Sp_batch, &Wp_batch,
                      &Wsp_batch, private_metadata) ||
@@ -911,8 +1116,13 @@ static int pmbtoken_sign(const PMBTOKEN_METHOD *method,
   }
 
   // Skip over any unused requests.
+#if 1 // hezhiwen
+  point_len = 1 + 2 * BN_num_bytes(&group->field);
+  token_len = point_len;
+#else
   size_t point_len = 1 + 2 * BN_num_bytes(&group->field);
   size_t token_len = point_len;
+#endif
   if (method->prefix_point) {
     token_len += 2;
   }
@@ -939,13 +1149,30 @@ static STACK_OF(TRUST_TOKEN) *
                      const STACK_OF(TRUST_TOKEN_PRETOKEN) * pretokens, CBS *cbs,
                      size_t count, uint32_t key_id) {
   const EC_GROUP *group = method->group;
+#if 1 // hezhiwen
+  int ok = 0;
+  STACK_OF(TRUST_TOKEN) *ret;
+  EC_RAW_POINT *Tps;
+  EC_RAW_POINT *Sps;
+  EC_RAW_POINT *Wps;
+  EC_RAW_POINT *Wsps;
+  EC_SCALAR *es;
+  CBB batch_cbb;
+  size_t i;
+  EC_RAW_POINT Tp_batch, Sp_batch, Wp_batch, Wsp_batch;
+  CBS proof;
+#endif
   if (count > sk_TRUST_TOKEN_PRETOKEN_num(pretokens)) {
     OPENSSL_PUT_ERROR(TRUST_TOKEN, TRUST_TOKEN_R_DECODE_FAILURE);
     return NULL;
   }
 
+#if 1 // hezhiwen
+  ret = sk_TRUST_TOKEN_new_null();
+#else
   int ok = 0;
   STACK_OF(TRUST_TOKEN) *ret = sk_TRUST_TOKEN_new_null();
+#endif
   if (ret == NULL) {
     OPENSSL_PUT_ERROR(TRUST_TOKEN, ERR_R_MALLOC_FAILURE);
     return NULL;
@@ -956,12 +1183,20 @@ static STACK_OF(TRUST_TOKEN) *
     OPENSSL_PUT_ERROR(TRUST_TOKEN, ERR_R_OVERFLOW);
     return 0;
   }
+#if 1 // hezhiwen
+  Tps = OPENSSL_malloc(count * sizeof(EC_RAW_POINT));
+  Sps = OPENSSL_malloc(count * sizeof(EC_RAW_POINT));
+  Wps = OPENSSL_malloc(count * sizeof(EC_RAW_POINT));
+  Wsps = OPENSSL_malloc(count * sizeof(EC_RAW_POINT));
+  es = OPENSSL_malloc(count * sizeof(EC_SCALAR));
+#else
   EC_RAW_POINT *Tps = OPENSSL_malloc(count * sizeof(EC_RAW_POINT));
   EC_RAW_POINT *Sps = OPENSSL_malloc(count * sizeof(EC_RAW_POINT));
   EC_RAW_POINT *Wps = OPENSSL_malloc(count * sizeof(EC_RAW_POINT));
   EC_RAW_POINT *Wsps = OPENSSL_malloc(count * sizeof(EC_RAW_POINT));
   EC_SCALAR *es = OPENSSL_malloc(count * sizeof(EC_SCALAR));
   CBB batch_cbb;
+#endif
   CBB_zero(&batch_cbb);
   if (!Tps ||
       !Sps ||
@@ -976,12 +1211,24 @@ static STACK_OF(TRUST_TOKEN) *
     goto err;
   }
 
+#if 1 // hezhiwen
+  for (i = 0; i < count; i++) {
+#else
   for (size_t i = 0; i < count; i++) {
+#endif
     const TRUST_TOKEN_PRETOKEN *pretoken =
         sk_TRUST_TOKEN_PRETOKEN_value(pretokens, i);
 
     uint8_t s[TRUST_TOKEN_NONCE_SIZE];
     EC_AFFINE Wp_affine, Wsp_affine;
+  #if 1 // hezhiwen
+    EC_AFFINE Sp_affine;
+    EC_RAW_POINT jacobians[3];
+    EC_AFFINE affines[3];
+    CBB token_cbb;
+    size_t point_len;
+    TRUST_TOKEN *token;
+  #endif
     if (!CBS_copy_bytes(cbs, s, TRUST_TOKEN_NONCE_SIZE) ||
         !cbs_get_prefixed_point(cbs, group, &Wp_affine, method->prefix_point) ||
         !cbs_get_prefixed_point(cbs, group, &Wsp_affine,
@@ -997,7 +1244,9 @@ static STACK_OF(TRUST_TOKEN) *
       goto err;
     }
 
+  #if 0 // hezhiwen
     EC_AFFINE Sp_affine;
+  #endif
     if (!point_to_cbb(&batch_cbb, group, &pretoken->Tp) ||
         !ec_jacobian_to_affine(group, &Sp_affine, &Sps[i]) ||
         !point_to_cbb(&batch_cbb, group, &Sp_affine) ||
@@ -1008,8 +1257,10 @@ static STACK_OF(TRUST_TOKEN) *
     }
 
     // Unblind the token.
+  #if 0 // hezhiwen
     EC_RAW_POINT jacobians[3];
     EC_AFFINE affines[3];
+  #endif
     if (!ec_point_mul_scalar(group, &jacobians[0], &Sps[i], &pretoken->r) ||
         !ec_point_mul_scalar(group, &jacobians[1], &Wps[i], &pretoken->r) ||
         !ec_point_mul_scalar(group, &jacobians[2], &Wsps[i], &pretoken->r) ||
@@ -1019,8 +1270,12 @@ static STACK_OF(TRUST_TOKEN) *
 
     // Serialize the token. Include |key_id| to avoid an extra copy in the layer
     // above.
+  #if 1 // hezhiwen
+    point_len = 1 + 2 * BN_num_bytes(&group->field);
+  #else
     CBB token_cbb;
     size_t point_len = 1 + 2 * BN_num_bytes(&group->field);
+  #endif
     if (!CBB_init(&token_cbb,
                   4 + TRUST_TOKEN_NONCE_SIZE + 3 * (2 + point_len)) ||
         !CBB_add_u32(&token_cbb, key_id) ||
@@ -1036,8 +1291,13 @@ static STACK_OF(TRUST_TOKEN) *
       goto err;
     }
 
+  #if 1 // hezhiwen
+    token =
+        TRUST_TOKEN_new(CBB_data(&token_cbb), CBB_len(&token_cbb));
+  #else
     TRUST_TOKEN *token =
         TRUST_TOKEN_new(CBB_data(&token_cbb), CBB_len(&token_cbb));
+  #endif
     CBB_cleanup(&token_cbb);
     if (token == NULL ||
         !sk_TRUST_TOKEN_push(ret, token)) {
@@ -1050,13 +1310,19 @@ static STACK_OF(TRUST_TOKEN) *
   // The DLEQ batching construction is described in appendix B of
   // https://eprint.iacr.org/2020/072/20200324:214215. Note the additional
   // computations all act on public inputs.
+#if 1 // hezhiwen
+  for (i = 0; i < count; i++) {
+#else
   for (size_t i = 0; i < count; i++) {
+#endif
     if (!hash_c_batch(method, &es[i], &batch_cbb, i)) {
       goto err;
     }
   }
 
+#if 0 // hezhiwen
   EC_RAW_POINT Tp_batch, Sp_batch, Wp_batch, Wsp_batch;
+#endif
   if (!ec_point_mul_scalar_public_batch(group, &Tp_batch,
                                         /*g_scalar=*/NULL, Tps, es, count) ||
       !ec_point_mul_scalar_public_batch(group, &Sp_batch,
@@ -1068,7 +1334,9 @@ static STACK_OF(TRUST_TOKEN) *
     goto err;
   }
 
+#if 0 // hezhiwen
   CBS proof;
+#endif
   if (!CBS_get_u16_length_prefixed(cbs, &proof) ||
       !dleq_verify(method, &proof, key, &Tp_batch, &Sp_batch, &Wp_batch,
                    &Wsp_batch) ||
@@ -1099,8 +1367,22 @@ static int pmbtoken_read(const PMBTOKEN_METHOD *method,
                          size_t token_len) {
   const EC_GROUP *group = method->group;
   CBS cbs;
+#if 1 // hezhiwen
+  EC_AFFINE S, W, Ws;
+  EC_RAW_POINT T;
+  EC_RAW_POINT S_jacobian;
+  EC_PRECOMP S_precomp, T_precomp;
+  EC_RAW_POINT Ws_calculated;
+  EC_RAW_POINT W0, W1;
+  int is_W0;
+  int is_W1;
+  int is_valid;
+
+  CBS_init(&cbs, token, token_len);
+#else
   CBS_init(&cbs, token, token_len);
   EC_AFFINE S, W, Ws;
+#endif
   if (!CBS_copy_bytes(&cbs, out_nonce, TRUST_TOKEN_NONCE_SIZE) ||
       !cbs_get_prefixed_point(&cbs, group, &S, method->prefix_point) ||
       !cbs_get_prefixed_point(&cbs, group, &W, method->prefix_point) ||
@@ -1111,22 +1393,28 @@ static int pmbtoken_read(const PMBTOKEN_METHOD *method,
   }
 
 
+#if 0 // hezhiwen
   EC_RAW_POINT T;
+#endif
   if (!method->hash_t(group, &T, out_nonce)) {
     return 0;
   }
 
   // We perform three multiplications with S and T. This is enough that it is
   // worth using |ec_point_mul_scalar_precomp|.
+#if 0 // hezhiwen
   EC_RAW_POINT S_jacobian;
   EC_PRECOMP S_precomp, T_precomp;
+#endif
   ec_affine_to_jacobian(group, &S_jacobian, &S);
   if (!ec_init_precomp(group, &S_precomp, &S_jacobian) ||
       !ec_init_precomp(group, &T_precomp, &T)) {
     return 0;
   }
 
+#if 0 // hezhiwen
   EC_RAW_POINT Ws_calculated;
+#endif
   // Check the validity of the token.
   if (!ec_point_mul_scalar_precomp(group, &Ws_calculated, &T_precomp, &key->xs,
                                    &S_precomp, &key->ys, NULL, NULL) ||
@@ -1135,7 +1423,9 @@ static int pmbtoken_read(const PMBTOKEN_METHOD *method,
     return 0;
   }
 
+#if 0 // hezhiwen
   EC_RAW_POINT W0, W1;
+#endif
   if (!ec_point_mul_scalar_precomp(group, &W0, &T_precomp, &key->x0, &S_precomp,
                                    &key->y0, NULL, NULL) ||
       !ec_point_mul_scalar_precomp(group, &W1, &T_precomp, &key->x1, &S_precomp,
@@ -1143,9 +1433,11 @@ static int pmbtoken_read(const PMBTOKEN_METHOD *method,
     return 0;
   }
 
-  const int is_W0 = ec_affine_jacobian_equal(group, &W, &W0);
-  const int is_W1 = ec_affine_jacobian_equal(group, &W, &W1);
-  const int is_valid = is_W0 ^ is_W1;
+#if 1 // hezhiwen
+  is_W0 = ec_affine_jacobian_equal(group, &W, &W0);
+  is_W1 = ec_affine_jacobian_equal(group, &W, &W1);
+  is_valid = is_W0 ^ is_W1;
+#endif
   if (!is_valid) {
     // Invalid tokens will fail the validity check above.
     OPENSSL_PUT_ERROR(TRUST_TOKEN, ERR_R_INTERNAL_ERROR);
@@ -1315,10 +1607,15 @@ int pmbtoken_exp1_read(const TRUST_TOKEN_ISSUER_KEY *key,
 }
 
 int pmbtoken_exp1_get_h_for_testing(uint8_t out[97]) {
+#if 1 // hezhiwen
+  EC_AFFINE h;
+#endif
   if (!pmbtoken_exp1_init_method()) {
     return 0;
   }
+#if 0 // hezhiwen
   EC_AFFINE h;
+#endif
   return ec_jacobian_to_affine(pmbtoken_exp1_method.group, &h,
                                &pmbtoken_exp1_method.h) &&
          ec_point_to_bytes(pmbtoken_exp1_method.group, &h,
@@ -1484,10 +1781,15 @@ int pmbtoken_exp2_read(const TRUST_TOKEN_ISSUER_KEY *key,
 }
 
 int pmbtoken_exp2_get_h_for_testing(uint8_t out[97]) {
+#if 1 // hezhiwen
+  EC_AFFINE h;
+#endif
   if (!pmbtoken_exp2_init_method()) {
     return 0;
   }
+#if 0 // hezhiwen
   EC_AFFINE h;
+#endif
   return ec_jacobian_to_affine(pmbtoken_exp2_method.group, &h,
                                &pmbtoken_exp2_method.h) &&
          ec_point_to_bytes(pmbtoken_exp2_method.group, &h,

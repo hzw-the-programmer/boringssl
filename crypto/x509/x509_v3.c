@@ -105,6 +105,9 @@ int X509v3_get_ext_by_OBJ(const STACK_OF(X509_EXTENSION) *sk,
 
 int X509v3_get_ext_by_critical(const STACK_OF(X509_EXTENSION) *sk, int crit,
                                int lastpos) {
+#if 1 // hezhiwen
+  int n;
+#endif
   if (sk == NULL) {
     return -1;
   }
@@ -115,7 +118,11 @@ int X509v3_get_ext_by_critical(const STACK_OF(X509_EXTENSION) *sk, int crit,
   }
 
   crit = !!crit;
+#if 1 // hezhiwen
+  n = sk_X509_EXTENSION_num(sk);
+#else
   int n = sk_X509_EXTENSION_num(sk);
+#endif
   for (; lastpos < n; lastpos++) {
     const X509_EXTENSION *ex = sk_X509_EXTENSION_value(sk, lastpos);
     if (X509_EXTENSION_get_critical(ex) == crit) {

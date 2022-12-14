@@ -300,7 +300,12 @@ static inline void poly3_vec_rshift1(vec_t a_s[6], vec_t a_a[6]) {
 
 OPENSSL_UNUSED static void hexdump(const void *void_in, size_t len) {
   const uint8_t *in = (const uint8_t *)void_in;
+#if 1 // hezhiwen
+  size_t i;
+  for (i = 0; i < len; i++) {
+#else
   for (size_t i = 0; i < len; i++) {
+#endif
     printf("%02x", in[i]);
   }
   printf("\n");
@@ -331,7 +336,12 @@ static crypto_word_t word_reverse(crypto_word_t in) {
   };
 #endif
 
+#if 1 // hezhiwen
+  size_t i;
+  for (i = 0; i < OPENSSL_ARRAY_SIZE(kMasks); i++) {
+#else
   for (size_t i = 0; i < OPENSSL_ARRAY_SIZE(kMasks); i++) {
+#endif
     in = ((in >> (1 << i)) & kMasks[i]) | ((in & kMasks[i]) << (1 << i));
   }
 
@@ -348,7 +358,12 @@ static void poly2_mod_phiN(struct poly2 *p) {
   // m is the term at x^700, replicated to every bit.
   const crypto_word_t m =
       lsb_to_all(p->v[WORDS_PER_POLY - 1] >> (BITS_IN_LAST_WORD - 1));
+#if 1 // hezhiwen
+  size_t i;
+  for (i = 0; i < WORDS_PER_POLY; i++) {
+#else
   for (size_t i = 0; i < WORDS_PER_POLY; i++) {
+#endif
     p->v[i] ^= m;
   }
   p->v[WORDS_PER_POLY - 1] &= (UINT64_C(1) << (BITS_IN_LAST_WORD - 1)) - 1;
@@ -358,12 +373,22 @@ static void poly2_mod_phiN(struct poly2 *p) {
 // the result to |out|.
 static void poly2_reverse_700(struct poly2 *out, const struct poly2 *in) {
   struct poly2 t;
+#if 1 // hezhiwen
+  static const size_t shift = BITS_PER_WORD - ((N-1) % BITS_PER_WORD);
+  size_t i;
+  for (i = 0; i < WORDS_PER_POLY; i++) {
+#else
   for (size_t i = 0; i < WORDS_PER_POLY; i++) {
+#endif
     t.v[i] = word_reverse(in->v[i]);
   }
 
+#if 1 // hezhiwen
+  for (i = 0; i < WORDS_PER_POLY-1; i++) {
+#else
   static const size_t shift = BITS_PER_WORD - ((N-1) % BITS_PER_WORD);
   for (size_t i = 0; i < WORDS_PER_POLY-1; i++) {
+#endif
     out->v[i] = t.v[WORDS_PER_POLY-1-i] >> shift;
     out->v[i] |= t.v[WORDS_PER_POLY-2-i] << (BITS_PER_WORD - shift);
   }
@@ -372,7 +397,12 @@ static void poly2_reverse_700(struct poly2 *out, const struct poly2 *in) {
 
 // poly2_cswap exchanges the values of |a| and |b| if |swap| is all ones.
 static void poly2_cswap(struct poly2 *a, struct poly2 *b, crypto_word_t swap) {
+#if 1 // hezhiwen
+  size_t i;
+  for (i = 0; i < WORDS_PER_POLY; i++) {
+#else
   for (size_t i = 0; i < WORDS_PER_POLY; i++) {
+#endif
     const crypto_word_t sum = swap & (a->v[i] ^ b->v[i]);
     a->v[i] ^= sum;
     b->v[i] ^= sum;
@@ -383,7 +413,12 @@ static void poly2_cswap(struct poly2 *a, struct poly2 *b, crypto_word_t swap) {
 // |CONSTTIME_TRUE_W| or |CONSTTIME_FALSE_W|.
 static void poly2_fmadd(struct poly2 *out, const struct poly2 *in,
                         crypto_word_t m) {
+#if 1 // hezhiwen
+  size_t i;
+  for (i = 0; i < WORDS_PER_POLY; i++) {
+#else
   for (size_t i = 0; i < WORDS_PER_POLY; i++) {
+#endif
     out->v[i] ^= in->v[i] & m;
   }
 }
@@ -391,7 +426,12 @@ static void poly2_fmadd(struct poly2 *out, const struct poly2 *in,
 // poly2_lshift1 left-shifts |p| by one bit.
 static void poly2_lshift1(struct poly2 *p) {
   crypto_word_t carry = 0;
+#if 1 // hezhiwen
+  size_t i;
+  for (i = 0; i < WORDS_PER_POLY; i++) {
+#else
   for (size_t i = 0; i < WORDS_PER_POLY; i++) {
+#endif
     const crypto_word_t next_carry = p->v[i] >> (BITS_PER_WORD - 1);
     p->v[i] <<= 1;
     p->v[i] |= carry;
@@ -402,7 +442,12 @@ static void poly2_lshift1(struct poly2 *p) {
 // poly2_rshift1 right-shifts |p| by one bit.
 static void poly2_rshift1(struct poly2 *p) {
   crypto_word_t carry = 0;
+#if 1 // hezhiwen
+  size_t i;
+  for (i = WORDS_PER_POLY - 1; i < WORDS_PER_POLY; i--) {
+#else
   for (size_t i = WORDS_PER_POLY - 1; i < WORDS_PER_POLY; i--) {
+#endif
     const crypto_word_t next_carry = p->v[i] & 1;
     p->v[i] >>= 1;
     p->v[i] |= carry << (BITS_PER_WORD - 1);
@@ -462,19 +507,30 @@ static int poly2_top_bits_are_clear(const struct poly2 *p) {
 
 OPENSSL_UNUSED static void poly3_print(const struct poly3 *in) {
   struct poly3 p;
+#if 1 // hezhiwen
+  unsigned i;
+#endif
   OPENSSL_memcpy(&p, in, sizeof(p));
   p.s.v[WORDS_PER_POLY - 1] &= ((crypto_word_t)1 << BITS_IN_LAST_WORD) - 1;
   p.a.v[WORDS_PER_POLY - 1] &= ((crypto_word_t)1 << BITS_IN_LAST_WORD) - 1;
 
   printf("{[");
+#if 1 // hezhiwen
+  for (i = 0; i < WORDS_PER_POLY; i++) {
+#else
   for (unsigned i = 0; i < WORDS_PER_POLY; i++) {
+#endif
     if (i) {
       printf(" ");
     }
     printf(BN_HEX_FMT2, p.s.v[i]);
   }
   printf("] [");
+#if 1 // hezhiwen
+  for (i = 0; i < WORDS_PER_POLY; i++) {
+#else
   for (unsigned i = 0; i < WORDS_PER_POLY; i++) {
+#endif
     if (i) {
       printf(" ");
     }
@@ -524,10 +580,17 @@ static void poly3_word_sub(crypto_word_t *out_s, crypto_word_t *out_a,
 // poly3_mul_const sets |p| to |p|×m, where m = (ms, ma).
 static void poly3_mul_const(struct poly3 *p, crypto_word_t ms,
                             crypto_word_t ma) {
+#if 1 // hezhiwen
+  size_t i;
+#endif
   ms = lsb_to_all(ms);
   ma = lsb_to_all(ma);
 
+#if 1 // hezhiwen
+  for (i = 0; i < WORDS_PER_POLY; i++) {
+#else
   for (size_t i = 0; i < WORDS_PER_POLY; i++) {
+#endif
     poly3_word_mul(&p->s.v[i], &p->a.v[i], p->s.v[i], p->a.v[i], ms, ma);
   }
 }
@@ -537,7 +600,12 @@ static void poly3_fmsub(struct poly3 *RESTRICT out,
                         const struct poly3 *RESTRICT in, crypto_word_t ms,
                         crypto_word_t ma) {
   crypto_word_t product_s, product_a;
+#if 1 // hezhiwen
+  size_t i;
+  for (i = 0; i < WORDS_PER_POLY; i++) {
+#else
   for (size_t i = 0; i < WORDS_PER_POLY; i++) {
+#endif
     poly3_word_mul(&product_s, &product_a, in->s.v[i], in->a.v[i], ms, ma);
     poly3_word_sub(&out->s.v[i], &out->a.v[i], out->s.v[i], out->a.v[i],
                    product_s, product_a);
@@ -563,7 +631,12 @@ static void poly3_mod_phiN(struct poly3 *p) {
   const crypto_word_t factor_s = final_bit_to_all(p->s.v[WORDS_PER_POLY - 1]);
   const crypto_word_t factor_a = final_bit_to_all(p->a.v[WORDS_PER_POLY - 1]);
 
+#if 1 // hezhiwen
+  size_t i;
+  for (i = 0; i < WORDS_PER_POLY; i++) {
+#else
   for (size_t i = 0; i < WORDS_PER_POLY; i++) {
+#endif
     poly3_word_sub(&p->s.v[i], &p->a.v[i], p->s.v[i], p->a.v[i], factor_s,
                    factor_a);
   }
@@ -598,7 +671,12 @@ struct poly3_span {
 static void poly3_span_add(const struct poly3_span *out,
                            const struct poly3_span *a,
                            const struct poly3_span *b, size_t n) {
+#if 1 // hezhiwen
+  size_t i;
+  for (i = 0; i < n; i++) {
+#else
   for (size_t i = 0; i < n; i++) {
+#endif
     poly3_word_add(&out->s[i], &out->a[i], a->s[i], a->a[i], b->s[i], b->a[i]);
   }
 }
@@ -606,7 +684,12 @@ static void poly3_span_add(const struct poly3_span *out,
 // poly3_span_sub subtracts |n| words of |b| from |n| words of |a|.
 static void poly3_span_sub(const struct poly3_span *a,
                            const struct poly3_span *b, size_t n) {
+#if 1 // hezhiwen
+  size_t i;
+  for (i = 0; i < n; i++) {
+#else
   for (size_t i = 0; i < n; i++) {
+#endif
     poly3_word_sub(&a->s[i], &a->a[i], a->s[i], a->a[i], b->s[i], b->a[i]);
   }
 }
@@ -620,14 +703,37 @@ static void poly3_mul_aux(const struct poly3_span *out,
                           const struct poly3_span *scratch,
                           const struct poly3_span *a,
                           const struct poly3_span *b, size_t n) {
+#if 1 // hezhiwen
+  size_t low_len;
+  size_t high_len;
+  struct poly3_span a_high;
+  struct poly3_span b_high;
+  struct poly3_span a_cross_sum;
+  struct poly3_span b_cross_sum;
+  struct poly3_span child_scratch;
+  struct poly3_span out_mid;
+  struct poly3_span out_high;
+#endif
+
   if (n == 1) {
     crypto_word_t r_s_low = 0, r_s_high = 0, r_a_low = 0, r_a_high = 0;
     crypto_word_t b_s = b->s[0], b_a = b->a[0];
     const crypto_word_t a_s = a->s[0], a_a = a->a[0];
 
+  #if 1 // hezhiwen
+    size_t i;
+    for (i = 0; i < BITS_PER_WORD; i++) {
+  #else
     for (size_t i = 0; i < BITS_PER_WORD; i++) {
+  #endif
       // Multiply (s, a) by the next value from (b_s, b_a).
       crypto_word_t m_s, m_a;
+    #if 1 // hezhiwen
+      crypto_word_t m_s_low;
+      crypto_word_t m_s_high;
+      crypto_word_t m_a_low;
+      crypto_word_t m_a_high;
+    #endif
       poly3_word_mul(&m_s, &m_a, a_s, a_a, lsb_to_all(b_s), lsb_to_all(b_a));
       b_s >>= 1;
       b_a >>= 1;
@@ -641,10 +747,17 @@ static void poly3_mul_aux(const struct poly3_span *out,
       }
 
       // Shift the multiplication result to the correct position.
+    #if 1 // hezhiwen
+      m_s_low = m_s << i;
+      m_s_high = m_s >> (BITS_PER_WORD - i);
+      m_a_low = m_a << i;
+      m_a_high = m_a >> (BITS_PER_WORD - i);
+    #else
       const crypto_word_t m_s_low = m_s << i;
       const crypto_word_t m_s_high = m_s >> (BITS_PER_WORD - i);
       const crypto_word_t m_a_low = m_a << i;
       const crypto_word_t m_a_high = m_a >> (BITS_PER_WORD - i);
+    #endif
 
       // Add into the result.
       poly3_word_add(&r_s_low, &r_a_low, r_s_low, r_a_low, m_s_low, m_a_low);
@@ -664,15 +777,30 @@ static void poly3_mul_aux(const struct poly3_span *out,
 
   // When |n| is odd, the two "halves" will have different lengths. The first
   // is always the smaller.
+#if 1 // hezhiwen
+  low_len = n / 2;
+  high_len = n - low_len;
+  a_high.s = &a->s[low_len];
+  a_high.a = &a->a[low_len];
+  b_high.s = &b->s[low_len];
+  b_high.a = &b->a[low_len];
+#else
   const size_t low_len = n / 2;
   const size_t high_len = n - low_len;
   const struct poly3_span a_high = {&a->s[low_len], &a->a[low_len]};
   const struct poly3_span b_high = {&b->s[low_len], &b->a[low_len]};
+#endif
 
   // Store a_1 + a_0 in the first half of |out| and b_1 + b_0 in the second
   // half.
+#if 1 // hezhiwen
+  a_cross_sum = *out;
+  b_cross_sum.s = &out->s[high_len];
+  b_cross_sum.a = &out->a[high_len];
+#else
   const struct poly3_span a_cross_sum = *out;
   const struct poly3_span b_cross_sum = {&out->s[high_len], &out->a[high_len]};
+#endif
   poly3_span_add(&a_cross_sum, a, &a_high, low_len);
   poly3_span_add(&b_cross_sum, b, &b_high, low_len);
   if (high_len != low_len) {
@@ -682,11 +810,20 @@ static void poly3_mul_aux(const struct poly3_span *out,
     b_cross_sum.a[low_len] = b_high.a[low_len];
   }
 
+#if 1 // hezhiwen
+  child_scratch.s = &scratch->s[2 * high_len];
+  child_scratch.a = &scratch->a[2 * high_len];
+  out_mid.s = &out->s[low_len];
+  out_mid.a = &out->a[low_len];
+  out_high.s = &out->s[2 * low_len];
+  out_high.a = &out->a[2 * low_len];
+#else
   const struct poly3_span child_scratch = {&scratch->s[2 * high_len],
                                            &scratch->a[2 * high_len]};
   const struct poly3_span out_mid = {&out->s[low_len], &out->a[low_len]};
   const struct poly3_span out_high = {&out->s[2 * low_len],
                                       &out->a[2 * low_len]};
+#endif
 
   // Calculate (a_1 + a_0) × (b_1 + b_0) and write to scratch buffer.
   poly3_mul_aux(scratch, &child_scratch, &a_cross_sum, &b_cross_sum, high_len);
@@ -716,6 +853,9 @@ void HRSS_poly3_mul(struct poly3 *out, const struct poly3 *x,
                                     (crypto_word_t *)x->a.v};
   const struct poly3_span y_span = {(crypto_word_t *)y->s.v,
                                     (crypto_word_t *)y->a.v};
+#if 1 // hezhiwen
+  size_t i;
+#endif
 
   poly3_mul_aux(&prod_span, &scratch_span, &x_span, &y_span, WORDS_PER_POLY);
 
@@ -723,10 +863,19 @@ void HRSS_poly3_mul(struct poly3 *out, const struct poly3 *x,
   // upper-half to the lower-half. However, N is 701, which isn't a multiple of
   // BITS_PER_WORD, so the upper-half vectors all have to be shifted before
   // being added to the lower-half.
+#if 1 // hezhiwen
+  for (i = 0; i < WORDS_PER_POLY; i++) {
+    crypto_word_t v_s;
+    crypto_word_t v_a;
+    v_s = prod_s[WORDS_PER_POLY + i - 1] >> BITS_IN_LAST_WORD;
+    v_s |= prod_s[WORDS_PER_POLY + i] << (BITS_PER_WORD - BITS_IN_LAST_WORD);
+    v_a = prod_a[WORDS_PER_POLY + i - 1] >> BITS_IN_LAST_WORD;
+#else
   for (size_t i = 0; i < WORDS_PER_POLY; i++) {
     crypto_word_t v_s = prod_s[WORDS_PER_POLY + i - 1] >> BITS_IN_LAST_WORD;
     v_s |= prod_s[WORDS_PER_POLY + i] << (BITS_PER_WORD - BITS_IN_LAST_WORD);
     crypto_word_t v_a = prod_a[WORDS_PER_POLY + i - 1] >> BITS_IN_LAST_WORD;
+#endif
     v_a |= prod_a[WORDS_PER_POLY + i] << (BITS_PER_WORD - BITS_IN_LAST_WORD);
 
     poly3_word_add(&out->s.v[i], &out->a.v[i], prod_s[i], prod_a[i], v_s, v_a);
@@ -850,6 +999,10 @@ void HRSS_poly3_invert(struct poly3 *out, const struct poly3 *in) {
 
   // This algorithm is taken from section 7.1 of [SAFEGCD].
   struct poly3 v, r, f, g;
+#if 1 // hezhiwen
+  int delta = 1;
+  size_t i;
+#endif
   // v = 0
   poly3_zero(&v);
   // r = 1
@@ -861,8 +1014,28 @@ void HRSS_poly3_invert(struct poly3 *out, const struct poly3 *in) {
   f.a.v[WORDS_PER_POLY - 1] >>= BITS_PER_WORD - BITS_IN_LAST_WORD;
   // g is the reversal of |in|.
   poly3_reverse_700(&g, in);
+#if 0 // hezhiwen
   int delta = 1;
+#endif
 
+#if 1 // hezhiwen
+  for (i = 0; i < (2*(N-1)) - 1; i++) {
+    crypto_word_t delta_sign_bit;
+    crypto_word_t delta_is_non_negative;
+    crypto_word_t delta_is_non_zero;
+    crypto_word_t g_has_constant_term;
+    crypto_word_t mask;
+    crypto_word_t c_s, c_a;
+
+    poly3_lshift1(&v);
+
+    delta_sign_bit = (delta >> (sizeof(delta) * 8 - 1)) & 1;
+    delta_is_non_negative = delta_sign_bit - 1;
+    delta_is_non_zero = ~constant_time_is_zero_w(delta);
+    g_has_constant_term = lsb_to_all(g.a.v[0]);
+    mask =
+        g_has_constant_term & delta_is_non_negative & delta_is_non_zero;
+#else
   for (size_t i = 0; i < (2*(N-1)) - 1; i++) {
     poly3_lshift1(&v);
 
@@ -874,6 +1047,8 @@ void HRSS_poly3_invert(struct poly3 *out, const struct poly3 *in) {
         g_has_constant_term & delta_is_non_negative & delta_is_non_zero;
 
     crypto_word_t c_s, c_a;
+#endif
+
     poly3_word_mul(&c_s, &c_a, f.s.v[0], f.a.v[0], g.s.v[0], g.a.v[0]);
     c_s = lsb_to_all(c_s);
     c_a = lsb_to_all(c_a);
@@ -941,8 +1116,15 @@ static void poly_assert_normalized(const struct poly *x) {
 }
 
 OPENSSL_UNUSED static void poly_print(const struct poly *p) {
+#if 1 // hezhiwen
+  unsigned i;
+#endif
   printf("[");
+#if 1 // hezhiwen
+  for (i = 0; i < N; i++) {
+#else
   for (unsigned i = 0; i < N; i++) {
+#endif
     if (i) {
       printf(" ");
     }
@@ -1262,10 +1444,24 @@ static void poly_mul_vec(struct POLY_MUL_SCRATCH *scratch, struct poly *out,
 static void poly_mul_novec_aux(uint16_t *out, uint16_t *scratch,
                                const uint16_t *a, const uint16_t *b, size_t n) {
   static const size_t kSchoolbookLimit = 64;
+#if 1 // hezhiwen
+  size_t i;
+  size_t j;
+  size_t low_len;
+  size_t high_len;
+  const uint16_t *a_high;
+  const uint16_t *b_high;
+  uint16_t *child_scratch;
+#endif
   if (n < kSchoolbookLimit) {
     OPENSSL_memset(out, 0, sizeof(uint16_t) * n * 2);
+  #if 1 // hezhiwen
+    for (i = 0; i < n; i++) {
+      for (j = 0; j < n; j++) {
+  #else
     for (size_t i = 0; i < n; i++) {
       for (size_t j = 0; j < n; j++) {
+  #endif
         out[i + j] += (unsigned) a[i] * b[j];
       }
     }
@@ -1278,12 +1474,21 @@ static void poly_mul_novec_aux(uint16_t *out, uint16_t *scratch,
 
   // When |n| is odd, the two "halves" will have different lengths. The
   // first is always the smaller.
+#if 1 // hezhiwen
+  low_len = n / 2;
+  high_len = n - low_len;
+  a_high = &a[low_len];
+  b_high = &b[low_len];
+
+  for (i = 0; i < low_len; i++) {
+#else
   const size_t low_len = n / 2;
   const size_t high_len = n - low_len;
   const uint16_t *const a_high = &a[low_len];
   const uint16_t *const b_high = &b[low_len];
 
   for (size_t i = 0; i < low_len; i++) {
+#endif
     out[i] = a_high[i] + a[i];
     out[high_len + i] = b_high[i] + b[i];
   }
@@ -1292,13 +1497,21 @@ static void poly_mul_novec_aux(uint16_t *out, uint16_t *scratch,
     out[high_len + low_len] = b_high[low_len];
   }
 
+#if 1 // hezhiwen
+  child_scratch = &scratch[2 * high_len];
+#else
   uint16_t *const child_scratch = &scratch[2 * high_len];
+#endif
   poly_mul_novec_aux(scratch, child_scratch, out, &out[high_len], high_len);
   poly_mul_novec_aux(&out[low_len * 2], child_scratch, a_high, b_high,
                      high_len);
   poly_mul_novec_aux(out, child_scratch, a, b, low_len);
 
+#if 1 // hezhiwen
+  for (i = 0; i < low_len * 2; i++) {
+#else
   for (size_t i = 0; i < low_len * 2; i++) {
+#endif
     scratch[i] -= out[i] + out[low_len * 2 + i];
   }
   if (low_len != high_len) {
@@ -1306,7 +1519,11 @@ static void poly_mul_novec_aux(uint16_t *out, uint16_t *scratch,
     assert(out[low_len * 4 + 1] == 0);
   }
 
+#if 1 // hezhiwen
+  for (i = 0; i < high_len * 2; i++) {
+#else
   for (size_t i = 0; i < high_len * 2; i++) {
+#endif
     out[low_len + i] += scratch[i];
   }
 }
@@ -1316,9 +1533,16 @@ static void poly_mul_novec(struct POLY_MUL_SCRATCH *scratch, struct poly *out,
                            const struct poly *x, const struct poly *y) {
   uint16_t *const prod = scratch->u.novec.prod;
   uint16_t *const aux_scratch = scratch->u.novec.scratch;
+#if 1 // hezhiwen
+  size_t i;
+#endif
   poly_mul_novec_aux(prod, aux_scratch, x->v, y->v, N);
 
+#if 1 // hezhiwen
+  for (i = 0; i < N; i++) {
+#else
   for (size_t i = 0; i < N; i++) {
+#endif
     out->v[i] = prod[i] + prod[i + N];
   }
   OPENSSL_memset(&out->v[N], 0, 3 * sizeof(uint16_t));
@@ -1353,7 +1577,12 @@ static void poly_mul_x_minus_1(struct poly *p) {
   // the value of the previous one.
   const uint16_t orig_final_coefficient = p->v[N - 1];
 
+#if 1 // hezhiwen
+  size_t i;
+  for (i = N - 1; i > 0; i--) {
+#else
   for (size_t i = N - 1; i > 0; i--) {
+#endif
     p->v[i] = p->v[i - 1] - p->v[i];
   }
   p->v[0] = orig_final_coefficient - p->v[0];
@@ -1363,14 +1592,24 @@ static void poly_mul_x_minus_1(struct poly *p) {
 static void poly_mod_phiN(struct poly *p) {
   const uint16_t coeff700 = p->v[N - 1];
 
+#if 1 // hezhiwen
+  unsigned i;
+  for (i = 0; i < N; i++) {
+#else
   for (unsigned i = 0; i < N; i++) {
+#endif
     p->v[i] -= coeff700;
   }
 }
 
 // poly_clamp reduces each coefficient mod Q.
 static void poly_clamp(struct poly *p) {
+#if 1 // hezhiwen
+  unsigned i;
+  for (i = 0; i < N; i++) {
+#else
   for (unsigned i = 0; i < N; i++) {
+#endif
     p->v[i] &= Q - 1;
   }
 }
@@ -1385,7 +1624,12 @@ static void poly2_from_poly(struct poly2 *out, const struct poly *in) {
   unsigned shift = 0;
   crypto_word_t word = 0;
 
+#if 1 // hezhiwen
+  unsigned i;
+  for (i = 0; i < N; i++) {
+#else
   for (unsigned i = 0; i < N; i++) {
+#endif
     word >>= 1;
     word |= (crypto_word_t)(in->v[i] & 1) << (BITS_PER_WORD - 1);
     shift++;
@@ -1419,13 +1663,26 @@ static void poly3_from_poly(struct poly3 *out, const struct poly *in) {
   crypto_word_t a = 0;
   unsigned shift = 0;
 
+#if 1 // hezhiwen
+  unsigned i;
+  for (i = 0; i < N; i++) {
+#else
   for (unsigned i = 0; i < N; i++) {
+#endif
     // This duplicates the 13th bit upwards to the top of the uint16,
     // essentially treating it as a sign bit and converting into a signed int16.
     // The signed value is reduced mod 3, yielding {0, 1, 2}.
+  #if 1 // hezhiwen
+    uint16_t v;
+    crypto_word_t s_bit;
+    v = mod3((int16_t)(in->v[i] << 3) >> 3);
+    s >>= 1;
+    s_bit = (crypto_word_t)(v & 2) << (BITS_PER_WORD - 2);
+  #else
     const uint16_t v = mod3((int16_t)(in->v[i] << 3) >> 3);
     s >>= 1;
     const crypto_word_t s_bit = (crypto_word_t)(v & 2) << (BITS_PER_WORD - 2);
+  #endif
     s |= s_bit;
     a >>= 1;
     a |= s_bit | (crypto_word_t)(v & 1) << (BITS_PER_WORD - 1);
@@ -1459,6 +1716,23 @@ static crypto_word_t poly3_from_poly_checked(struct poly3 *out,
   unsigned shift = 0;
   crypto_word_t ok = CONSTTIME_TRUE_W;
 
+#if 1 // hezhiwen
+  unsigned i;
+  for (i = 0; i < N; i++) {
+    uint16_t v;
+    uint16_t mod3;
+    uint16_t expected;
+    crypto_word_t s_bit;
+
+    v = in->v[i];
+    mod3 = v & 3;
+    mod3 ^= mod3 >> 1;
+    expected = (uint16_t)((~((mod3 >> 1) - 1)) | mod3) % Q;
+    ok &= constant_time_eq_w(v, expected);
+    s >>= 1;
+    s_bit = (crypto_word_t)(mod3 & 2)
+            << (BITS_PER_WORD - 2);
+#else
   for (unsigned i = 0; i < N; i++) {
     const uint16_t v = in->v[i];
     // Maps {0, 1, Q-1} to {0, 1, 2}.
@@ -1470,6 +1744,7 @@ static crypto_word_t poly3_from_poly_checked(struct poly3 *out,
     s >>= 1;
     const crypto_word_t s_bit = (crypto_word_t)(mod3 & 2)
                                 << (BITS_PER_WORD - 2);
+#endif
     s |= s_bit;
     a >>= 1;
     a |= s_bit | (crypto_word_t)(mod3 & 1) << (BITS_PER_WORD - 1);
@@ -1498,7 +1773,12 @@ static void poly_from_poly2(struct poly *out, const struct poly2 *in) {
   unsigned shift = 0;
   crypto_word_t word = *words;
 
+#if 1 // hezhiwen
+  unsigned i;
+  for (i = 0; i < N; i++) {
+#else
   for (unsigned i = 0; i < N; i++) {
+#endif
     out->v[i] = word & 1;
     word >>= 1;
     shift++;
@@ -1520,7 +1800,12 @@ static void poly_from_poly3(struct poly *out, const struct poly3 *in) {
   crypto_word_t word_a = *words_a;
   unsigned shift = 0;
 
+#if 1 // hezhiwen
+  unsigned i;
+  for (i = 0; i < N; i++) {
+#else
   for (unsigned i = 0; i < N; i++) {
+#endif
     out->v[i] = (uint16_t)(word_s & 1) - 1;
     out->v[i] |= word_a & 1;
     word_s >>= 1;
@@ -1548,6 +1833,10 @@ static void poly_from_poly3(struct poly *out, const struct poly3 *in) {
 static void poly_invert_mod2(struct poly *out, const struct poly *in) {
   // This algorithm is taken from section 7.1 of [SAFEGCD].
   struct poly2 v, r, f, g;
+#if 1 // hezhiwen
+  int delta = 1;
+  size_t i;
+#endif
 
   // v = 0
   poly2_zero(&v);
@@ -1561,8 +1850,29 @@ static void poly_invert_mod2(struct poly *out, const struct poly *in) {
   poly2_from_poly(&g, in);
   poly2_mod_phiN(&g);
   poly2_reverse_700(&g, &g);
+#if 0 // hezhiwen
   int delta = 1;
+#endif
 
+#if 1 // hezhiwen
+  for (i = 0; i < (2*(N-1)) - 1; i++) {
+    crypto_word_t delta_sign_bit;
+    crypto_word_t delta_is_non_negative;
+    crypto_word_t delta_is_non_zero;
+    crypto_word_t g_has_constant_term;
+    crypto_word_t mask;
+    crypto_word_t c;
+
+    poly2_lshift1(&v);
+
+    delta_sign_bit = (delta >> (sizeof(delta) * 8 - 1)) & 1;
+    delta_is_non_negative = delta_sign_bit - 1;
+    delta_is_non_zero = ~constant_time_is_zero_w(delta);
+    g_has_constant_term = lsb_to_all(g.v[0]);
+    mask =
+        g_has_constant_term & delta_is_non_negative & delta_is_non_zero;
+    c = lsb_to_all(f.v[0] & g.v[0]);
+#else
   for (size_t i = 0; i < (2*(N-1)) - 1; i++) {
     poly2_lshift1(&v);
 
@@ -1574,7 +1884,7 @@ static void poly_invert_mod2(struct poly *out, const struct poly *in) {
         g_has_constant_term & delta_is_non_negative & delta_is_non_zero;
 
     const crypto_word_t c = lsb_to_all(f.v[0] & g.v[0]);
-
+#endif
     delta = constant_time_select_int(mask, -delta, delta);
     delta++;
 
@@ -1601,7 +1911,12 @@ static void poly_invert(struct POLY_MUL_SCRATCH *scratch, struct poly *out,
   struct poly a, *b, tmp;
 
   // a = -in.
+#if 1 // hezhiwen
+  unsigned i;
+  for (i = 0; i < N; i++) {
+#else
   for (unsigned i = 0; i < N; i++) {
+#endif
     a.v[i] = -in->v[i];
   }
   poly_normalize(&a);
@@ -1612,7 +1927,11 @@ static void poly_invert(struct POLY_MUL_SCRATCH *scratch, struct poly *out,
 
   // We are working mod Q=2**13 and we need to iterate ceil(log_2(13))
   // times, which is four.
+#if 1 // hezhiwen
+  for (i = 0; i < 4; i++) {
+#else
   for (unsigned i = 0; i < 4; i++) {
+#endif
     poly_mul(scratch, &tmp, &a, b);
     tmp.v[0] += 2;
     poly_mul(scratch, b, b, &tmp);
@@ -1630,7 +1949,12 @@ static void poly_invert(struct POLY_MUL_SCRATCH *scratch, struct poly *out,
 static void poly_marshal(uint8_t out[POLY_BYTES], const struct poly *in) {
   const uint16_t *p = in->v;
 
+#if 1 // hezhiwen
+  size_t i;
+  for (i = 0; i < N / 8; i++) {
+#else
   for (size_t i = 0; i < N / 8; i++) {
+#endif
     out[0] = p[0];
     out[1] = (0x1f & (p[0] >> 8)) | ((p[1] & 0x07) << 5);
     out[2] = p[1] >> 3;
@@ -1666,7 +1990,13 @@ static void poly_marshal(uint8_t out[POLY_BYTES], const struct poly *in) {
 static int poly_unmarshal(struct poly *out, const uint8_t in[POLY_BYTES]) {
   uint16_t *p = out->v;
 
+#if 1 // hezhiwen
+  uint32_t sum = 0;
+  size_t i;
+  for (i = 0; i < N / 8; i++) {
+#else
   for (size_t i = 0; i < N / 8; i++) {
+#endif
     p[0] = (uint16_t)(in[0]) | (uint16_t)(in[1] & 0x1f) << 8;
     p[1] = (uint16_t)(in[1] >> 5) | (uint16_t)(in[2]) << 3 |
            (uint16_t)(in[3] & 3) << 11;
@@ -1692,7 +2022,11 @@ static int poly_unmarshal(struct poly *out, const uint8_t in[POLY_BYTES]) {
   p[3] = (uint16_t)(in[4] >> 7) | (uint16_t)(in[5]) << 1 |
          (uint16_t)(in[6] & 0xf) << 9;
 
+#if 1 // hezhiwen
+  for (i = 0; i < N - 1; i++) {
+#else
   for (unsigned i = 0; i < N - 1; i++) {
+#endif
     out->v[i] = (int16_t)(out->v[i] << 3) >> 3;
   }
 
@@ -1702,8 +2036,12 @@ static int poly_unmarshal(struct poly *out, const uint8_t in[POLY_BYTES]) {
   }
 
   // Set the final coefficient as specifed in [HRSSNIST] 1.9.2 step 6.
+#if 1 // hezhiwen
+  for (i = 0; i < N - 1; i++) {
+#else
   uint32_t sum = 0;
   for (size_t i = 0; i < N - 1; i++) {
+#endif
     sum += out->v[i];
   }
 
@@ -1726,11 +2064,18 @@ static uint16_t mod3_from_modQ(uint16_t v) {
 static void poly_marshal_mod3(uint8_t out[HRSS_POLY3_BYTES],
                               const struct poly *in) {
   const uint16_t *coeffs = in->v;
+#if 1 // hezhiwen
+  size_t i;
+#endif
 
   // Only 700 coefficients are marshaled because in[700] must be zero.
   assert(coeffs[N-1] == 0);
 
+#if 1 // hezhiwen
+  for (i = 0; i < HRSS_POLY3_BYTES; i++) {
+#else
   for (size_t i = 0; i < HRSS_POLY3_BYTES; i++) {
+#endif
     const uint16_t coeffs0 = mod3_from_modQ(coeffs[0]);
     const uint16_t coeffs1 = mod3_from_modQ(coeffs[1]);
     const uint16_t coeffs2 = mod3_from_modQ(coeffs[2]);
@@ -1751,8 +2096,13 @@ static void poly_marshal_mod3(uint8_t out[HRSS_POLY3_BYTES],
 // function uses that freedom to implement a flatter distribution of values.
 static void poly_short_sample(struct poly *out,
                               const uint8_t in[HRSS_SAMPLE_BYTES]) {
+#if 1 // hezhiwen
+  size_t i;
+  for (i = 0; i < N - 1; i++) {
+#else
   static_assert(HRSS_SAMPLE_BYTES == N - 1, "HRSS_SAMPLE_BYTES incorrect");
   for (size_t i = 0; i < N - 1; i++) {
+#endif
     uint16_t v = mod3(in[i]);
     // Map {0, 1, 2} -> {0, 1, 0xffff}
     v |= ((v >> 1) ^ 1) - 1;
@@ -1766,20 +2116,34 @@ static void poly_short_sample(struct poly *out,
 // section 1.8.2.
 static void poly_short_sample_plus(struct poly *out,
                                    const uint8_t in[HRSS_SAMPLE_BYTES]) {
+#if 1 // hezhiwen
+  uint16_t sum = 0;
+  unsigned i = 0;
+  uint16_t scale;
+#endif
   poly_short_sample(out, in);
 
   // sum (and the product in the for loop) will overflow. But that's fine
   // because |sum| is bound by +/- (N-2), and N < 2^15 so it works out.
+#if 1 // hezhiwen
+  for (i = 0; i < N - 2; i++) {
+#else
   uint16_t sum = 0;
   for (unsigned i = 0; i < N - 2; i++) {
+#endif
     sum += (unsigned) out->v[i] * out->v[i + 1];
   }
 
   // If the sum is negative, flip the sign of even-positioned coefficients. (See
   // page 8 of [HRSS].)
   sum = ((int16_t) sum) >> 15;
+#if 1 // hezhiwen
+  scale = sum | (~sum & 1);
+  for (i = 0; i < N; i += 2) {
+#else
   const uint16_t scale = sum | (~sum & 1);
   for (unsigned i = 0; i < N; i += 2) {
+#endif
     out->v[i] = (unsigned) out->v[i] * scale;
   }
   poly_assert_normalized(out);
@@ -1856,14 +2220,23 @@ static void poly_lift(struct poly *out, const struct poly *a) {
   // From this, we reach algorithm eight of appendix B.
 
   // Handle the first three elements of the inner products.
+#if 1 // hezhiwen
+  uint16_t s0 = 0, s2 = 0;
+  size_t i;
+  crypto_word_t v;
+#endif
   out->v[0] = a->v[0] + a->v[2];
   out->v[1] = a->v[1];
   out->v[2] = -a->v[0] + a->v[2];
 
   // s0, s1, s2 are added into out->v[0], out->v[1], and out->v[2],
   // respectively. We do not compute s1 because it's just -(s0 + s1).
+#if 1 // hezhiwen
+  for (i = 3; i < 699; i += 3) {
+#else
   uint16_t s0 = 0, s2 = 0;
   for (size_t i = 3; i < 699; i += 3) {
+#endif
     s0 += -a->v[i] + a->v[i + 2];
     // s1 += a->v[i] - a->v[i + 1];
     s2 += a->v[i + 1] - a->v[i + 2];
@@ -1883,15 +2256,24 @@ static void poly_lift(struct poly *out, const struct poly *a) {
   // Calculate the remaining inner products by taking advantage of the
   // fact that the pattern repeats every three cycles and the pattern of
   // differences moves with the rotation.
+#if 1 // hezhiwen
+  for (i = 3; i < N; i++) {
+#else
   for (size_t i = 3; i < N; i++) {
+#endif
     out->v[i] = (out->v[i - 3] - (a->v[i - 2] + a->v[i - 1] + a->v[i]));
   }
 
   // Reduce mod Φ(N) by subtracting a multiple of out[700] from every
   // element and convert to mod Q. (See above about adding twice as
   // subtraction.)
+#if 1 // hezhiwen
+  v = out->v[700];
+  for (i = 0; i < N; i++) {
+#else
   const crypto_word_t v = out->v[700];
   for (unsigned i = 0; i < N; i++) {
+#endif
     const uint16_t vi_mod3 = mod3(out->v[i] - v);
     // Map {0, 1, 2} to {0, 1, 0xffff}.
     out->v[i] = (~((vi_mod3 >> 1) - 1)) | vi_mod3;
@@ -1920,9 +2302,11 @@ struct private_key {
 // that up.)
 static struct public_key *public_key_from_external(
     struct HRSS_public_key *ext) {
+#if 0 // hezhiwen
   static_assert(
       sizeof(struct HRSS_public_key) >= sizeof(struct public_key) + 15,
       "HRSS public key too small");
+#endif
 
   return align_pointer(ext->opaque, 16);
 }
@@ -1932,9 +2316,11 @@ static struct public_key *public_key_from_external(
 // issues.
 static struct private_key *private_key_from_external(
     struct HRSS_private_key *ext) {
+#if 0 // hezhiwen
   static_assert(
       sizeof(struct HRSS_private_key) >= sizeof(struct private_key) + 15,
       "HRSS private key too small");
+#endif
 
   return align_pointer(ext->opaque, 16);
 }
@@ -1969,6 +2355,9 @@ int HRSS_generate_key(
 
   void *malloc_ptr;
   struct vars *const vars = malloc_align32(&malloc_ptr, sizeof(struct vars));
+#if 1 // hezhiwen
+  unsigned i;
+#endif
   if (!vars) {
     // If the caller ignores the return value the output will still be safe.
     // The private key output is randomised in case it's later passed to
@@ -1991,7 +2380,11 @@ int HRSS_generate_key(
 
   // pg_phi1 is p (i.e. 3) × g × Φ(1) (i.e. 𝑥-1).
   poly_short_sample_plus(&vars->pg_phi1, in + HRSS_SAMPLE_BYTES);
+#if 1 // hezhiwen
+  for (i = 0; i < N; i++) {
+#else
   for (unsigned i = 0; i < N; i++) {
+#endif
     vars->pg_phi1.v[i] *= 3;
   }
   poly_mul_x_minus_1(&vars->pg_phi1);
@@ -2032,6 +2425,9 @@ int HRSS_encap(uint8_t out_ciphertext[POLY_BYTES], uint8_t out_shared_key[32],
 
   void *malloc_ptr;
   struct vars *const vars = malloc_align32(&malloc_ptr, sizeof(struct vars));
+#if 1 // hezhiwen
+  unsigned i;
+#endif
   if (!vars) {
     // If the caller ignores the return value the output will still be safe.
     // The private key output is randomised in case it's used to encrypt and
@@ -2050,7 +2446,11 @@ int HRSS_encap(uint8_t out_ciphertext[POLY_BYTES], uint8_t out_shared_key[32],
   poly_lift(&vars->m_lifted, &vars->m);
 
   poly_mul(&vars->scratch, &vars->prh_plus_m, &vars->r, &pub->ph);
+#if 1 // hezhiwen
+  for (i = 0; i < N; i++) {
+#else
   for (unsigned i = 0; i < N; i++) {
+#endif
     vars->prh_plus_m.v[i] += vars->m_lifted.v[i];
   }
 
@@ -2094,6 +2494,11 @@ int HRSS_decap(uint8_t out_shared_key[HRSS_KEY_BYTES],
 
   void *malloc_ptr;
   struct vars *const vars = malloc_align32(&malloc_ptr, sizeof(struct vars));
+#if 1 // hezhiwen
+  size_t i;
+  uint8_t inner_digest[SHA256_DIGEST_LENGTH];
+  crypto_word_t ok;
+#endif
   if (!vars) {
     // If the caller ignores the return value the output will still be safe.
     // The private key output is randomised in case it's used to encrypt and
@@ -2111,7 +2516,11 @@ int HRSS_decap(uint8_t out_shared_key[HRSS_KEY_BYTES],
   // function infallible.
   static_assert(sizeof(priv->hmac_key) <= sizeof(vars->masked_key),
                 "HRSS HMAC key larger than SHA-256 block size");
+#if 1 // hezhiwen
+  for (i = 0; i < sizeof(priv->hmac_key); i++) {
+#else
   for (size_t i = 0; i < sizeof(priv->hmac_key); i++) {
+#endif
     vars->masked_key[i] = priv->hmac_key[i] ^ 0x36;
   }
   OPENSSL_memset(vars->masked_key + sizeof(priv->hmac_key), 0x36,
@@ -2120,10 +2529,16 @@ int HRSS_decap(uint8_t out_shared_key[HRSS_KEY_BYTES],
   SHA256_Init(&vars->hash_ctx);
   SHA256_Update(&vars->hash_ctx, vars->masked_key, sizeof(vars->masked_key));
   SHA256_Update(&vars->hash_ctx, ciphertext, ciphertext_len);
+#if 0 // hezhiwen
   uint8_t inner_digest[SHA256_DIGEST_LENGTH];
+#endif
   SHA256_Final(inner_digest, &vars->hash_ctx);
 
+#if 1 // hezhiwen
+  for (i = 0; i < sizeof(priv->hmac_key); i++) {
+#else
   for (size_t i = 0; i < sizeof(priv->hmac_key); i++) {
+#endif
     vars->masked_key[i] ^= (0x5c ^ 0x36);
   }
   OPENSSL_memset(vars->masked_key + sizeof(priv->hmac_key), 0x5c,
@@ -2153,7 +2568,11 @@ int HRSS_decap(uint8_t out_shared_key[HRSS_KEY_BYTES],
   poly_from_poly3(&vars->m, &vars->m3);
   poly_lift(&vars->m_lifted, &vars->m);
 
+#if 1 // hezhiwen
+  for (i = 0; i < N; i++) {
+#else
   for (unsigned i = 0; i < N; i++) {
+#endif
     vars->r.v[i] = vars->c.v[i] - vars->m_lifted.v[i];
   }
   poly_normalize(&vars->r);
@@ -2161,7 +2580,11 @@ int HRSS_decap(uint8_t out_shared_key[HRSS_KEY_BYTES],
   poly_mod_phiN(&vars->r);
   poly_clamp(&vars->r);
 
+#if 1 // hezhiwen
+  ok = poly3_from_poly_checked(&vars->r3, &vars->r);
+#else
   crypto_word_t ok = poly3_from_poly_checked(&vars->r3, &vars->r);
+#endif
 
   // [NTRUCOMP] section 5.1 includes ReEnc2 and a proof that it's valid. Rather
   // than do an expensive |poly_mul|, it rebuilds |c'| from |c - lift(m)|
@@ -2206,7 +2629,11 @@ int HRSS_decap(uint8_t out_shared_key[HRSS_KEY_BYTES],
                 sizeof(vars->expected_ciphertext));
   SHA256_Final(vars->shared_key, &vars->hash_ctx);
 
+#if 1 // hezhiwen
+  for (i = 0; i < sizeof(vars->shared_key); i++) {
+#else
   for (unsigned i = 0; i < sizeof(vars->shared_key); i++) {
+#endif
     out_shared_key[i] =
         constant_time_select_8(ok, vars->shared_key[i], out_shared_key[i]);
   }

@@ -65,7 +65,12 @@
 
 
 static int print_hex(BIO *bp, const uint8_t *data, size_t len, int off) {
+#if 1 // hezhiwen
+  size_t i;
+  for (i = 0; i < len; i++) {
+#else
   for (size_t i = 0; i < len; i++) {
+#endif
     if ((i % 15) == 0) {
       if (BIO_puts(bp, "\n") <= 0 ||  //
           !BIO_indent(bp, off + 4, 128)) {
@@ -83,6 +88,12 @@ static int print_hex(BIO *bp, const uint8_t *data, size_t len, int off) {
 }
 
 static int bn_print(BIO *bp, const char *name, const BIGNUM *num, int off) {
+#if 1 // hezhiwen
+  uint64_t u64;
+  size_t len;
+  uint8_t *buf;
+  int ret;
+#endif
   if (num == NULL) {
     return 1;
   }
@@ -97,7 +108,9 @@ static int bn_print(BIO *bp, const char *name, const BIGNUM *num, int off) {
     return 1;
   }
 
+#if 0 // hezhiwen
   uint64_t u64;
+#endif
   if (BN_get_u64(num, &u64)) {
     const char *neg = BN_is_negative(num) ? "-" : "";
     return BIO_printf(bp, "%s %s%" PRIu64 " (%s0x%" PRIx64 ")\n", name, neg,
@@ -114,8 +127,13 @@ static int bn_print(BIO *bp, const char *name, const BIGNUM *num, int off) {
   //
   // TODO(davidben): Do we need to do this? We already print "(Negative)" above
   // and negative values are never valid in keys anyway.
+#if 1 // hezhiwen
+  len = BN_num_bytes(num);
+  buf = OPENSSL_malloc(len + 1);
+#else
   size_t len = BN_num_bytes(num);
   uint8_t *buf = OPENSSL_malloc(len + 1);
+#endif
   if (buf == NULL) {
     OPENSSL_PUT_ERROR(EVP, ERR_R_MALLOC_FAILURE);
     return 0;
@@ -123,7 +141,9 @@ static int bn_print(BIO *bp, const char *name, const BIGNUM *num, int off) {
 
   buf[0] = 0;
   BN_bn2bin(num, buf + 1);
+#if 0 // hezhiwen
   int ret;
+#endif
   if (len > 0 && (buf[1] & 0x80) != 0) {
     // Print the whole buffer.
     ret = print_hex(bp, buf, len + 1, off);
@@ -140,6 +160,9 @@ static int bn_print(BIO *bp, const char *name, const BIGNUM *num, int off) {
 static int do_rsa_print(BIO *out, const RSA *rsa, int off,
                         int include_private) {
   int mod_len = 0;
+#if 1 // hezhiwen
+  const char *s, *str;
+#endif
   if (rsa->n != NULL) {
     mod_len = BN_num_bits(rsa->n);
   }
@@ -148,7 +171,9 @@ static int do_rsa_print(BIO *out, const RSA *rsa, int off,
     return 0;
   }
 
+#if 0 // hezhiwen
   const char *s, *str;
+#endif
   if (include_private && rsa->d) {
     if (BIO_printf(out, "Private-Key: (%d bit)\n", mod_len) <= 0) {
       return 0;
@@ -194,16 +219,24 @@ static int rsa_priv_print(BIO *bp, const EVP_PKEY *pkey, int indent) {
 
 static int do_dsa_print(BIO *bp, const DSA *x, int off, int ptype) {
   const BIGNUM *priv_key = NULL;
+#if 1 // hezhiwen
+  const BIGNUM *pub_key = NULL;
+  const char *ktype = "DSA-Parameters";
+#endif
   if (ptype == 2) {
     priv_key = x->priv_key;
   }
 
+#if 0 // hezhiwen
   const BIGNUM *pub_key = NULL;
+#endif
   if (ptype > 0) {
     pub_key = x->pub_key;
   }
 
+#if 0 // hezhiwen
   const char *ktype = "DSA-Parameters";
+#endif
   if (ptype == 2) {
     ktype = "Private-Key";
   } else if (ptype == 1) {
@@ -242,12 +275,18 @@ static int dsa_priv_print(BIO *bp, const EVP_PKEY *pkey, int indent) {
 
 static int do_EC_KEY_print(BIO *bp, const EC_KEY *x, int off, int ktype) {
   const EC_GROUP *group;
+#if 1 // hezhiwen
+  const char *ecstr;
+  int curve_name;
+#endif
   if (x == NULL || (group = EC_KEY_get0_group(x)) == NULL) {
     OPENSSL_PUT_ERROR(EVP, ERR_R_PASSED_NULL_PARAMETER);
     return 0;
   }
 
+#if 0 // hezhiwen
   const char *ecstr;
+#endif
   if (ktype == 2) {
     ecstr = "Private-Key";
   } else if (ktype == 1) {
@@ -259,7 +298,11 @@ static int do_EC_KEY_print(BIO *bp, const EC_KEY *x, int off, int ktype) {
   if (!BIO_indent(bp, off, 128)) {
     return 0;
   }
+#if 1 // hezhiwen
+  curve_name = EC_GROUP_get_curve_name(group);
+#else
   int curve_name = EC_GROUP_get_curve_name(group);
+#endif
   if (BIO_printf(bp, "%s: (%s)\n", ecstr,
                  curve_name == NID_undef
                      ? "unknown curve"
@@ -278,12 +321,21 @@ static int do_EC_KEY_print(BIO *bp, const EC_KEY *x, int off, int ktype) {
   if (ktype > 0 && EC_KEY_get0_public_key(x) != NULL) {
     uint8_t *pub = NULL;
     size_t pub_len = EC_KEY_key2buf(x, EC_KEY_get_conv_form(x), &pub, NULL);
+  #if 1 // hezhiwen
+    int ret;
+  #endif
     if (pub_len == 0) {
       return 0;
     }
+  #if 1 // hezhiwen
+    ret = BIO_indent(bp, off, 128) &&  //
+          BIO_puts(bp, "pub:") > 0 &&  //
+          print_hex(bp, pub, pub_len, off);
+  #else
     int ret = BIO_indent(bp, off, 128) &&  //
               BIO_puts(bp, "pub:") > 0 &&  //
               print_hex(bp, pub, pub_len, off);
+  #endif
     OPENSSL_free(pub);
     if (!ret) {
       return 0;
@@ -338,7 +390,12 @@ static EVP_PKEY_PRINT_METHOD kPrintMethods[] = {
 static size_t kPrintMethodsLen = OPENSSL_ARRAY_SIZE(kPrintMethods);
 
 static EVP_PKEY_PRINT_METHOD *find_method(int type) {
+#if 1 // hezhiwen
+  size_t i;
+  for (i = 0; i < kPrintMethodsLen; i++) {
+#else
   for (size_t i = 0; i < kPrintMethodsLen; i++) {
+#endif
     if (kPrintMethods[i].type == type) {
       return &kPrintMethods[i];
     }

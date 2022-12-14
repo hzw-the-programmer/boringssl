@@ -104,11 +104,18 @@ int PKCS7_get_raw_certificates(STACK_OF(CRYPTO_BUFFER) *out_certs, CBS *cbs,
 
   while (CBS_len(&certificates) > 0) {
     CBS cert;
+  #if 1 // hezhiwen
+    CRYPTO_BUFFER *buf;
+  #endif
     if (!CBS_get_asn1_element(&certificates, &cert, CBS_ASN1_SEQUENCE)) {
       goto err;
     }
 
+  #if 1 // hezhiwen
+    buf = CRYPTO_BUFFER_new_from_CBS(&cert, pool);
+  #else
     CRYPTO_BUFFER *buf = CRYPTO_BUFFER_new_from_CBS(&cert, pool);
+  #endif
     if (buf == NULL ||
         !sk_CRYPTO_BUFFER_push(out_certs, buf)) {
       CRYPTO_BUFFER_free(buf);
@@ -134,6 +141,9 @@ err:
 static int pkcs7_bundle_raw_certificates_cb(CBB *out, const void *arg) {
   const STACK_OF(CRYPTO_BUFFER) *certs = arg;
   CBB certificates;
+#if 1 // hezhiwen
+  size_t i;
+#endif
 
   // See https://tools.ietf.org/html/rfc2315#section-9.1
   if (!CBB_add_asn1(out, &certificates,
@@ -141,7 +151,11 @@ static int pkcs7_bundle_raw_certificates_cb(CBB *out, const void *arg) {
     return 0;
   }
 
+#if 1 // hezhiwen
+  for (i = 0; i < sk_CRYPTO_BUFFER_num(certs); i++) {
+#else
   for (size_t i = 0; i < sk_CRYPTO_BUFFER_num(certs); i++) {
+#endif
     CRYPTO_BUFFER *cert = sk_CRYPTO_BUFFER_value(certs, i);
     if (!CBB_add_bytes(&certificates, CRYPTO_BUFFER_data(cert),
                        CRYPTO_BUFFER_len(cert))) {

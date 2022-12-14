@@ -86,8 +86,15 @@ static inline uint8_t constant_time_in_range_8(uint8_t a, uint8_t min,
 static uint8_t conv_bin2ascii(uint8_t a) {
   // Since PEM is sometimes used to carry private keys, we encode base64 data
   // itself in constant-time.
+#if 1 // hezhiwen
+  uint8_t ret;
+#endif
   a &= 0x3f;
+#if 1 // hezhiwen
+  ret = constant_time_select_8(constant_time_eq_8(a, 62), '+', '/');
+#else
   uint8_t ret = constant_time_select_8(constant_time_eq_8(a, 62), '+', '/');
+#endif
   ret =
       constant_time_select_8(constant_time_lt_args_8(a, 62), a - 52 + '0', ret);
   ret =
@@ -156,11 +163,18 @@ void EVP_EncodeUpdate(EVP_ENCODE_CTX *ctx, uint8_t *out, int *out_len,
 
   if (ctx->data_used != 0) {
     const size_t todo = sizeof(ctx->data) - ctx->data_used;
+  #if 1 // hezhiwen
+    size_t encoded;
+  #endif
     OPENSSL_memcpy(&ctx->data[ctx->data_used], in, todo);
     in += todo;
     in_len -= todo;
 
+  #if 1 // hezhiwen
+    encoded = EVP_EncodeBlock(out, ctx->data, sizeof(ctx->data));
+  #else
     size_t encoded = EVP_EncodeBlock(out, ctx->data, sizeof(ctx->data));
+  #endif
     ctx->data_used = 0;
 
     out += encoded;
@@ -202,12 +216,19 @@ void EVP_EncodeUpdate(EVP_ENCODE_CTX *ctx, uint8_t *out, int *out_len,
 }
 
 void EVP_EncodeFinal(EVP_ENCODE_CTX *ctx, uint8_t *out, int *out_len) {
+#if 1 // hezhiwen
+  size_t encoded;
+#endif
   if (ctx->data_used == 0) {
     *out_len = 0;
     return;
   }
 
+#if 1 // hezhiwen
+  encoded = EVP_EncodeBlock(out, ctx->data, ctx->data_used);
+#else
   size_t encoded = EVP_EncodeBlock(out, ctx->data, ctx->data_used);
+#endif
   out[encoded++] = '\n';
   out[encoded] = '\0';
   ctx->data_used = 0;
@@ -275,6 +296,9 @@ static uint8_t base64_ascii_to_bin(uint8_t a) {
   const uint8_t is_plus = constant_time_eq_8(a, '+');
   const uint8_t is_slash = constant_time_eq_8(a, '/');
   const uint8_t is_equals = constant_time_eq_8(a, '=');
+#if 1 // hezhiwen
+  uint8_t is_valid;
+#endif
 
   uint8_t ret = 0;
   ret |= is_upper & (a - 'A');       // [0,26)
@@ -284,8 +308,13 @@ static uint8_t base64_ascii_to_bin(uint8_t a) {
   ret |= is_slash & 63;
   // Invalid inputs, 'A', and '=' have all been mapped to zero. Map invalid
   // inputs to 0xff. Note '=' is padding and handled separately by the caller.
+#if 1 // hezhiwen
+  is_valid =
+      is_upper | is_lower | is_digit | is_plus | is_slash | is_equals;
+#else
   const uint8_t is_valid =
       is_upper | is_lower | is_digit | is_plus | is_slash | is_equals;
+#endif
   ret |= ~is_valid;
   return ret;
 }
@@ -300,9 +329,11 @@ static int base64_decode_quad(uint8_t *out, size_t *out_num_bytes,
   const uint8_t b = base64_ascii_to_bin(in[1]);
   const uint8_t c = base64_ascii_to_bin(in[2]);
   const uint8_t d = base64_ascii_to_bin(in[3]);
+#if 0 // hezhiwen
   if (a == 0xff || b == 0xff || c == 0xff || d == 0xff) {
     return 0;
   }
+#endif
 
   const uint32_t v = ((uint32_t)a) << 18 | ((uint32_t)b) << 12 |
                      ((uint32_t)c) << 6 | (uint32_t)d;
@@ -311,6 +342,12 @@ static int base64_decode_quad(uint8_t *out, size_t *out_num_bytes,
                                    (in[1] == '=') << 2 |
                                    (in[2] == '=') << 1 |
                                    (in[3] == '=');
+
+#if 1 // hezhiwen
+  if (a == 0xff || b == 0xff || c == 0xff || d == 0xff) {
+    return 0;
+  }
+#endif
 
   switch (padding_pattern) {
     case 0:
@@ -341,13 +378,18 @@ static int base64_decode_quad(uint8_t *out, size_t *out_num_bytes,
 
 int EVP_DecodeUpdate(EVP_ENCODE_CTX *ctx, uint8_t *out, int *out_len,
                      const uint8_t *in, size_t in_len) {
+#if 1 // hezhiwen
+  size_t bytes_out = 0, i;
+#endif
   *out_len = 0;
 
   if (ctx->error_encountered) {
     return -1;
   }
 
+#if 0 // hezhiwen
   size_t bytes_out = 0, i;
+#endif
   for (i = 0; i < in_len; i++) {
     const char c = in[i];
     switch (c) {
@@ -406,19 +448,27 @@ int EVP_DecodeFinal(EVP_ENCODE_CTX *ctx, uint8_t *out, int *out_len) {
 
 int EVP_DecodeBase64(uint8_t *out, size_t *out_len, size_t max_out,
                      const uint8_t *in, size_t in_len) {
+#if 1 // hezhiwen
+  size_t max_len;
+  size_t i, bytes_out = 0;
+#endif
   *out_len = 0;
 
   if (in_len % 4 != 0) {
     return 0;
   }
 
+#if 0 // hezhiwen
   size_t max_len;
+#endif
   if (!EVP_DecodedLength(&max_len, in_len) ||
       max_out < max_len) {
     return 0;
   }
 
+#if 0 // hezhiwen
   size_t i, bytes_out = 0;
+#endif
   for (i = 0; i < in_len; i += 4) {
     size_t num_bytes_resulting;
 
@@ -439,6 +489,9 @@ int EVP_DecodeBase64(uint8_t *out, size_t *out_len, size_t max_out,
 
 int EVP_DecodeBlock(uint8_t *dst, const uint8_t *src, size_t src_len) {
   // Trim spaces and tabs from the beginning of the input.
+#if 1 // hezhiwen
+  size_t dst_len;
+#endif
   while (src_len > 0) {
     if (src[0] != ' ' && src[0] != '\t') {
       break;
@@ -462,7 +515,9 @@ int EVP_DecodeBlock(uint8_t *dst, const uint8_t *src, size_t src_len) {
     break;
   }
 
+#if 0 // hezhiwen
   size_t dst_len;
+#endif
   if (!EVP_DecodedLength(&dst_len, src_len) ||
       dst_len > INT_MAX ||
       !EVP_DecodeBase64(dst, &dst_len, dst_len, src, src_len)) {

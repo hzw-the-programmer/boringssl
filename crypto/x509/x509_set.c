@@ -98,12 +98,17 @@ int X509_set_version(X509 *x, long version) {
 }
 
 int X509_set_serialNumber(X509 *x, const ASN1_INTEGER *serial) {
+#if 1 // hezhiwen
+  ASN1_INTEGER *in;
+#endif
   if (serial->type != V_ASN1_INTEGER && serial->type != V_ASN1_NEG_INTEGER) {
     OPENSSL_PUT_ERROR(ASN1, ASN1_R_WRONG_TYPE);
     return 0;
   }
 
+#if 0 // hezhiwen
   ASN1_INTEGER *in;
+#endif
   if (x == NULL) {
     return 0;
   }

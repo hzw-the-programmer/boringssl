@@ -251,13 +251,20 @@ static int aes_ecb_cipher(EVP_CIPHER_CTX *ctx, uint8_t *out, const uint8_t *in,
                           size_t len) {
   size_t bl = ctx->cipher->block_size;
   EVP_AES_KEY *dat = (EVP_AES_KEY *)ctx->cipher_data;
+#if 1 // hezhiwen
+  size_t i;
+#endif
 
   if (len < bl) {
     return 1;
   }
 
   len -= bl;
+#if 1 // hezhiwen
+  for (i = 0; i <= len; i += bl) {
+#else
   for (size_t i = 0; i <= len; i += bl) {
+#endif
     (*dat->block)(in + i, out + i, &dat->ks.ks);
   }
 
@@ -338,6 +345,9 @@ ctr128_f aes_ctr_set_key(AES_KEY *aes_key, GCM128_KEY *gcm_key,
 #endif
 
 static EVP_AES_GCM_CTX *aes_gcm_from_cipher_ctx(EVP_CIPHER_CTX *ctx) {
+#if 1 // hezhiwen
+  char *ptr;
+#endif
   static_assert(
       alignof(EVP_AES_GCM_CTX) <= 16,
       "EVP_AES_GCM_CTX needs more alignment than this function provides");
@@ -347,7 +357,11 @@ static EVP_AES_GCM_CTX *aes_gcm_from_cipher_ctx(EVP_CIPHER_CTX *ctx) {
   assert(ctx->cipher->ctx_size ==
          sizeof(EVP_AES_GCM_CTX) + EVP_AES_GCM_CTX_PADDING);
 
+#if 1 // hezhiwen
+  ptr = ctx->cipher_data;
+#else
   char *ptr = ctx->cipher_data;
+#endif
 #if defined(OPENSSL_32_BIT)
   assert((uintptr_t)ptr % 4 == 0);
   ptr += (uintptr_t)ptr & 4;
@@ -962,6 +976,10 @@ static int aead_aes_gcm_seal_scatter_impl(
     const uint8_t *extra_in, size_t extra_in_len,
     const uint8_t *ad, size_t ad_len,
     size_t tag_len) {
+#if 1 // hezhiwen
+  const AES_KEY *key;
+  GCM128_CONTEXT gcm;
+#endif
   if (extra_in_len + tag_len < tag_len) {
     OPENSSL_PUT_ERROR(CIPHER, CIPHER_R_TOO_LARGE);
     return 0;
@@ -975,9 +993,13 @@ static int aead_aes_gcm_seal_scatter_impl(
     return 0;
   }
 
+#if 1 // hezhiwen
+  key = &gcm_ctx->ks.ks;
+#else
   const AES_KEY *key = &gcm_ctx->ks.ks;
 
   GCM128_CONTEXT gcm;
+#endif
   OPENSSL_memset(&gcm, 0, sizeof(gcm));
   OPENSSL_memcpy(&gcm.gcm_key, &gcm_ctx->gcm_key, sizeof(gcm.gcm_key));
   CRYPTO_gcm128_setiv(&gcm, key, nonce, nonce_len);
@@ -1040,6 +1062,10 @@ static int aead_aes_gcm_open_gather_impl(const struct aead_aes_gcm_ctx *gcm_ctx,
                                          const uint8_t *ad, size_t ad_len,
                                          size_t tag_len) {
   uint8_t tag[EVP_AEAD_AES_GCM_TAG_LEN];
+#if 1 // hezhiwen
+  const AES_KEY *key;
+  GCM128_CONTEXT gcm;
+#endif
 
   if (nonce_len == 0) {
     OPENSSL_PUT_ERROR(CIPHER, CIPHER_R_INVALID_NONCE_SIZE);
@@ -1051,9 +1077,13 @@ static int aead_aes_gcm_open_gather_impl(const struct aead_aes_gcm_ctx *gcm_ctx,
     return 0;
   }
 
+#if 1 // hezhiwen
+  key = &gcm_ctx->ks.ks;
+#else
   const AES_KEY *key = &gcm_ctx->ks.ks;
 
   GCM128_CONTEXT gcm;
+#endif
   OPENSSL_memset(&gcm, 0, sizeof(gcm));
   OPENSSL_memcpy(&gcm.gcm_key, &gcm_ctx->gcm_key, sizeof(gcm.gcm_key));
   CRYPTO_gcm128_setiv(&gcm, key, nonce, nonce_len);
@@ -1169,12 +1199,18 @@ static int aead_aes_gcm_seal_scatter_randnonce(
     const uint8_t *in, size_t in_len,
     const uint8_t *extra_in, size_t extra_in_len,
     const uint8_t *ad, size_t ad_len) {
+#if 1 // hezhiwen
+  uint8_t nonce[AES_GCM_NONCE_LENGTH];
+  const struct aead_aes_gcm_ctx *gcm_ctx;
+#endif
   if (external_nonce_len != 0) {
     OPENSSL_PUT_ERROR(CIPHER, CIPHER_R_INVALID_NONCE_SIZE);
     return 0;
   }
 
+#if 0 // hezhiwen
   uint8_t nonce[AES_GCM_NONCE_LENGTH];
+#endif
   if (max_out_tag_len < sizeof(nonce)) {
     OPENSSL_PUT_ERROR(CIPHER, CIPHER_R_BUFFER_TOO_SMALL);
     return 0;
@@ -1186,8 +1222,13 @@ static int aead_aes_gcm_seal_scatter_randnonce(
   RAND_bytes(nonce, sizeof(nonce));
   FIPS_service_indicator_unlock_state();
 
+#if 1 // hezhiwen
+  gcm_ctx =
+      (const struct aead_aes_gcm_ctx *)&ctx->state;
+#else
   const struct aead_aes_gcm_ctx *gcm_ctx =
       (const struct aead_aes_gcm_ctx *)&ctx->state;
+#endif
   if (!aead_aes_gcm_seal_scatter_impl(gcm_ctx, out, out_tag, out_tag_len,
                                       max_out_tag_len - AES_GCM_NONCE_LENGTH,
                                       nonce, sizeof(nonce), in, in_len,
@@ -1210,6 +1251,10 @@ static int aead_aes_gcm_open_gather_randnonce(
     const uint8_t *in, size_t in_len,
     const uint8_t *in_tag, size_t in_tag_len,
     const uint8_t *ad, size_t ad_len) {
+#if 1 // hezhiwen
+  const uint8_t *nonce;
+  const struct aead_aes_gcm_ctx *gcm_ctx;
+#endif
   if (external_nonce_len != 0) {
     OPENSSL_PUT_ERROR(CIPHER, CIPHER_R_INVALID_NONCE_SIZE);
     return 0;
@@ -1219,10 +1264,16 @@ static int aead_aes_gcm_open_gather_randnonce(
     OPENSSL_PUT_ERROR(CIPHER, CIPHER_R_BAD_DECRYPT);
     return 0;
   }
+#if 1 // hezhiwen
+  nonce = in_tag + in_tag_len - AES_GCM_NONCE_LENGTH;
+  gcm_ctx =
+      (const struct aead_aes_gcm_ctx *)&ctx->state;
+#else
   const uint8_t *nonce = in_tag + in_tag_len - AES_GCM_NONCE_LENGTH;
 
   const struct aead_aes_gcm_ctx *gcm_ctx =
       (const struct aead_aes_gcm_ctx *)&ctx->state;
+#endif
   if (!aead_aes_gcm_open_gather_impl(
       gcm_ctx, out, nonce, AES_GCM_NONCE_LENGTH, in, in_len, in_tag,
       in_tag_len - AES_GCM_NONCE_LENGTH, ad, ad_len,
@@ -1280,10 +1331,15 @@ static int aead_aes_gcm_tls12_init(EVP_AEAD_CTX *ctx, const uint8_t *key,
                                    size_t key_len, size_t requested_tag_len) {
   struct aead_aes_gcm_tls12_ctx *gcm_ctx =
       (struct aead_aes_gcm_tls12_ctx *) &ctx->state;
+#if 1 // hezhiwen
+  size_t actual_tag_len;
+#endif
 
   gcm_ctx->min_next_nonce = 0;
 
+#if 0 // hezhiwen
   size_t actual_tag_len;
+#endif
   if (!aead_aes_gcm_init_impl(&gcm_ctx->gcm_ctx, &actual_tag_len, key, key_len,
                               requested_tag_len)) {
     return 0;
@@ -1300,6 +1356,9 @@ static int aead_aes_gcm_tls12_seal_scatter(
     size_t extra_in_len, const uint8_t *ad, size_t ad_len) {
   struct aead_aes_gcm_tls12_ctx *gcm_ctx =
       (struct aead_aes_gcm_tls12_ctx *) &ctx->state;
+#if 1 // hezhiwen
+  uint64_t given_counter;
+#endif
 
   if (nonce_len != AES_GCM_NONCE_LENGTH) {
     OPENSSL_PUT_ERROR(CIPHER, CIPHER_R_UNSUPPORTED_NONCE_SIZE);
@@ -1307,8 +1366,13 @@ static int aead_aes_gcm_tls12_seal_scatter(
   }
 
   // The given nonces must be strictly monotonically increasing.
+#if 1 // hezhiwen
+  given_counter =
+      CRYPTO_load_u64_be(nonce + nonce_len - sizeof(uint64_t));
+#else
   uint64_t given_counter =
       CRYPTO_load_u64_be(nonce + nonce_len - sizeof(uint64_t));
+#endif
   if (given_counter == UINT64_MAX || given_counter < gcm_ctx->min_next_nonce) {
     OPENSSL_PUT_ERROR(CIPHER, CIPHER_R_INVALID_NONCE);
     return 0;
@@ -1374,11 +1438,16 @@ static int aead_aes_gcm_tls13_init(EVP_AEAD_CTX *ctx, const uint8_t *key,
                                    size_t key_len, size_t requested_tag_len) {
   struct aead_aes_gcm_tls13_ctx *gcm_ctx =
       (struct aead_aes_gcm_tls13_ctx *) &ctx->state;
+#if 1 // hezhiwen
+  size_t actual_tag_len;
+#endif
 
   gcm_ctx->min_next_nonce = 0;
   gcm_ctx->first = 1;
 
+#if 0 // hezhiwen
   size_t actual_tag_len;
+#endif
   if (!aead_aes_gcm_init_impl(&gcm_ctx->gcm_ctx, &actual_tag_len, key, key_len,
                               requested_tag_len)) {
     return 0;
@@ -1395,6 +1464,9 @@ static int aead_aes_gcm_tls13_seal_scatter(
     size_t extra_in_len, const uint8_t *ad, size_t ad_len) {
   struct aead_aes_gcm_tls13_ctx *gcm_ctx =
       (struct aead_aes_gcm_tls13_ctx *) &ctx->state;
+#if 1 // hezhiwen
+  uint64_t given_counter;
+#endif
 
   if (nonce_len != AES_GCM_NONCE_LENGTH) {
     OPENSSL_PUT_ERROR(CIPHER, CIPHER_R_UNSUPPORTED_NONCE_SIZE);
@@ -1404,8 +1476,13 @@ static int aead_aes_gcm_tls13_seal_scatter(
   // The given nonces must be strictly monotonically increasing. See
   // https://tools.ietf.org/html/rfc8446#section-5.3 for details of the TLS 1.3
   // nonce construction.
+#if 1 // hezhiwen
+  given_counter =
+      CRYPTO_load_u64_be(nonce + nonce_len - sizeof(uint64_t));
+#else
   uint64_t given_counter =
       CRYPTO_load_u64_be(nonce + nonce_len - sizeof(uint64_t));
+#endif
 
   if (gcm_ctx->first) {
     // In the first call the sequence number will be zero and therefore the

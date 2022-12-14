@@ -282,21 +282,35 @@ err:
 
 static int asn1_cb(const char *elem, size_t len, void *bitstr) {
   tag_exp_arg *arg = bitstr;
+#if 1 // hezhiwen
+  const char *vstart = NULL;
+  size_t vlen = 0;
+  const char *colon;
+  int utype;
+#endif
   if (elem == NULL) {
     return -1;
   }
 
   // Look for the ':' in name:value pairs.
+#if 1 // hezhiwen
+  colon = OPENSSL_memchr(elem, ':', len);
+#else
   const char *vstart = NULL;
   size_t vlen = 0;
   const char *colon = OPENSSL_memchr(elem, ':', len);
+#endif
   if (colon != NULL) {
     vstart = colon + 1;
     vlen = len - (vstart - elem);
     len = colon - elem;
   }
 
+#if 1 // hezhiwen
+  utype = asn1_str2tag(elem, len);
+#else
   int utype = asn1_str2tag(elem, len);
+#endif
   if (utype == -1) {
     OPENSSL_PUT_ERROR(ASN1, ASN1_R_UNKNOWN_TAG);
     ERR_add_error_data(2, "tag=", elem);
@@ -605,7 +619,12 @@ static int asn1_str2tag(const char *tagstr, size_t len) {
       ASN1_GEN_STR("FORMAT", ASN1_GEN_FLAG_FORMAT),
   };
 
+#if 1 // hezhiwen
+  size_t i;
+  for (i = 0; i < OPENSSL_ARRAY_SIZE(tnst); i++) {
+#else
   for (size_t i = 0; i < OPENSSL_ARRAY_SIZE(tnst); i++) {
+#endif
     if (len == tnst[i].len && strncmp(tnst[i].strnam, tagstr, len) == 0) {
       return tnst[i].tag;
     }

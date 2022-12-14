@@ -160,6 +160,9 @@ BN_MONT_CTX *BN_MONT_CTX_copy(BN_MONT_CTX *to, const BN_MONT_CTX *from) {
 }
 
 static int bn_mont_ctx_set_N_and_n0(BN_MONT_CTX *mont, const BIGNUM *mod) {
+#if 1 // hezhiwen
+  uint64_t n0;
+#endif
   if (BN_is_zero(mod)) {
     OPENSSL_PUT_ERROR(BN, BN_R_DIV_BY_ZERO);
     return 0;
@@ -197,7 +200,11 @@ static int bn_mont_ctx_set_N_and_n0(BN_MONT_CTX *mont, const BIGNUM *mod) {
                 "BN_MONT_CTX_N0_LIMBS value is invalid");
   static_assert(sizeof(BN_ULONG) * BN_MONT_CTX_N0_LIMBS == sizeof(uint64_t),
                 "uint64_t is insufficient precision for n0");
+#if 1 // hezhiwen
+  n0 = bn_mont_n0(&mont->N);
+#else
   uint64_t n0 = bn_mont_n0(&mont->N);
+#endif
   mont->n0[0] = (BN_ULONG)n0;
 #if BN_MONT_CTX_N0_LIMBS == 2
   mont->n0[1] = (BN_ULONG)(n0 >> BN_BITS2);
@@ -208,11 +215,18 @@ static int bn_mont_ctx_set_N_and_n0(BN_MONT_CTX *mont, const BIGNUM *mod) {
 }
 
 int BN_MONT_CTX_set(BN_MONT_CTX *mont, const BIGNUM *mod, BN_CTX *ctx) {
+#if 1 // hezhiwen
+  BN_CTX *new_ctx = NULL;
+  unsigned lgBigR;
+  int ok;
+#endif
   if (!bn_mont_ctx_set_N_and_n0(mont, mod)) {
     return 0;
   }
 
+#if 0 // hezhiwen
   BN_CTX *new_ctx = NULL;
+#endif
   if (ctx == NULL) {
     new_ctx = BN_CTX_new();
     if (new_ctx == NULL) {
@@ -226,11 +240,21 @@ int BN_MONT_CTX_set(BN_MONT_CTX *mont, const BIGNUM *mod, BN_CTX *ctx) {
   // values, using |BN_BITS2| here, rather than |BN_MONT_CTX_N0_LIMBS *
   // BN_BITS2|, is correct because R**2 will still be a multiple of the latter
   // as |BN_MONT_CTX_N0_LIMBS| is either one or two.
+#if 1 // hezhiwen
+  lgBigR = mont->N.width * BN_BITS2;
+#else
   unsigned lgBigR = mont->N.width * BN_BITS2;
+#endif
   BN_zero(&mont->RR);
+#if 1 // hezhiwen
+  ok = BN_set_bit(&mont->RR, lgBigR * 2) &&
+       BN_mod(&mont->RR, &mont->RR, &mont->N, ctx) &&
+       bn_resize_words(&mont->RR, mont->N.width);
+#else
   int ok = BN_set_bit(&mont->RR, lgBigR * 2) &&
            BN_mod(&mont->RR, &mont->RR, &mont->N, ctx) &&
            bn_resize_words(&mont->RR, mont->N.width);
+#endif
   BN_CTX_free(new_ctx);
   return ok;
 }
@@ -247,11 +271,18 @@ BN_MONT_CTX *BN_MONT_CTX_new_for_modulus(const BIGNUM *mod, BN_CTX *ctx) {
 
 BN_MONT_CTX *BN_MONT_CTX_new_consttime(const BIGNUM *mod, BN_CTX *ctx) {
   BN_MONT_CTX *mont = BN_MONT_CTX_new();
+#if 1 // hezhiwen
+  unsigned lgBigR;
+#endif
   if (mont == NULL ||
       !bn_mont_ctx_set_N_and_n0(mont, mod)) {
     goto err;
   }
+#if 1 // hezhiwen
+  lgBigR = mont->N.width * BN_BITS2;
+#else
   unsigned lgBigR = mont->N.width * BN_BITS2;
+#endif
   if (!bn_mod_exp_base_2_consttime(&mont->RR, lgBigR * 2, &mont->N, ctx) ||
       !bn_resize_words(&mont->RR, mont->N.width)) {
     goto err;
@@ -265,8 +296,16 @@ err:
 
 int BN_MONT_CTX_set_locked(BN_MONT_CTX **pmont, CRYPTO_MUTEX *lock,
                            const BIGNUM *mod, BN_CTX *bn_ctx) {
+#if 1 // hezhiwen
+  BN_MONT_CTX *ctx;
+  int ok;
+#endif
   CRYPTO_MUTEX_lock_read(lock);
+#if 1 // hezhiwen
+  ctx = *pmont;
+#else
   BN_MONT_CTX *ctx = *pmont;
+#endif
   CRYPTO_MUTEX_unlock_read(lock);
 
   if (ctx) {
@@ -277,7 +316,11 @@ int BN_MONT_CTX_set_locked(BN_MONT_CTX **pmont, CRYPTO_MUTEX *lock,
   if (*pmont == NULL) {
     *pmont = BN_MONT_CTX_new_for_modulus(mod, bn_ctx);
   }
+#if 1 // hezhiwen
+  ok = *pmont != NULL;
+#else
   const int ok = *pmont != NULL;
+#endif
   CRYPTO_MUTEX_unlock_write(lock);
   return ok;
 }
@@ -291,6 +334,11 @@ static int bn_from_montgomery_in_place(BN_ULONG *r, size_t num_r, BN_ULONG *a,
                                        size_t num_a, const BN_MONT_CTX *mont) {
   const BN_ULONG *n = mont->N.d;
   size_t num_n = mont->N.width;
+#if 1 // hezhiwen
+  BN_ULONG n0;
+  BN_ULONG carry = 0;
+  size_t i;
+#endif
   if (num_r != num_n || num_a != 2 * num_n) {
     OPENSSL_PUT_ERROR(BN, ERR_R_SHOULD_NOT_HAVE_BEEN_CALLED);
     return 0;
@@ -299,9 +347,14 @@ static int bn_from_montgomery_in_place(BN_ULONG *r, size_t num_r, BN_ULONG *a,
   // Add multiples of |n| to |r| until R = 2^(nl * BN_BITS2) divides it. On
   // input, we had |r| < |n| * R, so now |r| < 2 * |n| * R. Note that |r|
   // includes |carry| which is stored separately.
+#if 1 // hezhiwen
+  n0 = mont->n0[0];
+  for (i = 0; i < num_n; i++) {
+#else
   BN_ULONG n0 = mont->n0[0];
   BN_ULONG carry = 0;
   for (size_t i = 0; i < num_n; i++) {
+#endif
     BN_ULONG v = bn_mul_add_words(a + i, n, num_n, a[i] * n0);
     v += carry + a[i + num_n];
     carry |= (v != a[i + num_n]);
@@ -320,18 +373,30 @@ static int bn_from_montgomery_in_place(BN_ULONG *r, size_t num_r, BN_ULONG *a,
 
 static int BN_from_montgomery_word(BIGNUM *ret, BIGNUM *r,
                                    const BN_MONT_CTX *mont) {
+#if 1 // hezhiwen
+  const BIGNUM *n;
+  int max;
+#endif
   if (r->neg) {
     OPENSSL_PUT_ERROR(BN, BN_R_NEGATIVE_NUMBER);
     return 0;
   }
 
+#if 1 // hezhiwen
+  n = &mont->N;
+#else
   const BIGNUM *n = &mont->N;
+#endif
   if (n->width == 0) {
     ret->width = 0;
     return 1;
   }
 
+#if 1 // hezhiwen
+  max = 2 * n->width;
+#else
   int max = 2 * n->width;  // carry is stored separately
+#endif
   if (!bn_resize_words(r, max) ||
       !bn_wexpand(ret, n->width)) {
     return 0;
@@ -366,12 +431,19 @@ int bn_one_to_montgomery(BIGNUM *r, const BN_MONT_CTX *mont, BN_CTX *ctx) {
   // If the high bit of |n| is set, R = 2^(width*BN_BITS2) < 2 * |n|, so we
   // compute R - |n| rather than perform Montgomery reduction.
   const BIGNUM *n = &mont->N;
+#if 1 // hezhiwen
+  int i;
+#endif
   if (n->width > 0 && (n->d[n->width - 1] >> (BN_BITS2 - 1)) != 0) {
     if (!bn_wexpand(r, n->width)) {
       return 0;
     }
     r->d[0] = 0 - n->d[0];
+  #if 1 // hezhiwen
+    for (i = 1; i < n->width; i++) {
+  #else
     for (int i = 1; i < n->width; i++) {
+  #endif
       r->d[i] = ~n->d[i];
     }
     r->width = n->width;
@@ -387,9 +459,16 @@ static int bn_mod_mul_montgomery_fallback(BIGNUM *r, const BIGNUM *a,
                                           const BN_MONT_CTX *mont,
                                           BN_CTX *ctx) {
   int ret = 0;
+#if 1 // hezhiwen
+  BIGNUM *tmp;
+#endif
 
   BN_CTX_start(ctx);
+#if 1 // hezhiwen
+  tmp = BN_CTX_get(ctx);
+#else
   BIGNUM *tmp = BN_CTX_get(ctx);
+#endif
   if (tmp == NULL) {
     goto err;
   }
@@ -418,6 +497,9 @@ err:
 
 int BN_mod_mul_montgomery(BIGNUM *r, const BIGNUM *a, const BIGNUM *b,
                           const BN_MONT_CTX *mont, BN_CTX *ctx) {
+#if 1 // hezhiwen
+  int num;
+#endif
   if (a->neg || b->neg) {
     OPENSSL_PUT_ERROR(BN, BN_R_NEGATIVE_NUMBER);
     return 0;
@@ -425,7 +507,11 @@ int BN_mod_mul_montgomery(BIGNUM *r, const BIGNUM *a, const BIGNUM *b,
 
 #if defined(OPENSSL_BN_ASM_MONT)
   // |bn_mul_mont| requires at least 128 bits of limbs, at least for x86.
+#if 1 // hezhiwen
+  num = mont->N.width;
+#else
   int num = mont->N.width;
+#endif
   if (num >= (128 / BN_BITS2) &&
       a->width == num &&
       b->width == num) {
@@ -462,11 +548,16 @@ void bn_to_montgomery_small(BN_ULONG *r, const BN_ULONG *a, size_t num,
 
 void bn_from_montgomery_small(BN_ULONG *r, size_t num_r, const BN_ULONG *a,
                               size_t num_a, const BN_MONT_CTX *mont) {
+#if 1 // hezhiwen
+  BN_ULONG tmp[BN_SMALL_MAX_WORDS * 2] = {0};
+#endif
   if (num_r != (size_t)mont->N.width || num_r > BN_SMALL_MAX_WORDS ||
       num_a > 2 * num_r) {
     abort();
   }
+#if 0 // hezhiwen
   BN_ULONG tmp[BN_SMALL_MAX_WORDS * 2] = {0};
+#endif
   OPENSSL_memcpy(tmp, a, num_a * sizeof(BN_ULONG));
   if (!bn_from_montgomery_in_place(r, num_r, tmp, 2 * num_r, mont)) {
     abort();
@@ -477,6 +568,9 @@ void bn_from_montgomery_small(BN_ULONG *r, size_t num_r, const BN_ULONG *a,
 void bn_mod_mul_montgomery_small(BN_ULONG *r, const BN_ULONG *a,
                                  const BN_ULONG *b, size_t num,
                                  const BN_MONT_CTX *mont) {
+#if 1 // hezhiwen
+  BN_ULONG tmp[2 * BN_SMALL_MAX_WORDS];
+#endif
   if (num != (size_t)mont->N.width || num > BN_SMALL_MAX_WORDS) {
     abort();
   }
@@ -492,7 +586,9 @@ void bn_mod_mul_montgomery_small(BN_ULONG *r, const BN_ULONG *a,
 #endif
 
   // Compute the product.
+#if 0 // hezhiwen
   BN_ULONG tmp[2 * BN_SMALL_MAX_WORDS];
+#endif
   if (a == b) {
     bn_sqr_small(tmp, 2 * num, a, num);
   } else {

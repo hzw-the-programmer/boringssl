@@ -136,9 +136,16 @@ static void gcm_mul64_nohw(uint64_t *out_lo, uint64_t *out_hi, uint64_t a,
   __m128i lo = gcm_mul32_nohw(a0, b0);
   __m128i hi = gcm_mul32_nohw(a1, b1);
   __m128i mid = gcm_mul32_nohw(a0 ^ a1, b0 ^ b1);
+#if 1 // hezhiwen
+  __m128i ret;
+#endif
   mid = _mm_xor_si128(mid, lo);
   mid = _mm_xor_si128(mid, hi);
+#if 1 // hezhiwen
+  ret = _mm_unpacklo_epi64(lo, hi);
+#else
   __m128i ret = _mm_unpacklo_epi64(lo, hi);
+#endif
   mid = _mm_slli_si128(mid, 4);
   mid = _mm_and_si128(mid, _mm_setr_epi32(0, 0xffffffff, 0xffffffff, 0));
   ret = _mm_xor_si128(ret, mid);
@@ -203,10 +210,17 @@ void gcm_init_nohw(u128 Htable[16], const uint64_t Xi[2]) {
   //
   // See also slide 16 of
   // https://crypto.stanford.edu/RealWorldCrypto/slides/gueron.pdf
+#if 1 //hezhiwen
+  uint64_t carry;
+#endif
   Htable[0].lo = Xi[1];
   Htable[0].hi = Xi[0];
 
+#if 1 // hezhiwen
+  carry = Htable[0].hi >> 63;
+#else
   uint64_t carry = Htable[0].hi >> 63;
+#endif
   carry = 0u - carry;
 
   Htable[0].hi <<= 1;
@@ -226,10 +240,14 @@ static void gcm_polyval_nohw(uint64_t Xi[2], const u128 *H) {
   // through |r3|. Note there is no byte or bit reversal because we are
   // evaluating POLYVAL.
   uint64_t r0, r1;
-  gcm_mul64_nohw(&r0, &r1, Xi[0], H->lo);
+#if 1 // hezhiwen
   uint64_t r2, r3;
-  gcm_mul64_nohw(&r2, &r3, Xi[1], H->hi);
   uint64_t mid0, mid1;
+#endif
+  gcm_mul64_nohw(&r0, &r1, Xi[0], H->lo);
+  // uint64_t r2, r3; // hezhiwen
+  gcm_mul64_nohw(&r2, &r3, Xi[1], H->hi);
+  // uint64_t mid0, mid1; // hezhiwen
   gcm_mul64_nohw(&mid0, &mid1, Xi[0] ^ Xi[1], H->hi ^ H->lo);
   mid0 ^= r0 ^ r2;
   mid1 ^= r1 ^ r3;

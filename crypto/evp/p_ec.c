@@ -219,6 +219,9 @@ static int pkey_ec_ctrl(EVP_PKEY_CTX *ctx, int type, int p1, void *p2) {
 static int pkey_ec_keygen(EVP_PKEY_CTX *ctx, EVP_PKEY *pkey) {
   EC_PKEY_CTX *dctx = ctx->data;
   const EC_GROUP *group = dctx->gen_group;
+#if 1 // hezhiwen
+  EC_KEY *ec;
+#endif
   if (group == NULL) {
     if (ctx->pkey == NULL) {
       OPENSSL_PUT_ERROR(EVP, EVP_R_NO_PARAMETERS_SET);
@@ -226,7 +229,11 @@ static int pkey_ec_keygen(EVP_PKEY_CTX *ctx, EVP_PKEY *pkey) {
     }
     group = EC_KEY_get0_group(ctx->pkey->pkey.ec);
   }
+#if 1 // hezhiwen
+  ec = EC_KEY_new();
+#else
   EC_KEY *ec = EC_KEY_new();
+#endif
   if (ec == NULL ||
       !EC_KEY_set_group(ec, group) ||
       !EC_KEY_generate_key(ec)) {
@@ -239,11 +246,18 @@ static int pkey_ec_keygen(EVP_PKEY_CTX *ctx, EVP_PKEY *pkey) {
 
 static int pkey_ec_paramgen(EVP_PKEY_CTX *ctx, EVP_PKEY *pkey) {
   EC_PKEY_CTX *dctx = ctx->data;
+#if 1 // hezhiwen
+  EC_KEY *ec;
+#endif
   if (dctx->gen_group == NULL) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_NO_PARAMETERS_SET);
     return 0;
   }
+#if 1 // hezhiwen
+  ec = EC_KEY_new();
+#else
   EC_KEY *ec = EC_KEY_new();
+#endif
   if (ec == NULL ||
       !EC_KEY_set_group(ec, dctx->gen_group)) {
     EC_KEY_free(ec);

@@ -76,6 +76,12 @@ static int x509_digest_nid_ok(const int digest_nid) {
 
 int x509_digest_sign_algorithm(EVP_MD_CTX *ctx, X509_ALGOR *algor) {
   EVP_PKEY *pkey = EVP_PKEY_CTX_get0_pkey(ctx->pctx);
+#if 1 // hezhiwen
+  const EVP_MD *digest;
+  int digest_nid;
+  int sign_nid;
+  int paramtype;
+#endif
   if (pkey == NULL) {
     OPENSSL_PUT_ERROR(ASN1, ASN1_R_CONTEXT_NOT_INITIALISED);
     return 0;
@@ -98,14 +104,22 @@ int x509_digest_sign_algorithm(EVP_MD_CTX *ctx, X509_ALGOR *algor) {
 
   // Default behavior: look up the OID for the algorithm/hash pair and encode
   // that.
+#if 1 // hezhiwen
+  digest = EVP_MD_CTX_md(ctx);
+#else
   const EVP_MD *digest = EVP_MD_CTX_md(ctx);
+#endif
   if (digest == NULL) {
     OPENSSL_PUT_ERROR(ASN1, ASN1_R_CONTEXT_NOT_INITIALISED);
     return 0;
   }
 
+#if 1 // hezhiwen
+  digest_nid = EVP_MD_type(digest);
+#else
   const int digest_nid = EVP_MD_type(digest);
   int sign_nid;
+#endif
   if (!x509_digest_nid_ok(digest_nid) ||
       !OBJ_find_sigid_by_algs(&sign_nid, digest_nid, EVP_PKEY_id(pkey))) {
     OPENSSL_PUT_ERROR(ASN1, ASN1_R_DIGEST_AND_KEY_TYPE_NOT_SUPPORTED);
@@ -114,8 +128,13 @@ int x509_digest_sign_algorithm(EVP_MD_CTX *ctx, X509_ALGOR *algor) {
 
   // RSA signature algorithms include an explicit NULL parameter. Others omit
   // it.
+#if 1 // hezhiwen
+  paramtype =
+      (EVP_PKEY_id(pkey) == EVP_PKEY_RSA) ? V_ASN1_NULL : V_ASN1_UNDEF;
+#else
   int paramtype =
       (EVP_PKEY_id(pkey) == EVP_PKEY_RSA) ? V_ASN1_NULL : V_ASN1_UNDEF;
+#endif
   X509_ALGOR_set0(algor, OBJ_nid2obj(sign_nid), paramtype, NULL);
   return 1;
 }
@@ -125,6 +144,9 @@ int x509_digest_verify_init(EVP_MD_CTX *ctx, const X509_ALGOR *sigalg,
   // Convert the signature OID into digest and public key OIDs.
   int sigalg_nid = OBJ_obj2nid(sigalg->algorithm);
   int digest_nid, pkey_nid;
+#if 1 // hezhiwen
+  const EVP_MD *digest;
+#endif
   if (!OBJ_find_sigid_algs(sigalg_nid, &digest_nid, &pkey_nid)) {
     OPENSSL_PUT_ERROR(ASN1, ASN1_R_UNKNOWN_SIGNATURE_ALGORITHM);
     return 0;
@@ -169,7 +191,11 @@ int x509_digest_verify_init(EVP_MD_CTX *ctx, const X509_ALGOR *sigalg,
   }
 
   // Otherwise, initialize with the digest from the OID.
+#if 1 // hezhiwen
+  digest = EVP_get_digestbynid(digest_nid);
+#else
   const EVP_MD *digest = EVP_get_digestbynid(digest_nid);
+#endif
   if (digest == NULL) {
     OPENSSL_PUT_ERROR(ASN1, ASN1_R_UNKNOWN_MESSAGE_DIGEST_ALGORITHM);
     return 0;

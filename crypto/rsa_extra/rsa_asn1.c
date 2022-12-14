@@ -89,10 +89,15 @@ static int marshal_integer(CBB *cbb, BIGNUM *bn) {
 
 RSA *RSA_parse_public_key(CBS *cbs) {
   RSA *ret = RSA_new();
+#if 1 // hezhiwen
+  CBS child;
+#endif
   if (ret == NULL) {
     return NULL;
   }
+#if 0 // hezhiwen
   CBS child;
+#endif
   if (!CBS_get_asn1(cbs, &child, CBS_ASN1_SEQUENCE) ||
       !parse_integer(&child, &ret->n) ||
       !parse_integer(&child, &ret->e) ||
@@ -113,8 +118,13 @@ RSA *RSA_parse_public_key(CBS *cbs) {
 
 RSA *RSA_public_key_from_bytes(const uint8_t *in, size_t in_len) {
   CBS cbs;
+#if 0 // hezhiwen
   CBS_init(&cbs, in, in_len);
+#endif
   RSA *ret = RSA_parse_public_key(&cbs);
+#if 1 // hezhiwen
+  CBS_init(&cbs, in, in_len);
+#endif
   if (ret == NULL || CBS_len(&cbs) != 0) {
     OPENSSL_PUT_ERROR(RSA, RSA_R_BAD_ENCODING);
     RSA_free(ret);
@@ -155,12 +165,18 @@ static const uint64_t kVersionTwoPrime = 0;
 
 RSA *RSA_parse_private_key(CBS *cbs) {
   RSA *ret = RSA_new();
+#if 1 // hezhiwen
+  CBS child;
+  uint64_t version;
+#endif
   if (ret == NULL) {
     return NULL;
   }
 
+#if 0 // hezhiwen
   CBS child;
   uint64_t version;
+#endif
   if (!CBS_get_asn1(cbs, &child, CBS_ASN1_SEQUENCE) ||
       !CBS_get_asn1_uint64(&child, &version)) {
     OPENSSL_PUT_ERROR(RSA, RSA_R_BAD_ENCODING);
@@ -202,8 +218,13 @@ err:
 
 RSA *RSA_private_key_from_bytes(const uint8_t *in, size_t in_len) {
   CBS cbs;
+#if 0 // hezhiwen
   CBS_init(&cbs, in, in_len);
+#endif
   RSA *ret = RSA_parse_private_key(&cbs);
+#if 1 // hezhiwen
+  CBS_init(&cbs, in, in_len);
+#endif
   if (ret == NULL || CBS_len(&cbs) != 0) {
     OPENSSL_PUT_ERROR(RSA, RSA_R_BAD_ENCODING);
     RSA_free(ret);
@@ -246,12 +267,21 @@ int RSA_private_key_to_bytes(uint8_t **out_bytes, size_t *out_len,
 }
 
 RSA *d2i_RSAPublicKey(RSA **out, const uint8_t **inp, long len) {
+#if 1 // hezhiwen
+  CBS cbs;
+  RSA *ret;
+#endif
   if (len < 0) {
     return NULL;
   }
+#if 1 // hezhiwen
+  CBS_init(&cbs, *inp, (size_t)len);
+  ret = RSA_parse_public_key(&cbs);
+#else
   CBS cbs;
   CBS_init(&cbs, *inp, (size_t)len);
   RSA *ret = RSA_parse_public_key(&cbs);
+#endif
   if (ret == NULL) {
     return NULL;
   }
@@ -274,12 +304,21 @@ int i2d_RSAPublicKey(const RSA *in, uint8_t **outp) {
 }
 
 RSA *d2i_RSAPrivateKey(RSA **out, const uint8_t **inp, long len) {
+#if 1 // hezhiwen
+  CBS cbs;
+  RSA *ret;
+#endif
   if (len < 0) {
     return NULL;
   }
+#if 1 // hezhiwen
+  CBS_init(&cbs, *inp, (size_t)len);
+  ret = RSA_parse_private_key(&cbs);
+#else
   CBS cbs;
   CBS_init(&cbs, *inp, (size_t)len);
   RSA *ret = RSA_parse_private_key(&cbs);
+#endif
   if (ret == NULL) {
     return NULL;
   }
@@ -304,10 +343,17 @@ int i2d_RSAPrivateKey(const RSA *in, uint8_t **outp) {
 RSA *RSAPublicKey_dup(const RSA *rsa) {
   uint8_t *der;
   size_t der_len;
+#if 1 // hezhiwen
+  RSA *ret;
+#endif
   if (!RSA_public_key_to_bytes(&der, &der_len, rsa)) {
     return NULL;
   }
+#if 1 // hezhiwen
+  ret = RSA_public_key_from_bytes(der, der_len);
+#else
   RSA *ret = RSA_public_key_from_bytes(der, der_len);
+#endif
   OPENSSL_free(der);
   return ret;
 }
@@ -315,10 +361,17 @@ RSA *RSAPublicKey_dup(const RSA *rsa) {
 RSA *RSAPrivateKey_dup(const RSA *rsa) {
   uint8_t *der;
   size_t der_len;
+#if 1 // hezhiwen
+  RSA *ret;
+#endif
   if (!RSA_private_key_to_bytes(&der, &der_len, rsa)) {
     return NULL;
   }
+#if 1 // hezhiwen
+  ret = RSA_private_key_from_bytes(der, der_len);
+#else
   RSA *ret = RSA_private_key_from_bytes(der, der_len);
+#endif
   OPENSSL_free(der);
   return ret;
 }

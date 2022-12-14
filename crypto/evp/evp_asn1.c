@@ -79,11 +79,18 @@ static const EVP_PKEY_ASN1_METHOD *const kASN1Methods[] = {
 
 static int parse_key_type(CBS *cbs, int *out_type) {
   CBS oid;
+#if 1 // hezhiwen
+  unsigned i;
+#endif
   if (!CBS_get_asn1(cbs, &oid, CBS_ASN1_OBJECT)) {
     return 0;
   }
 
+#if 1 // hezhiwen
+  for (i = 0; i < OPENSSL_ARRAY_SIZE(kASN1Methods); i++) {
+#else
   for (unsigned i = 0; i < OPENSSL_ARRAY_SIZE(kASN1Methods); i++) {
+#endif
     const EVP_PKEY_ASN1_METHOD *method = kASN1Methods[i];
     if (CBS_len(&oid) == method->oid_len &&
         OPENSSL_memcmp(CBS_data(&oid), method->oid, method->oid_len) == 0) {
@@ -100,6 +107,9 @@ EVP_PKEY *EVP_parse_public_key(CBS *cbs) {
   CBS spki, algorithm, key;
   int type;
   uint8_t padding;
+#if 1 // hezhiwen
+  EVP_PKEY *ret;
+#endif
   if (!CBS_get_asn1(cbs, &spki, CBS_ASN1_SEQUENCE) ||
       !CBS_get_asn1(&spki, &algorithm, CBS_ASN1_SEQUENCE) ||
       !CBS_get_asn1(&spki, &key, CBS_ASN1_BITSTRING) ||
@@ -120,7 +130,11 @@ EVP_PKEY *EVP_parse_public_key(CBS *cbs) {
   }
 
   // Set up an |EVP_PKEY| of the appropriate type.
+#if 1 // hezhiwen
+  ret = EVP_PKEY_new();
+#else
   EVP_PKEY *ret = EVP_PKEY_new();
+#endif
   if (ret == NULL ||
       !EVP_PKEY_set_type(ret, type)) {
     goto err;
@@ -156,6 +170,9 @@ EVP_PKEY *EVP_parse_private_key(CBS *cbs) {
   CBS pkcs8, algorithm, key;
   uint64_t version;
   int type;
+#if 1 // hezhiwen
+  EVP_PKEY *ret;
+#endif
   if (!CBS_get_asn1(cbs, &pkcs8, CBS_ASN1_SEQUENCE) ||
       !CBS_get_asn1_uint64(&pkcs8, &version) ||
       version != 0 ||
@@ -172,7 +189,11 @@ EVP_PKEY *EVP_parse_private_key(CBS *cbs) {
   // A PrivateKeyInfo ends with a SET of Attributes which we ignore.
 
   // Set up an |EVP_PKEY| of the appropriate type.
+#if 1 // hezhiwen
+  ret = EVP_PKEY_new();
+#else
   EVP_PKEY *ret = EVP_PKEY_new();
+#endif
   if (ret == NULL ||
       !EVP_PKEY_set_type(ret, type)) {
     goto err;
@@ -246,15 +267,24 @@ err:
 
 EVP_PKEY *d2i_PrivateKey(int type, EVP_PKEY **out, const uint8_t **inp,
                          long len) {
+#if 1 // hezhiwen
+  CBS cbs;
+  EVP_PKEY *ret;
+#endif
   if (len < 0) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_DECODE_ERROR);
     return NULL;
   }
 
   // Parse with the legacy format.
+#if 1 // hezhiwen
+  CBS_init(&cbs, *inp, (size_t)len);
+  ret = old_priv_decode(&cbs, type);
+#else
   CBS cbs;
   CBS_init(&cbs, *inp, (size_t)len);
   EVP_PKEY *ret = old_priv_decode(&cbs, type);
+#endif
   if (ret == NULL) {
     // Try again with PKCS#8.
     ERR_clear_error();
@@ -282,13 +312,18 @@ EVP_PKEY *d2i_PrivateKey(int type, EVP_PKEY **out, const uint8_t **inp,
 // in it. On parse error, it returns zero.
 static size_t num_elements(const uint8_t *in, size_t in_len) {
   CBS cbs, sequence;
+#if 1 // hezhiwen
+  size_t count = 0;
+#endif
   CBS_init(&cbs, in, (size_t)in_len);
 
   if (!CBS_get_asn1(&cbs, &sequence, CBS_ASN1_SEQUENCE)) {
     return 0;
   }
 
+#if 0 // hezhiwen
   size_t count = 0;
+#endif
   while (CBS_len(&sequence) > 0) {
     if (!CBS_get_any_asn1_element(&sequence, NULL, NULL, NULL)) {
       return 0;
@@ -301,15 +336,24 @@ static size_t num_elements(const uint8_t *in, size_t in_len) {
 }
 
 EVP_PKEY *d2i_AutoPrivateKey(EVP_PKEY **out, const uint8_t **inp, long len) {
+#if 1 // hezhiwen
+  CBS cbs;
+  EVP_PKEY *ret;
+#endif
   if (len < 0) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_DECODE_ERROR);
     return NULL;
   }
 
   // Parse the input as a PKCS#8 PrivateKeyInfo.
+#if 1 // hezhiwen
+  CBS_init(&cbs, *inp, (size_t)len);
+  ret = EVP_parse_private_key(&cbs);
+#else
   CBS cbs;
   CBS_init(&cbs, *inp, (size_t)len);
   EVP_PKEY *ret = EVP_parse_private_key(&cbs);
+#endif
   if (ret != NULL) {
     if (out != NULL) {
       EVP_PKEY_free(*out);
@@ -350,11 +394,16 @@ int i2d_PublicKey(const EVP_PKEY *key, uint8_t **outp) {
 EVP_PKEY *d2i_PublicKey(int type, EVP_PKEY **out, const uint8_t **inp,
                         long len) {
   EVP_PKEY *ret = EVP_PKEY_new();
+#if 1 // hezhiwen
+  CBS cbs;
+#endif
   if (ret == NULL) {
     return NULL;
   }
 
+#if 0 // hezhiwen
   CBS cbs;
+#endif
   CBS_init(&cbs, *inp, len < 0 ? 0 : (size_t)len);
   switch (type) {
     case EVP_PKEY_RSA: {
@@ -389,12 +438,21 @@ err:
 }
 
 EVP_PKEY *d2i_PUBKEY(EVP_PKEY **out, const uint8_t **inp, long len) {
+#if 1 // hezhiwen
+  CBS cbs;
+  EVP_PKEY *ret;
+#endif
   if (len < 0) {
     return NULL;
   }
+#if 1 // hezhiwen
+  CBS_init(&cbs, *inp, (size_t)len);
+  ret = EVP_parse_public_key(&cbs);
+#else
   CBS cbs;
   CBS_init(&cbs, *inp, (size_t)len);
   EVP_PKEY *ret = EVP_parse_public_key(&cbs);
+#endif
   if (ret == NULL) {
     return NULL;
   }
@@ -407,11 +465,16 @@ EVP_PKEY *d2i_PUBKEY(EVP_PKEY **out, const uint8_t **inp, long len) {
 }
 
 int i2d_PUBKEY(const EVP_PKEY *pkey, uint8_t **outp) {
+#if 1 // hezhiwen
+  CBB cbb;
+#endif
   if (pkey == NULL) {
     return 0;
   }
 
+#if 0 // hezhiwen
   CBB cbb;
+#endif
   if (!CBB_init(&cbb, 128) ||
       !EVP_marshal_public_key(&cbb, pkey)) {
     CBB_cleanup(&cbb);
@@ -421,16 +484,30 @@ int i2d_PUBKEY(const EVP_PKEY *pkey, uint8_t **outp) {
 }
 
 RSA *d2i_RSA_PUBKEY(RSA **out, const uint8_t **inp, long len) {
+#if 1 // hezhiwen
+  CBS cbs;
+  EVP_PKEY *pkey;
+  RSA *rsa;
+#endif
   if (len < 0) {
     return NULL;
   }
+#if 1 // hezhiwen
+  CBS_init(&cbs, *inp, (size_t)len);
+  pkey = EVP_parse_public_key(&cbs);
+#else
   CBS cbs;
   CBS_init(&cbs, *inp, (size_t)len);
   EVP_PKEY *pkey = EVP_parse_public_key(&cbs);
+#endif
   if (pkey == NULL) {
     return NULL;
   }
+#if 1 // hezhiwen
+  rsa = EVP_PKEY_get1_RSA(pkey);
+#else
   RSA *rsa = EVP_PKEY_get1_RSA(pkey);
+#endif
   EVP_PKEY_free(pkey);
   if (rsa == NULL) {
     return NULL;
@@ -444,12 +521,20 @@ RSA *d2i_RSA_PUBKEY(RSA **out, const uint8_t **inp, long len) {
 }
 
 int i2d_RSA_PUBKEY(const RSA *rsa, uint8_t **outp) {
+#if 1 // hezhiwen
+  int ret = -1;
+  EVP_PKEY *pkey;
+#endif
   if (rsa == NULL) {
     return 0;
   }
 
+#if 1 // hezhiwen
+  pkey = EVP_PKEY_new();
+#else
   int ret = -1;
   EVP_PKEY *pkey = EVP_PKEY_new();
+#endif
   if (pkey == NULL ||
       !EVP_PKEY_set1_RSA(pkey, (RSA *)rsa)) {
     goto err;
@@ -463,16 +548,30 @@ err:
 }
 
 DSA *d2i_DSA_PUBKEY(DSA **out, const uint8_t **inp, long len) {
+#if 1 // hezhiwen
+  CBS cbs;
+  EVP_PKEY *pkey;
+  DSA *dsa;
+#endif
   if (len < 0) {
     return NULL;
   }
+#if 1 // hezhiwen
+  CBS_init(&cbs, *inp, (size_t)len);
+  pkey = EVP_parse_public_key(&cbs);
+#else
   CBS cbs;
   CBS_init(&cbs, *inp, (size_t)len);
   EVP_PKEY *pkey = EVP_parse_public_key(&cbs);
+#endif
   if (pkey == NULL) {
     return NULL;
   }
+#if 1 // hezhiwen
+  dsa = EVP_PKEY_get1_DSA(pkey);
+#else
   DSA *dsa = EVP_PKEY_get1_DSA(pkey);
+#endif
   EVP_PKEY_free(pkey);
   if (dsa == NULL) {
     return NULL;
@@ -486,12 +585,20 @@ DSA *d2i_DSA_PUBKEY(DSA **out, const uint8_t **inp, long len) {
 }
 
 int i2d_DSA_PUBKEY(const DSA *dsa, uint8_t **outp) {
+#if 1 // hezhiwen
+  int ret = -1;
+  EVP_PKEY *pkey;
+#endif
   if (dsa == NULL) {
     return 0;
   }
 
+#if 1 // hezhiwen
+  pkey = EVP_PKEY_new();
+#else
   int ret = -1;
   EVP_PKEY *pkey = EVP_PKEY_new();
+#endif
   if (pkey == NULL ||
       !EVP_PKEY_set1_DSA(pkey, (DSA *)dsa)) {
     goto err;
@@ -505,16 +612,30 @@ err:
 }
 
 EC_KEY *d2i_EC_PUBKEY(EC_KEY **out, const uint8_t **inp, long len) {
+#if 1 // hezhiwen
+  CBS cbs;
+  EVP_PKEY *pkey;
+  EC_KEY *ec_key;
+#endif
   if (len < 0) {
     return NULL;
   }
+#if 1 // hezhiwen
+  CBS_init(&cbs, *inp, (size_t)len);
+  pkey = EVP_parse_public_key(&cbs);
+#else
   CBS cbs;
   CBS_init(&cbs, *inp, (size_t)len);
   EVP_PKEY *pkey = EVP_parse_public_key(&cbs);
+#endif
   if (pkey == NULL) {
     return NULL;
   }
+#if 1 // hezhiwen
+  ec_key = EVP_PKEY_get1_EC_KEY(pkey);
+#else
   EC_KEY *ec_key = EVP_PKEY_get1_EC_KEY(pkey);
+#endif
   EVP_PKEY_free(pkey);
   if (ec_key == NULL) {
     return NULL;
@@ -528,12 +649,21 @@ EC_KEY *d2i_EC_PUBKEY(EC_KEY **out, const uint8_t **inp, long len) {
 }
 
 int i2d_EC_PUBKEY(const EC_KEY *ec_key, uint8_t **outp) {
+#if 1 // hezhiwen
+  int ret = -1;
+  EVP_PKEY *pkey;
+#endif
+
   if (ec_key == NULL) {
     return 0;
   }
 
+#if 1 // hezhiwen
+  pkey = EVP_PKEY_new();
+#else
   int ret = -1;
   EVP_PKEY *pkey = EVP_PKEY_new();
+#endif
   if (pkey == NULL ||
       !EVP_PKEY_set1_EC_KEY(pkey, (EC_KEY *)ec_key)) {
     goto err;

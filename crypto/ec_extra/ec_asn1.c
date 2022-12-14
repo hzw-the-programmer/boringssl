@@ -75,6 +75,11 @@ static const CBS_ASN1_TAG kPublicKeyTag =
 EC_KEY *EC_KEY_parse_private_key(CBS *cbs, const EC_GROUP *group) {
   CBS ec_private_key, private_key;
   uint64_t version;
+#if 1 // hezhiwen
+  EC_GROUP *inner_group = NULL;
+  EC_KEY *ret = NULL;
+  BIGNUM *priv_key = NULL;
+#endif
   if (!CBS_get_asn1(cbs, &ec_private_key, CBS_ASN1_SEQUENCE) ||
       !CBS_get_asn1_uint64(&ec_private_key, &version) ||
       version != 1 ||
@@ -84,9 +89,11 @@ EC_KEY *EC_KEY_parse_private_key(CBS *cbs, const EC_GROUP *group) {
   }
 
   // Parse the optional parameters field.
+#if 0 // hezhiwen
   EC_GROUP *inner_group = NULL;
   EC_KEY *ret = NULL;
   BIGNUM *priv_key = NULL;
+#endif
   if (CBS_peek_asn1_tag(&ec_private_key, kParametersTag)) {
     // Per SEC 1, as an alternative to omitting it, one is allowed to specify
     // this field and put in a NULL to mean inheriting this value. This was
@@ -191,12 +198,17 @@ err:
 
 int EC_KEY_marshal_private_key(CBB *cbb, const EC_KEY *key,
                                unsigned enc_flags) {
+#if 1 // hezhiwen
+  CBB ec_private_key, private_key;
+#endif
   if (key == NULL || key->group == NULL || key->priv_key == NULL) {
     OPENSSL_PUT_ERROR(EC, ERR_R_PASSED_NULL_PARAMETER);
     return 0;
   }
 
+#if 0 // hezhiwen
   CBB ec_private_key, private_key;
+#endif
   if (!CBB_add_asn1(cbb, &ec_private_key, CBS_ASN1_SEQUENCE) ||
       !CBB_add_asn1_uint64(&ec_private_key, 1 /* version */) ||
       !CBB_add_asn1(&ec_private_key, &private_key, CBS_ASN1_OCTETSTRING) ||
@@ -252,6 +264,10 @@ static int parse_explicit_prime_curve(CBS *in, CBS *out_prime, CBS *out_a,
   CBS params, field_id, field_type, curve, base, cofactor;
   int has_cofactor;
   uint64_t version;
+#if 1 // hezhiwen
+  uint8_t form;
+  size_t field_len;
+#endif
   if (!CBS_get_asn1(in, &params, CBS_ASN1_SEQUENCE) ||
       !CBS_get_asn1_uint64(&params, &version) ||
       version != 1 ||
@@ -289,7 +305,9 @@ static int parse_explicit_prime_curve(CBS *in, CBS *out_prime, CBS *out_a,
   }
 
   // Require that the base point use uncompressed form.
+#if 0 // hezhiwen
   uint8_t form;
+#endif
   if (!CBS_get_u8(&base, &form) || form != POINT_CONVERSION_UNCOMPRESSED) {
     OPENSSL_PUT_ERROR(EC, EC_R_INVALID_FORM);
     return 0;
@@ -299,7 +317,11 @@ static int parse_explicit_prime_curve(CBS *in, CBS *out_prime, CBS *out_a,
     OPENSSL_PUT_ERROR(EC, EC_R_DECODE_ERROR);
     return 0;
   }
+#if 1 // hezhiwen
+  field_len = CBS_len(&base) / 2;
+#else
   size_t field_len = CBS_len(&base) / 2;
+#endif
   CBS_init(out_base_x, CBS_data(&base), field_len);
   CBS_init(out_base_y, CBS_data(&base) + field_len, field_len);
 
@@ -323,14 +345,23 @@ static int integers_equal(const CBS *a, const uint8_t *b, size_t b_len) {
 
 EC_GROUP *EC_KEY_parse_curve_name(CBS *cbs) {
   CBS named_curve;
+#if 1 // hezhiwen
+  const struct built_in_curves *curves;
+  size_t i;
+#endif
   if (!CBS_get_asn1(cbs, &named_curve, CBS_ASN1_OBJECT)) {
     OPENSSL_PUT_ERROR(EC, EC_R_DECODE_ERROR);
     return NULL;
   }
 
   // Look for a matching curve.
+#if 1 // hezhiwen
+  curves = OPENSSL_built_in_curves();
+  for (i = 0; i < OPENSSL_NUM_BUILT_IN_CURVES; i++) {
+#else
   const struct built_in_curves *const curves = OPENSSL_built_in_curves();
   for (size_t i = 0; i < OPENSSL_NUM_BUILT_IN_CURVES; i++) {
+#endif
     const struct built_in_curve *curve = &curves->curves[i];
     if (CBS_len(&named_curve) == curve->oid_len &&
         OPENSSL_memcmp(CBS_data(&named_curve), curve->oid, curve->oid_len) ==
@@ -345,13 +376,22 @@ EC_GROUP *EC_KEY_parse_curve_name(CBS *cbs) {
 
 int EC_KEY_marshal_curve_name(CBB *cbb, const EC_GROUP *group) {
   int nid = EC_GROUP_get_curve_name(group);
+#if 1 // hezhiwen
+  const struct built_in_curves *curves;
+  size_t i;
+#endif
   if (nid == NID_undef) {
     OPENSSL_PUT_ERROR(EC, EC_R_UNKNOWN_GROUP);
     return 0;
   }
 
+#if 1 // hezhiwen
+  curves = OPENSSL_built_in_curves();
+  for (i = 0; i < OPENSSL_NUM_BUILT_IN_CURVES; i++) {
+#else
   const struct built_in_curves *const curves = OPENSSL_built_in_curves();
   for (size_t i = 0; i < OPENSSL_NUM_BUILT_IN_CURVES; i++) {
+#endif
     const struct built_in_curve *curve = &curves->curves[i];
     if (curve->nid == nid) {
       CBB child;
@@ -366,6 +406,11 @@ int EC_KEY_marshal_curve_name(CBB *cbb, const EC_GROUP *group) {
 }
 
 EC_GROUP *EC_KEY_parse_parameters(CBS *cbs) {
+#if 1 // hezhiwen
+  CBS prime, a, b, base_x, base_y, order;
+  const struct built_in_curves *curves;
+  size_t i;
+#endif
   if (!CBS_peek_asn1_tag(cbs, CBS_ASN1_SEQUENCE)) {
     return EC_KEY_parse_curve_name(cbs);
   }
@@ -374,15 +419,22 @@ EC_GROUP *EC_KEY_parse_parameters(CBS *cbs) {
   // of named curves.
   //
   // TODO(davidben): Remove support for this.
+#if 0 // hezhiwen
   CBS prime, a, b, base_x, base_y, order;
+#endif
   if (!parse_explicit_prime_curve(cbs, &prime, &a, &b, &base_x, &base_y,
                                   &order)) {
     return NULL;
   }
 
   // Look for a matching prime curve.
+#if 1 // hezhiwen
+  curves = OPENSSL_built_in_curves();
+  for (i = 0; i < OPENSSL_NUM_BUILT_IN_CURVES; i++) {
+#else
   const struct built_in_curves *const curves = OPENSSL_built_in_curves();
   for (size_t i = 0; i < OPENSSL_NUM_BUILT_IN_CURVES; i++) {
+#endif
     const struct built_in_curve *curve = &curves->curves[i];
     const unsigned param_len = curve->param_len;
     // |curve->params| is ordered p, a, b, x, y, order, each component
@@ -407,10 +459,15 @@ EC_GROUP *EC_KEY_parse_parameters(CBS *cbs) {
 int EC_POINT_point2cbb(CBB *out, const EC_GROUP *group, const EC_POINT *point,
                        point_conversion_form_t form, BN_CTX *ctx) {
   size_t len = EC_POINT_point2oct(group, point, form, NULL, 0, ctx);
+#if 1 // hezhiwen
+  uint8_t *p;
+#endif
   if (len == 0) {
     return 0;
   }
+#if 0 // hezhiwen
   uint8_t *p;
+#endif
   return CBB_add_space(out, &p, len) &&
          EC_POINT_point2oct(group, point, form, p, len, ctx) == len;
 }
@@ -419,6 +476,10 @@ EC_KEY *d2i_ECPrivateKey(EC_KEY **out, const uint8_t **inp, long len) {
   // This function treats its |out| parameter differently from other |d2i|
   // functions. If supplied, take the group from |*out|.
   const EC_GROUP *group = NULL;
+#if 1 // hezhiwen
+  CBS cbs;
+  EC_KEY *ret;
+#endif
   if (out != NULL && *out != NULL) {
     group = EC_KEY_get0_group(*out);
   }
@@ -427,9 +488,14 @@ EC_KEY *d2i_ECPrivateKey(EC_KEY **out, const uint8_t **inp, long len) {
     OPENSSL_PUT_ERROR(EC, EC_R_DECODE_ERROR);
     return NULL;
   }
+#if 1 // hezhiwen
+  CBS_init(&cbs, *inp, (size_t)len);
+  ret = EC_KEY_parse_private_key(&cbs, group);
+#else
   CBS cbs;
   CBS_init(&cbs, *inp, (size_t)len);
   EC_KEY *ret = EC_KEY_parse_private_key(&cbs, group);
+#endif
   if (ret == NULL) {
     return NULL;
   }
@@ -452,18 +518,32 @@ int i2d_ECPrivateKey(const EC_KEY *key, uint8_t **outp) {
 }
 
 EC_KEY *d2i_ECParameters(EC_KEY **out_key, const uint8_t **inp, long len) {
+#if 1 // hezhiwen
+  CBS cbs;
+  EC_GROUP *group;
+  EC_KEY *ret;
+#endif
   if (len < 0) {
     return NULL;
   }
 
+#if 1 // hezhiwen
+  CBS_init(&cbs, *inp, (size_t)len);
+  group = EC_KEY_parse_parameters(&cbs);
+#else
   CBS cbs;
   CBS_init(&cbs, *inp, (size_t)len);
   EC_GROUP *group = EC_KEY_parse_parameters(&cbs);
+#endif
   if (group == NULL) {
     return NULL;
   }
 
+#if 1 // hezhiwen
+  ret = EC_KEY_new();
+#else
   EC_KEY *ret = EC_KEY_new();
+#endif
   if (ret == NULL || !EC_KEY_set_group(ret, group)) {
     EC_GROUP_free(group);
     EC_KEY_free(ret);
@@ -480,12 +560,17 @@ EC_KEY *d2i_ECParameters(EC_KEY **out_key, const uint8_t **inp, long len) {
 }
 
 int i2d_ECParameters(const EC_KEY *key, uint8_t **outp) {
+#if 1 // hezhiwen
+  CBB cbb;
+#endif
   if (key == NULL || key->group == NULL) {
     OPENSSL_PUT_ERROR(EC, ERR_R_PASSED_NULL_PARAMETER);
     return -1;
   }
 
+#if 0 // hezhiwen
   CBB cbb;
+#endif
   if (!CBB_init(&cbb, 0) ||
       !EC_KEY_marshal_curve_name(&cbb, key->group)) {
     CBB_cleanup(&cbb);
@@ -518,18 +603,28 @@ EC_KEY *o2i_ECPublicKey(EC_KEY **keyp, const uint8_t **inp, long len) {
 }
 
 int i2o_ECPublicKey(const EC_KEY *key, uint8_t **outp) {
+#if 1 // hezhiwen
+  CBB cbb;
+  int ret;
+#endif
   if (key == NULL) {
     OPENSSL_PUT_ERROR(EC, ERR_R_PASSED_NULL_PARAMETER);
     return 0;
   }
+#if 0 // hezhiwen
   CBB cbb;
+#endif
   if (!CBB_init(&cbb, 0) ||  //
       !EC_POINT_point2cbb(&cbb, key->group, key->pub_key, key->conv_form,
                           NULL)) {
     CBB_cleanup(&cbb);
     return -1;
   }
+#if 1 // hezhiwen
+  ret = CBB_finish_i2d(&cbb, outp);
+#else
   int ret = CBB_finish_i2d(&cbb, outp);
+#endif
   // Historically, this function used the wrong return value on error.
   return ret > 0 ? ret : 0;
 }

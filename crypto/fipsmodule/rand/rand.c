@@ -133,13 +133,22 @@ static void rand_thread_state_free(void *state_in) {
 // returned true.
 static int rdrand(uint8_t *buf, const size_t len) {
   const size_t len_multiple8 = len & ~7;
+#if 1 // hezhiwen
+  size_t remainder;
+#endif
   if (!CRYPTO_rdrand_multiple8_buf(buf, len_multiple8)) {
     return 0;
   }
+#if 1 // hezhiwen
+  remainder = len - len_multiple8;
+#else
   const size_t remainder = len - len_multiple8;
+#endif
 
   if (remainder != 0) {
+  #if 0 // hezhiwen
     assert(remainder < 8);
+  #endif
 
     uint8_t rand_buf[8];
     if (!CRYPTO_rdrand(rand_buf)) {
@@ -200,9 +209,16 @@ DEFINE_STATIC_MUTEX(entropy_buffer_lock);
 void RAND_load_entropy(const uint8_t *entropy, size_t entropy_len,
                        int want_additional_input) {
   struct entropy_buffer *const buffer = entropy_buffer_bss_get();
+#if 1 // hezhiwen
+  size_t space;
+#endif
 
   CRYPTO_STATIC_MUTEX_lock_write(entropy_buffer_lock_bss_get());
+#if 1 // hezhiwen
+  space = sizeof(buffer->bytes) - buffer->bytes_valid;
+#else
   const size_t space = sizeof(buffer->bytes) - buffer->bytes_valid;
+#endif
   if (entropy_len > space) {
     entropy_len = space;
   }
@@ -253,6 +269,10 @@ static void rand_get_seed(struct rand_thread_state *state,
                         CTR_DRBG_ENTROPY_LEN * BORINGSSL_FIPS_OVERREAD];
   uint8_t *entropy = entropy_bytes;
   size_t entropy_len = sizeof(entropy_bytes);
+#if 1 // hezhiwen
+  int want_additional_input;
+  size_t i, j;
+#endif
 
   if (state->last_block_valid) {
     // No need to fill |state->last_block| with entropy from the read.
@@ -260,7 +280,9 @@ static void rand_get_seed(struct rand_thread_state *state,
     entropy_len -= sizeof(state->last_block);
   }
 
+#if 0 // hezhiwen
   int want_additional_input;
+#endif
   get_seed_entropy(entropy, entropy_len, &want_additional_input);
 
   if (!state->last_block_valid) {
@@ -279,7 +301,11 @@ static void rand_get_seed(struct rand_thread_state *state,
   }
 
   assert(entropy_len % CRNGT_BLOCK_SIZE == 0);
+#if 1 // hezhiwen
+  for (i = CRNGT_BLOCK_SIZE; i < entropy_len; i += CRNGT_BLOCK_SIZE) {
+#else
   for (size_t i = CRNGT_BLOCK_SIZE; i < entropy_len; i += CRNGT_BLOCK_SIZE) {
+#endif
     if (CRYPTO_memcmp(entropy + i - CRNGT_BLOCK_SIZE, entropy + i,
                       CRNGT_BLOCK_SIZE) == 0) {
       fprintf(stderr, "CRNGT failed.\n");
@@ -292,8 +318,13 @@ static void rand_get_seed(struct rand_thread_state *state,
   assert(entropy_len == BORINGSSL_FIPS_OVERREAD * CTR_DRBG_ENTROPY_LEN);
   OPENSSL_memcpy(seed, entropy, CTR_DRBG_ENTROPY_LEN);
 
+#if 1 // hezhiwen
+  for (i = 1; i < BORINGSSL_FIPS_OVERREAD; i++) {
+    for (j = 0; j < CTR_DRBG_ENTROPY_LEN; j++) {
+#else
   for (size_t i = 1; i < BORINGSSL_FIPS_OVERREAD; i++) {
     for (size_t j = 0; j < CTR_DRBG_ENTROPY_LEN; j++) {
+#endif
       seed[j] ^= entropy[CTR_DRBG_ENTROPY_LEN * i + j];
     }
   }
@@ -327,17 +358,31 @@ static void rand_get_seed(struct rand_thread_state *state,
 
 void RAND_bytes_with_additional_data(uint8_t *out, size_t out_len,
                                      const uint8_t user_additional_data[32]) {
+#if 1 // hezhiwen
+  uint64_t fork_generation;
+  uint8_t additional_data[32];
+  size_t i;
+  struct rand_thread_state stack_state;
+  struct rand_thread_state *state;
+  int first_call = 1;
+#endif
   if (out_len == 0) {
     return;
   }
 
+#if 1 // hezhiwen
+  fork_generation = CRYPTO_get_fork_generation();
+#else
   const uint64_t fork_generation = CRYPTO_get_fork_generation();
+#endif
 
   // Additional data is mixed into every CTR-DRBG call to protect, as best we
   // can, against forks & VM clones. We do not over-read this information and
   // don't reseed with it so, from the point of view of FIPS, this doesn't
   // provide “prediction resistance”. But, in practice, it does.
+#if 0 // hezhiwen
   uint8_t additional_data[32];
+#endif
   // Intel chips have fast RDRAND instructions while, in other cases, RDRAND can
   // be _slower_ than a system call.
   if (!have_fast_rdrand() ||
@@ -359,15 +404,29 @@ void RAND_bytes_with_additional_data(uint8_t *out, size_t out_len,
     }
   }
 
+#if 1 // hezhiwen
+  for (i = 0; i < sizeof(additional_data); i++) {
+#else
   for (size_t i = 0; i < sizeof(additional_data); i++) {
+#endif
     additional_data[i] ^= user_additional_data[i];
   }
 
+#if 1 // hezhiwen
+  state =
+      CRYPTO_get_thread_local(OPENSSL_THREAD_LOCAL_RAND);
+#else
   struct rand_thread_state stack_state;
   struct rand_thread_state *state =
       CRYPTO_get_thread_local(OPENSSL_THREAD_LOCAL_RAND);
+#endif
 
   if (state == NULL) {
+  #if 1 // hezhiwen
+    uint8_t seed[CTR_DRBG_ENTROPY_LEN];
+    uint8_t personalization[CTR_DRBG_ENTROPY_LEN] = {0};
+    size_t personalization_len = 0;
+  #endif
     state = OPENSSL_malloc(sizeof(struct rand_thread_state));
     if (state == NULL ||
         !CRYPTO_set_thread_local(OPENSSL_THREAD_LOCAL_RAND, state,
@@ -378,9 +437,11 @@ void RAND_bytes_with_additional_data(uint8_t *out, size_t out_len,
     }
 
     state->last_block_valid = 0;
+  #if 0 // hezhiwen
     uint8_t seed[CTR_DRBG_ENTROPY_LEN];
     uint8_t personalization[CTR_DRBG_ENTROPY_LEN] = {0};
     size_t personalization_len = 0;
+  #endif
     rand_get_seed(state, seed, personalization, &personalization_len);
 
     if (!CTR_DRBG_init(&state->drbg, seed, personalization,
@@ -392,8 +453,14 @@ void RAND_bytes_with_additional_data(uint8_t *out, size_t out_len,
 
 #if defined(BORINGSSL_FIPS)
     if (state != &stack_state) {
+    #if 1 // hezhiwen
+      struct rand_thread_state **states_list;
+      CRYPTO_STATIC_MUTEX_lock_write(thread_states_list_lock_bss_get());
+      states_list = thread_states_list_bss_get();
+    #else
       CRYPTO_STATIC_MUTEX_lock_write(thread_states_list_lock_bss_get());
       struct rand_thread_state **states_list = thread_states_list_bss_get();
+    #endif
       state->next = *states_list;
       if (state->next != NULL) {
         state->next->prev = state;
@@ -435,7 +502,9 @@ void RAND_bytes_with_additional_data(uint8_t *out, size_t out_len,
 #endif
   }
 
+#if 0 // hezhiwen
   int first_call = 1;
+#endif
   while (out_len > 0) {
     size_t todo = out_len;
     if (todo > CTR_DRBG_MAX_GENERATE_LENGTH) {

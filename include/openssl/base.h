@@ -280,6 +280,9 @@ extern "C" {
 // Add OPENSSL_UNUSED so that, should an inline function be emitted via macro
 // (e.g. a |STACK_OF(T)| implementation) in a source file without tripping
 // clang's -Wunused-function.
+#if defined(_MSC_VER) // hezhiwen
+#define inline __inline
+#endif
 #define OPENSSL_INLINE static inline OPENSSL_UNUSED
 #endif
 
@@ -633,5 +636,8 @@ BSSL_NAMESPACE_END
 }  // extern C++
 
 #endif  // !BORINGSSL_NO_CXX
+
+// hezhiwen
+#define static_assert(exp, msg)
 
 #endif  // OPENSSL_HEADER_BASE_H

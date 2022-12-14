@@ -49,10 +49,15 @@ static void hmac_init(SHA256_CTX *out_inner, SHA256_CTX *out_outer,
                       const uint8_t hmac_key[32]) {
   static const size_t hmac_key_len = 32;
   uint8_t block[SHA256_CBLOCK];
+#if 1 // hezhiwen
+  unsigned i;
+#endif
   OPENSSL_memcpy(block, hmac_key, hmac_key_len);
   OPENSSL_memset(block + hmac_key_len, 0x36, sizeof(block) - hmac_key_len);
 
+#if 0 // hezhiwen
   unsigned i;
+#endif
   for (i = 0; i < hmac_key_len; i++) {
     block[i] ^= 0x36;
   }
@@ -74,13 +79,20 @@ static int aead_aes_ctr_hmac_sha256_init(EVP_AEAD_CTX *ctx, const uint8_t *key,
   struct aead_aes_ctr_hmac_sha256_ctx *aes_ctx =
       (struct aead_aes_ctr_hmac_sha256_ctx *)&ctx->state;
   static const size_t hmac_key_len = 32;
+#if 1 // hezhiwen
+  size_t aes_key_len;
+#endif
 
   if (key_len < hmac_key_len) {
     OPENSSL_PUT_ERROR(CIPHER, CIPHER_R_BAD_KEY_LENGTH);
     return 0;  // EVP_AEAD_CTX_init should catch this.
   }
 
+#if 1 // hezhiwen
+  aes_key_len = key_len - hmac_key_len;
+#else
   const size_t aes_key_len = key_len - hmac_key_len;
+#endif
   if (aes_key_len != 16 && aes_key_len != 32) {
     OPENSSL_PUT_ERROR(CIPHER, CIPHER_R_BAD_KEY_LENGTH);
     return 0;  // EVP_AEAD_CTX_init should catch this.
@@ -124,6 +136,11 @@ static void hmac_calculate(uint8_t out[SHA256_DIGEST_LENGTH],
                            const uint8_t *nonce, const uint8_t *ciphertext,
                            size_t ciphertext_len) {
   SHA256_CTX sha256;
+#if 1 // hezhiwen
+  unsigned num_padding;
+  uint8_t padding[SHA256_CBLOCK];
+  uint8_t inner_digest[SHA256_DIGEST_LENGTH];
+#endif
   OPENSSL_memcpy(&sha256, inner_init_state, sizeof(sha256));
   hmac_update_uint64(&sha256, ad_len);
   hmac_update_uint64(&sha256, ciphertext_len);
@@ -131,18 +148,28 @@ static void hmac_calculate(uint8_t out[SHA256_DIGEST_LENGTH],
   SHA256_Update(&sha256, ad, ad_len);
 
   // Pad with zeros to the end of the SHA-256 block.
+#if 1 // hezhiwen
+  num_padding =
+      (SHA256_CBLOCK - ((sizeof(uint64_t)*2 +
+                         EVP_AEAD_AES_CTR_HMAC_SHA256_NONCE_LEN + ad_len) %
+                        SHA256_CBLOCK)) %
+      SHA256_CBLOCK;
+#else
   const unsigned num_padding =
       (SHA256_CBLOCK - ((sizeof(uint64_t)*2 +
                          EVP_AEAD_AES_CTR_HMAC_SHA256_NONCE_LEN + ad_len) %
                         SHA256_CBLOCK)) %
       SHA256_CBLOCK;
   uint8_t padding[SHA256_CBLOCK];
+#endif
   OPENSSL_memset(padding, 0, num_padding);
   SHA256_Update(&sha256, padding, num_padding);
 
   SHA256_Update(&sha256, ciphertext, ciphertext_len);
 
+#if 0 // hezhiwen
   uint8_t inner_digest[SHA256_DIGEST_LENGTH];
+#endif
   SHA256_Final(inner_digest, &sha256);
 
   OPENSSL_memcpy(&sha256, outer_init_state, sizeof(sha256));
@@ -157,9 +184,14 @@ static void aead_aes_ctr_hmac_sha256_crypt(
   // bytes is pointless. However, |CRYPTO_ctr128_encrypt| requires it.
   uint8_t partial_block_buffer[AES_BLOCK_SIZE];
   unsigned partial_block_offset = 0;
+#if 1 // hezhiwen
+  uint8_t counter[AES_BLOCK_SIZE];
+#endif
   OPENSSL_memset(partial_block_buffer, 0, sizeof(partial_block_buffer));
 
+#if 0 // hezhiwen
   uint8_t counter[AES_BLOCK_SIZE];
+#endif
   OPENSSL_memcpy(counter, nonce, EVP_AEAD_AES_CTR_HMAC_SHA256_NONCE_LEN);
   OPENSSL_memset(counter + EVP_AEAD_AES_CTR_HMAC_SHA256_NONCE_LEN, 0, 4);
 
@@ -182,6 +214,9 @@ static int aead_aes_ctr_hmac_sha256_seal_scatter(
   const struct aead_aes_ctr_hmac_sha256_ctx *aes_ctx =
       (struct aead_aes_ctr_hmac_sha256_ctx *) &ctx->state;
   const uint64_t in_len_64 = in_len;
+#if 1 // hezhiwen
+  uint8_t hmac_result[SHA256_DIGEST_LENGTH];
+#endif
 
   if (in_len_64 >= (UINT64_C(1) << 32) * AES_BLOCK_SIZE) {
      // This input is so large it would overflow the 32-bit block counter.
@@ -201,7 +236,9 @@ static int aead_aes_ctr_hmac_sha256_seal_scatter(
 
   aead_aes_ctr_hmac_sha256_crypt(aes_ctx, out, in, in_len, nonce);
 
+#if 0 // hezhiwen
   uint8_t hmac_result[SHA256_DIGEST_LENGTH];
+#endif
   hmac_calculate(hmac_result, &aes_ctx->inner_init_state,
                  &aes_ctx->outer_init_state, ad, ad_len, nonce, out, in_len);
   OPENSSL_memcpy(out_tag, hmac_result, ctx->tag_len);
@@ -216,6 +253,9 @@ static int aead_aes_ctr_hmac_sha256_open_gather(
     size_t in_tag_len, const uint8_t *ad, size_t ad_len) {
   const struct aead_aes_ctr_hmac_sha256_ctx *aes_ctx =
       (struct aead_aes_ctr_hmac_sha256_ctx *) &ctx->state;
+#if 1 // hezhiwen
+  uint8_t hmac_result[SHA256_DIGEST_LENGTH];
+#endif
 
   if (in_tag_len != ctx->tag_len) {
     OPENSSL_PUT_ERROR(CIPHER, CIPHER_R_BAD_DECRYPT);
@@ -227,7 +267,9 @@ static int aead_aes_ctr_hmac_sha256_open_gather(
     return 0;
   }
 
+#if 0 // hezhiwen
   uint8_t hmac_result[SHA256_DIGEST_LENGTH];
+#endif
   hmac_calculate(hmac_result, &aes_ctx->inner_init_state,
                  &aes_ctx->outer_init_state, ad, ad_len, nonce, in,
                  in_len);

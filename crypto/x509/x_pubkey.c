@@ -91,12 +91,18 @@ int X509_PUBKEY_set(X509_PUBKEY **x, EVP_PKEY *pkey) {
   X509_PUBKEY *pk = NULL;
   uint8_t *spki = NULL;
   size_t spki_len;
+#if 1 // hezhiwen
+  CBB cbb;
+  const uint8_t *p;
+#endif
 
   if (x == NULL) {
     return 0;
   }
 
+#if 0 // hezhiwen
   CBB cbb;
+#endif
   if (!CBB_init(&cbb, 0) ||  //
       !EVP_marshal_public_key(&cbb, pkey) ||
       !CBB_finish(&cbb, &spki, &spki_len) ||  //
@@ -106,7 +112,11 @@ int X509_PUBKEY_set(X509_PUBKEY **x, EVP_PKEY *pkey) {
     goto error;
   }
 
+#if 1 // hezhiwen
+  p = spki;
+#else
   const uint8_t *p = spki;
+#endif
   pk = d2i_X509_PUBKEY(NULL, &p, (long)spki_len);
   if (pk == NULL || p != spki + spki_len) {
     OPENSSL_PUT_ERROR(X509, X509_R_PUBLIC_KEY_DECODE_ERROR);
@@ -133,6 +143,10 @@ static struct CRYPTO_STATIC_MUTEX g_pubkey_lock = CRYPTO_STATIC_MUTEX_INIT;
 EVP_PKEY *X509_PUBKEY_get(X509_PUBKEY *key) {
   EVP_PKEY *ret = NULL;
   uint8_t *spki = NULL;
+#if 1 // hezhiwen
+  int spki_len;
+  CBS cbs;
+#endif
 
   if (key == NULL) {
     goto error;
@@ -147,11 +161,17 @@ EVP_PKEY *X509_PUBKEY_get(X509_PUBKEY *key) {
   CRYPTO_STATIC_MUTEX_unlock_read(&g_pubkey_lock);
 
   // Re-encode the |X509_PUBKEY| to DER and parse it.
+#if 1 // hezhiwen
+  spki_len = i2d_X509_PUBKEY(key, &spki);
+#else
   int spki_len = i2d_X509_PUBKEY(key, &spki);
+#endif
   if (spki_len < 0) {
     goto error;
   }
+#if 0 // hezhiwen
   CBS cbs;
+#endif
   CBS_init(&cbs, spki, (size_t)spki_len);
   ret = EVP_parse_public_key(&cbs);
   if (ret == NULL || CBS_len(&cbs) != 0) {

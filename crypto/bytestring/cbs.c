@@ -93,11 +93,18 @@ int CBS_mem_equal(const CBS *cbs, const uint8_t *data, size_t len) {
 static int cbs_get_u(CBS *cbs, uint64_t *out, size_t len) {
   uint64_t result = 0;
   const uint8_t *data;
+#if 1 // hezhiwen
+  size_t i;
+#endif
 
   if (!cbs_get(cbs, &data, len)) {
     return 0;
   }
+#if 1 // hezhiwen
+  for (i = 0; i < len; i++) {
+#else
   for (size_t i = 0; i < len; i++) {
+#endif
     result <<= 8;
     result |= data[i];
   }
@@ -256,6 +263,10 @@ static int parse_base128_integer(CBS *cbs, uint64_t *out) {
 
 static int parse_asn1_tag(CBS *cbs, CBS_ASN1_TAG *out) {
   uint8_t tag_byte;
+#if 1 // hezhiwen
+  CBS_ASN1_TAG tag;
+  CBS_ASN1_TAG tag_number;
+#endif
   if (!CBS_get_u8(cbs, &tag_byte)) {
     return 0;
   }
@@ -266,8 +277,13 @@ static int parse_asn1_tag(CBS *cbs, CBS_ASN1_TAG *out) {
   // If the number portion is 31 (0x1f, the largest value that fits in the
   // allotted bits), then the tag is more than one byte long and the
   // continuation bytes contain the tag number.
+#if 1 // hezhiwen
+  tag = ((CBS_ASN1_TAG)tag_byte & 0xe0) << CBS_ASN1_TAG_SHIFT;
+  tag_number = tag_byte & 0x1f;
+#else
   CBS_ASN1_TAG tag = ((CBS_ASN1_TAG)tag_byte & 0xe0) << CBS_ASN1_TAG_SHIFT;
   CBS_ASN1_TAG tag_number = tag_byte & 0x1f;
+#endif
   if (tag_number == 0x1f) {
     uint64_t v;
     if (!parse_base128_integer(cbs, &v) ||
@@ -298,6 +314,12 @@ static int cbs_get_any_asn1_element(CBS *cbs, CBS *out, CBS_ASN1_TAG *out_tag,
                                     int *out_indefinite, int ber_ok) {
   CBS header = *cbs;
   CBS throwaway;
+#if 1 // hezhiwen
+  CBS_ASN1_TAG tag;
+  uint8_t length_byte;
+  size_t header_len;
+  size_t len;
+#endif
 
   if (out == NULL) {
     out = &throwaway;
@@ -310,7 +332,9 @@ static int cbs_get_any_asn1_element(CBS *cbs, CBS *out, CBS_ASN1_TAG *out_tag,
     assert(out_indefinite == NULL);
   }
 
+#if 0 // hezhiwen
   CBS_ASN1_TAG tag;
+#endif
   if (!parse_asn1_tag(&header, &tag)) {
     return 0;
   }
@@ -318,14 +342,20 @@ static int cbs_get_any_asn1_element(CBS *cbs, CBS *out, CBS_ASN1_TAG *out_tag,
     *out_tag = tag;
   }
 
+#if 0 // hezhiwen
   uint8_t length_byte;
+#endif
   if (!CBS_get_u8(&header, &length_byte)) {
     return 0;
   }
 
+#if 1 // hezhiwen
+  header_len = CBS_len(cbs) - CBS_len(&header);
+#else
   size_t header_len = CBS_len(cbs) - CBS_len(&header);
 
   size_t len;
+#endif
   // The format for the length encoding is specified in ITU-T X.690 section
   // 8.1.3.
   if ((length_byte & 0x80) == 0) {
@@ -456,26 +486,45 @@ int CBS_get_asn1_element(CBS *cbs, CBS *out, CBS_ASN1_TAG tag_value) {
 }
 
 int CBS_peek_asn1_tag(const CBS *cbs, CBS_ASN1_TAG tag_value) {
+#if 1 // hezhiwen
+  CBS copy;
+  CBS_ASN1_TAG actual_tag;
+#endif
   if (CBS_len(cbs) < 1) {
     return 0;
   }
 
+#if 1 // hezhiwen
+  copy = *cbs;
+#else
   CBS copy = *cbs;
   CBS_ASN1_TAG actual_tag;
+#endif
   return parse_asn1_tag(&copy, &actual_tag) && tag_value == actual_tag;
 }
 
 int CBS_get_asn1_uint64(CBS *cbs, uint64_t *out) {
   CBS bytes;
+#if 1 // hezhiwen
+  const uint8_t *data;
+  size_t len;
+  size_t i;
+#endif
   if (!CBS_get_asn1(cbs, &bytes, CBS_ASN1_INTEGER) ||
       !CBS_is_unsigned_asn1_integer(&bytes)) {
     return 0;
   }
 
   *out = 0;
+#if 1 // hezhiwen
+  data = CBS_data(&bytes);
+  len = CBS_len(&bytes);
+  for (i = 0; i < len; i++) {
+#else
   const uint8_t *data = CBS_data(&bytes);
   size_t len = CBS_len(&bytes);
   for (size_t i = 0; i < len; i++) {
+#endif
     if ((*out >> 56) != 0) {
       // Too large to represent as a uint64_t.
       return 0;
@@ -490,18 +539,35 @@ int CBS_get_asn1_uint64(CBS *cbs, uint64_t *out) {
 int CBS_get_asn1_int64(CBS *cbs, int64_t *out) {
   int is_negative;
   CBS bytes;
+#if 1 // hezhiwen
+  const uint8_t *data;
+  size_t len;
+  uint8_t sign_extend[sizeof(int64_t)];
+  size_t i;
+#endif
   if (!CBS_get_asn1(cbs, &bytes, CBS_ASN1_INTEGER) ||
       !CBS_is_valid_asn1_integer(&bytes, &is_negative)) {
     return 0;
   }
+#if 1 // hezhiwen
+  data = CBS_data(&bytes);
+  len = CBS_len(&bytes);
+#else
   const uint8_t *data = CBS_data(&bytes);
   const size_t len = CBS_len(&bytes);
+#endif
   if (len > sizeof(int64_t)) {
     return 0;
   }
+#if 0 // hezhiwen
   uint8_t sign_extend[sizeof(int64_t)];
+#endif
   memset(sign_extend, is_negative ? 0xff : 0, sizeof(sign_extend));
+#if 1 // hezhiwen
+  for (i = 0; i < len; i++) {
+#else
   for (size_t i = 0; i < len; i++) {
+#endif
     sign_extend[i] = data[len - i - 1];
   }
   memcpy(out, sign_extend, sizeof(sign_extend));
@@ -510,12 +576,19 @@ int CBS_get_asn1_int64(CBS *cbs, int64_t *out) {
 
 int CBS_get_asn1_bool(CBS *cbs, int *out) {
   CBS bytes;
+#if 1 // hezhiwen
+  uint8_t value;
+#endif
   if (!CBS_get_asn1(cbs, &bytes, CBS_ASN1_BOOLEAN) ||
       CBS_len(&bytes) != 1) {
     return 0;
   }
 
+#if 1 // hezhiwen
+  value = *CBS_data(&bytes);
+#else
   const uint8_t value = *CBS_data(&bytes);
+#endif
   if (value != 0 && value != 0xff) {
     return 0;
   }
@@ -614,6 +687,9 @@ int CBS_get_optional_asn1_bool(CBS *cbs, int *out, CBS_ASN1_TAG tag,
 int CBS_is_valid_asn1_bitstring(const CBS *cbs) {
   CBS in = *cbs;
   uint8_t num_unused_bits;
+#if 1 // hezhiwen
+  uint8_t last;
+#endif
   if (!CBS_get_u8(&in, &num_unused_bits) ||
       num_unused_bits > 7) {
     return 0;
@@ -624,7 +700,9 @@ int CBS_is_valid_asn1_bitstring(const CBS *cbs) {
   }
 
   // All num_unused_bits bits must exist and be zeros.
+#if 0 // hezhiwen
   uint8_t last;
+#endif
   if (!CBS_get_last_u8(&in, &last) ||
       (last & ((1 << num_unused_bits) - 1)) != 0) {
     return 0;
@@ -634,12 +712,21 @@ int CBS_is_valid_asn1_bitstring(const CBS *cbs) {
 }
 
 int CBS_asn1_bitstring_has_bit(const CBS *cbs, unsigned bit) {
+#if 1 // hezhiwen
+  unsigned byte_num;
+  unsigned bit_num;
+#endif
   if (!CBS_is_valid_asn1_bitstring(cbs)) {
     return 0;
   }
 
+#if 1 // hezhiwen
+  byte_num = (bit >> 3) + 1;
+  bit_num = 7 - (bit & 7);
+#else
   const unsigned byte_num = (bit >> 3) + 1;
   const unsigned bit_num = 7 - (bit & 7);
+#endif
 
   // Unused bits are zero, and this function does not distinguish between
   // missing and unset bits. Thus it is sufficient to do a byte-level length
@@ -680,13 +767,23 @@ static int add_decimal(CBB *out, uint64_t v) {
 
 char *CBS_asn1_oid_to_text(const CBS *cbs) {
   CBB cbb;
+#if 1 // hezhiwen
+  CBS copy;
+  uint64_t v;
+  uint8_t *txt;
+  size_t txt_len;
+#endif
   if (!CBB_init(&cbb, 32)) {
     goto err;
   }
 
+#if 1 // hezhiwen
+  copy = *cbs;
+#else
   CBS copy = *cbs;
   // The first component is 40 * value1 + value2, where value1 is 0, 1, or 2.
   uint64_t v;
+#endif
   if (!parse_base128_integer(&copy, &v)) {
     goto err;
   }
@@ -710,8 +807,10 @@ char *CBS_asn1_oid_to_text(const CBS *cbs) {
     }
   }
 
+#if 0 // hezhiwen
   uint8_t *txt;
   size_t txt_len;
+#endif
   if (!CBB_add_u8(&cbb, '\0') ||
       !CBB_finish(&cbb, &txt, &txt_len)) {
     goto err;
@@ -777,6 +876,10 @@ static int CBS_parse_rfc5280_time_internal(const CBS *cbs, int is_gentime,
   int year, month, day, hour, min, sec, tmp;
   CBS copy = *cbs;
   uint8_t tz;
+#if 1 // hezhiwen
+  int offset_sign = 0;
+  int offset_seconds = 0;
+#endif
 
   if (is_gentime) {
     if (!cbs_get_two_digits(&copy, &tmp)) {
@@ -812,7 +915,9 @@ static int CBS_parse_rfc5280_time_internal(const CBS *cbs, int is_gentime,
     return 0;
   }
 
+#if 0 // hezhiwen
   int offset_sign = 0;
+#endif
   switch (tz) {
     case 'Z':
       break;  // We correctly have 'Z' on the end as per spec.
@@ -838,12 +943,19 @@ static int CBS_parse_rfc5280_time_internal(const CBS *cbs, int is_gentime,
   // TODO(bbe): This has been expunged from public web-pki as the ecosystem has
   // managed to encourage CA compliance with standards. We should find a way to
   // get rid of this or make it off by default.
+#if 0 // hezhiwen
   int offset_seconds = 0;
+#endif
   if (offset_sign != 0) {
+  #if 1 // hezhiwen
+    int offset_hours, offset_minutes;
+  #endif
     if (!allow_timezone_offset) {
       return 0;
     }
+  #if 0 // hezhiwen
     int offset_hours, offset_minutes;
+  #endif
     if (!cbs_get_two_digits(&copy, &offset_hours) ||
         offset_hours > 23 ||  // Reject invalid hours.
         !cbs_get_two_digits(&copy, &offset_minutes) ||

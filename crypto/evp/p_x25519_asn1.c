@@ -29,12 +29,19 @@ static void x25519_free(EVP_PKEY *pkey) {
 }
 
 static int x25519_set_priv_raw(EVP_PKEY *pkey, const uint8_t *in, size_t len) {
+#if 1 // hezhiwen
+  X25519_KEY *key;
+#endif
   if (len != 32) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_DECODE_ERROR);
     return 0;
   }
 
+#if 1 // hezhiwen
+  key = OPENSSL_malloc(sizeof(X25519_KEY));
+#else
   X25519_KEY *key = OPENSSL_malloc(sizeof(X25519_KEY));
+#endif
   if (key == NULL) {
     OPENSSL_PUT_ERROR(EVP, ERR_R_MALLOC_FAILURE);
     return 0;
@@ -50,12 +57,19 @@ static int x25519_set_priv_raw(EVP_PKEY *pkey, const uint8_t *in, size_t len) {
 }
 
 static int x25519_set_pub_raw(EVP_PKEY *pkey, const uint8_t *in, size_t len) {
+#if 1 // hezhiwen
+  X25519_KEY *key;
+#endif
   if (len != 32) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_DECODE_ERROR);
     return 0;
   }
 
+#if 1 // hezhiwen
+  key = OPENSSL_malloc(sizeof(X25519_KEY));
+#else
   X25519_KEY *key = OPENSSL_malloc(sizeof(X25519_KEY));
+#endif
   if (key == NULL) {
     OPENSSL_PUT_ERROR(EVP, ERR_R_MALLOC_FAILURE);
     return 0;
@@ -183,13 +197,18 @@ static int x25519_priv_decode(EVP_PKEY *out, CBS *params, CBS *key) {
 
 static int x25519_priv_encode(CBB *out, const EVP_PKEY *pkey) {
   X25519_KEY *key = pkey->pkey.ptr;
+#if 1 // hezhiwen
+  CBB pkcs8, algorithm, oid, private_key, inner;
+#endif
   if (!key->has_private) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_NOT_A_PRIVATE_KEY);
     return 0;
   }
 
   // See RFC 8410, section 7.
+#if 0 // hezhiwen
   CBB pkcs8, algorithm, oid, private_key, inner;
+#endif
   if (!CBB_add_asn1(out, &pkcs8, CBS_ASN1_SEQUENCE) ||
       !CBB_add_asn1_uint64(&pkcs8, 0 /* version */) ||
       !CBB_add_asn1(&pkcs8, &algorithm, CBS_ASN1_SEQUENCE) ||

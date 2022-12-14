@@ -49,6 +49,16 @@ static BN_ULONG maybe_add_words(BN_ULONG *a, BN_ULONG mask, const BN_ULONG *b,
 static int bn_gcd_consttime(BIGNUM *r, unsigned *out_shift, const BIGNUM *x,
                             const BIGNUM *y, BN_CTX *ctx) {
   size_t width = x->width > y->width ? x->width : y->width;
+#if 1 // hezhiwen
+  int ret = 0;
+  BIGNUM *u;
+  BIGNUM *v;
+  BIGNUM *tmp;
+  unsigned x_bits, y_bits;
+  unsigned num_iters;
+  unsigned shift = 0;
+  size_t i;
+#endif
   if (width == 0) {
     *out_shift = 0;
     BN_zero(r);
@@ -56,11 +66,18 @@ static int bn_gcd_consttime(BIGNUM *r, unsigned *out_shift, const BIGNUM *x,
   }
 
   // This is a constant-time implementation of Stein's algorithm (binary GCD).
+#if 1 // hezhiwen
+  BN_CTX_start(ctx);
+  u = BN_CTX_get(ctx);
+  v = BN_CTX_get(ctx);
+  tmp = BN_CTX_get(ctx);
+#else
   int ret = 0;
   BN_CTX_start(ctx);
   BIGNUM *u = BN_CTX_get(ctx);
   BIGNUM *v = BN_CTX_get(ctx);
   BIGNUM *tmp = BN_CTX_get(ctx);
+#endif
   if (u == NULL || v == NULL || tmp == NULL ||
       !BN_copy(u, x) ||
       !BN_copy(v, y) ||
@@ -72,27 +89,46 @@ static int bn_gcd_consttime(BIGNUM *r, unsigned *out_shift, const BIGNUM *x,
 
   // Each loop iteration halves at least one of |u| and |v|. Thus we need at
   // most the combined bit width of inputs for at least one value to be zero.
+#if 1 // hezhiwen
+  x_bits = x->width * BN_BITS2;
+  y_bits = y->width * BN_BITS2;
+  num_iters = x_bits + y_bits;
+#else
   unsigned x_bits = x->width * BN_BITS2, y_bits = y->width * BN_BITS2;
   unsigned num_iters = x_bits + y_bits;
+#endif
   if (num_iters < x_bits) {
     OPENSSL_PUT_ERROR(BN, BN_R_BIGNUM_TOO_LONG);
     goto err;
   }
 
+#if 1 // hezhiwen
+  for (i = 0; i < num_iters; i++) {
+#else
   unsigned shift = 0;
   for (unsigned i = 0; i < num_iters; i++) {
+#endif
     BN_ULONG both_odd = word_is_odd_mask(u->d[0]) & word_is_odd_mask(v->d[0]);
 
     // If both |u| and |v| are odd, subtract the smaller from the larger.
     BN_ULONG u_less_than_v =
         (BN_ULONG)0 - bn_sub_words(tmp->d, u->d, v->d, width);
+  #if 1 // hezhiwen
+    BN_ULONG u_is_odd;
+    BN_ULONG v_is_odd;
+  #endif
     bn_select_words(u->d, both_odd & ~u_less_than_v, tmp->d, u->d, width);
     bn_sub_words(tmp->d, v->d, u->d, width);
     bn_select_words(v->d, both_odd & u_less_than_v, tmp->d, v->d, width);
 
     // At least one of |u| and |v| is now even.
+  #if 1 // hezhiwen
+    u_is_odd = word_is_odd_mask(u->d[0]);
+    v_is_odd = word_is_odd_mask(v->d[0]);
+  #else
     BN_ULONG u_is_odd = word_is_odd_mask(u->d[0]);
     BN_ULONG v_is_odd = word_is_odd_mask(v->d[0]);
+  #endif
     assert(!(u_is_odd & v_is_odd));
 
     // If both are even, the final GCD gains a factor of two.
@@ -107,7 +143,11 @@ static int bn_gcd_consttime(BIGNUM *r, unsigned *out_shift, const BIGNUM *x,
   // zero, unless |y| was already zero on input. Fix this by combining the
   // values.
   assert(BN_is_zero(u) || BN_is_zero(v));
+#if 1 // hezhiwen
+  for (i = 0; i < width; i++) {
+#else
   for (size_t i = 0; i < width; i++) {
+#endif
     v->d[i] |= u->d[i];
   }
 
@@ -127,10 +167,19 @@ int BN_gcd(BIGNUM *r, const BIGNUM *x, const BIGNUM *y, BN_CTX *ctx) {
 
 int bn_is_relatively_prime(int *out_relatively_prime, const BIGNUM *x,
                            const BIGNUM *y, BN_CTX *ctx) {
+#if 1 // hezhiwen
+  int ret = 0;
+  unsigned shift;
+  BIGNUM *gcd;
+
+  BN_CTX_start(ctx);
+  gcd = BN_CTX_get(ctx);
+#else
   int ret = 0;
   BN_CTX_start(ctx);
   unsigned shift;
   BIGNUM *gcd = BN_CTX_get(ctx);
+#endif
   if (gcd == NULL ||
       !bn_gcd_consttime(gcd, &shift, x, y, ctx)) {
     goto err;
@@ -141,7 +190,12 @@ int bn_is_relatively_prime(int *out_relatively_prime, const BIGNUM *x,
     *out_relatively_prime = 0;
   } else {
     BN_ULONG mask = shift | (gcd->d[0] ^ 1);
+  #if 1 // hezhiwen
+    int i;
+    for (i = 1; i < gcd->width; i++) {
+  #else
     for (int i = 1; i < gcd->width; i++) {
+  #endif
       mask |= gcd->d[i];
     }
     *out_relatively_prime = mask == 0;
@@ -154,6 +208,20 @@ err:
 }
 
 int bn_lcm_consttime(BIGNUM *r, const BIGNUM *a, const BIGNUM *b, BN_CTX *ctx) {
+#if 1 // hezhiwen
+  unsigned shift;
+  BIGNUM *gcd;
+  int ret;
+
+  BN_CTX_start(ctx);
+  gcd = BN_CTX_get(ctx);
+  ret = gcd != NULL &&  //
+        bn_mul_consttime(r, a, b, ctx) &&
+        bn_gcd_consttime(gcd, &shift, a, b, ctx) &&
+        // |gcd| has a secret bit width.
+        bn_div_consttime(r, NULL, r, gcd, /*divisor_min_bits=*/0, ctx) &&
+        bn_rshift_secret_shift(r, r, shift, ctx);
+#else
   BN_CTX_start(ctx);
   unsigned shift;
   BIGNUM *gcd = BN_CTX_get(ctx);
@@ -163,12 +231,34 @@ int bn_lcm_consttime(BIGNUM *r, const BIGNUM *a, const BIGNUM *b, BN_CTX *ctx) {
             // |gcd| has a secret bit width.
             bn_div_consttime(r, NULL, r, gcd, /*divisor_min_bits=*/0, ctx) &&
             bn_rshift_secret_shift(r, r, shift, ctx);
+#endif
   BN_CTX_end(ctx);
   return ret;
 }
 
 int bn_mod_inverse_consttime(BIGNUM *r, int *out_no_inverse, const BIGNUM *a,
                              const BIGNUM *n, BN_CTX *ctx) {
+#if 1 // hezhiwen
+  size_t n_width, a_width;
+  int ret = 0;
+  BIGNUM *u;
+  BIGNUM *v;
+  BIGNUM *A;
+  BIGNUM *B;
+  BIGNUM *C;
+  BIGNUM *D;
+  BIGNUM *tmp;
+  BIGNUM *tmp2;
+  size_t a_bits, n_bits;
+  size_t num_iters;
+  size_t i;
+  BN_ULONG A_or_B_is_odd;
+  BN_ULONG A_carry;
+  BN_ULONG B_carry;
+  BN_ULONG C_or_D_is_odd;
+  BN_ULONG C_carry;
+  BN_ULONG D_carry;
+#endif
   *out_no_inverse = 0;
   if (BN_is_negative(a) || BN_ucmp(a, n) >= 0) {
     OPENSSL_PUT_ERROR(BN, BN_R_INPUT_NOT_REDUCED);
@@ -202,11 +292,27 @@ int bn_mod_inverse_consttime(BIGNUM *r, int *out_no_inverse, const BIGNUM *a,
 
   // This function exists to compute the RSA private exponent, where |a| is one
   // word. We'll thus use |a_width| when available.
+#if 1 // hezhiwen
+  n_width = n->width;
+  a_width = a->width;
+#else
   size_t n_width = n->width, a_width = a->width;
+#endif
   if (a_width > n_width) {
     a_width = n_width;
   }
 
+#if 1 // hezhiwen
+  BN_CTX_start(ctx);
+  u = BN_CTX_get(ctx);
+  v = BN_CTX_get(ctx);
+  A = BN_CTX_get(ctx);
+  B = BN_CTX_get(ctx);
+  C = BN_CTX_get(ctx);
+  D = BN_CTX_get(ctx);
+  tmp = BN_CTX_get(ctx);
+  tmp2 = BN_CTX_get(ctx);
+#else
   int ret = 0;
   BN_CTX_start(ctx);
   BIGNUM *u = BN_CTX_get(ctx);
@@ -217,6 +323,7 @@ int bn_mod_inverse_consttime(BIGNUM *r, int *out_no_inverse, const BIGNUM *a,
   BIGNUM *D = BN_CTX_get(ctx);
   BIGNUM *tmp = BN_CTX_get(ctx);
   BIGNUM *tmp2 = BN_CTX_get(ctx);
+#endif
   if (u == NULL || v == NULL || A == NULL || B == NULL || C == NULL ||
       D == NULL || tmp == NULL || tmp2 == NULL ||
       !BN_copy(u, a) ||
@@ -242,8 +349,14 @@ int bn_mod_inverse_consttime(BIGNUM *r, int *out_no_inverse, const BIGNUM *a,
   // most the combined bit width of inputs for at least one value to be zero.
   // |a_bits| and |n_bits| cannot overflow because |bn_wexpand| ensures bit
   // counts fit in even |int|.
+#if 1 // hezhiwen
+  a_bits = a_width * BN_BITS2;
+  n_bits = n_width * BN_BITS2;
+  num_iters = a_bits + n_bits;
+#else
   size_t a_bits = a_width * BN_BITS2, n_bits = n_width * BN_BITS2;
   size_t num_iters = a_bits + n_bits;
+#endif
   if (num_iters < a_bits) {
     OPENSSL_PUT_ERROR(BN, BN_R_BIGNUM_TOO_LONG);
     goto err;
@@ -262,18 +375,31 @@ int bn_mod_inverse_consttime(BIGNUM *r, int *out_no_inverse, const BIGNUM *a,
   //
   // After each loop iteration, u and v only get smaller, and at least one of
   // them shrinks by at least a factor of two.
+#if 1 // hezhiwen
+  for (i = 0; i < num_iters; i++) {
+#else
   for (size_t i = 0; i < num_iters; i++) {
+#endif
     BN_ULONG both_odd = word_is_odd_mask(u->d[0]) & word_is_odd_mask(v->d[0]);
 
     // If both |u| and |v| are odd, subtract the smaller from the larger.
     BN_ULONG v_less_than_u =
         (BN_ULONG)0 - bn_sub_words(tmp->d, v->d, u->d, n_width);
+  #if 1 // hezhiwen
+    BN_ULONG carry;
+    BN_ULONG u_is_even;
+    BN_ULONG v_is_even;
+  #endif
     bn_select_words(v->d, both_odd & ~v_less_than_u, tmp->d, v->d, n_width);
     bn_sub_words(tmp->d, u->d, v->d, n_width);
     bn_select_words(u->d, both_odd & v_less_than_u, tmp->d, u->d, n_width);
 
     // If we updated one of the values, update the corresponding coefficient.
+  #if 1 // hezhiwen
+    carry = bn_add_words(tmp->d, A->d, C->d, n_width);
+  #else
     BN_ULONG carry = bn_add_words(tmp->d, A->d, C->d, n_width);
+  #endif
     carry -= bn_sub_words(tmp2->d, tmp->d, n->d, n_width);
     bn_select_words(tmp->d, carry, tmp->d, tmp2->d, n_width);
     bn_select_words(A->d, both_odd & v_less_than_u, tmp->d, A->d, n_width);
@@ -287,28 +413,51 @@ int bn_mod_inverse_consttime(BIGNUM *r, int *out_no_inverse, const BIGNUM *a,
 
     // Our loop invariants hold at this point. Additionally, exactly one of |u|
     // and |v| is now even.
+  #if 1 // hezhiwen
+    u_is_even = ~word_is_odd_mask(u->d[0]);
+    v_is_even = ~word_is_odd_mask(v->d[0]);
+  #else
     BN_ULONG u_is_even = ~word_is_odd_mask(u->d[0]);
     BN_ULONG v_is_even = ~word_is_odd_mask(v->d[0]);
+  #endif
     assert(u_is_even != v_is_even);
 
     // Halve the even one and adjust the corresponding coefficient.
     maybe_rshift1_words(u->d, u_is_even, tmp->d, n_width);
+  #if 1 // hezhiwen
+    A_or_B_is_odd =
+        word_is_odd_mask(A->d[0]) | word_is_odd_mask(B->d[0]);
+    A_carry =
+        maybe_add_words(A->d, A_or_B_is_odd & u_is_even, n->d, tmp->d, n_width);
+    B_carry =
+        maybe_add_words(B->d, A_or_B_is_odd & u_is_even, a->d, tmp->d, a_width);
+  #else
     BN_ULONG A_or_B_is_odd =
         word_is_odd_mask(A->d[0]) | word_is_odd_mask(B->d[0]);
     BN_ULONG A_carry =
         maybe_add_words(A->d, A_or_B_is_odd & u_is_even, n->d, tmp->d, n_width);
     BN_ULONG B_carry =
         maybe_add_words(B->d, A_or_B_is_odd & u_is_even, a->d, tmp->d, a_width);
+  #endif
     maybe_rshift1_words_carry(A->d, A_carry, u_is_even, tmp->d, n_width);
     maybe_rshift1_words_carry(B->d, B_carry, u_is_even, tmp->d, a_width);
 
     maybe_rshift1_words(v->d, v_is_even, tmp->d, n_width);
+  #if 1 // hezhiwen
+    C_or_D_is_odd =
+        word_is_odd_mask(C->d[0]) | word_is_odd_mask(D->d[0]);
+    C_carry =
+        maybe_add_words(C->d, C_or_D_is_odd & v_is_even, n->d, tmp->d, n_width);
+    D_carry =
+        maybe_add_words(D->d, C_or_D_is_odd & v_is_even, a->d, tmp->d, a_width);
+  #else
     BN_ULONG C_or_D_is_odd =
         word_is_odd_mask(C->d[0]) | word_is_odd_mask(D->d[0]);
     BN_ULONG C_carry =
         maybe_add_words(C->d, C_or_D_is_odd & v_is_even, n->d, tmp->d, n_width);
     BN_ULONG D_carry =
         maybe_add_words(D->d, C_or_D_is_odd & v_is_even, a->d, tmp->d, a_width);
+  #endif
     maybe_rshift1_words_carry(C->d, C_carry, v_is_even, tmp->d, n_width);
     maybe_rshift1_words_carry(D->d, D_carry, v_is_even, tmp->d, a_width);
   }

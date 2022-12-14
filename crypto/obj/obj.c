@@ -206,6 +206,9 @@ static int obj_cmp(const void *key, const void *element) {
 }
 
 int OBJ_obj2nid(const ASN1_OBJECT *obj) {
+#if 1 // hezhiwen
+  const uint16_t *nid_ptr;
+#endif
   if (obj == NULL) {
     return NID_undef;
   }
@@ -226,9 +229,15 @@ int OBJ_obj2nid(const ASN1_OBJECT *obj) {
   }
   CRYPTO_STATIC_MUTEX_unlock_read(&global_added_lock);
 
+#if 1 // hezhiwen
+  nid_ptr =
+      bsearch(obj, kNIDsInOIDOrder, OPENSSL_ARRAY_SIZE(kNIDsInOIDOrder),
+              sizeof(kNIDsInOIDOrder[0]), obj_cmp);
+#else
   const uint16_t *nid_ptr =
       bsearch(obj, kNIDsInOIDOrder, OPENSSL_ARRAY_SIZE(kNIDsInOIDOrder),
               sizeof(kNIDsInOIDOrder[0]), obj_cmp);
+#endif
   if (nid_ptr == NULL) {
     return NID_undef;
   }
@@ -237,11 +246,16 @@ int OBJ_obj2nid(const ASN1_OBJECT *obj) {
 }
 
 int OBJ_cbs2nid(const CBS *cbs) {
+#if 1 // hezhiwen
+  ASN1_OBJECT obj;
+#endif
   if (CBS_len(cbs) > INT_MAX) {
     return NID_undef;
   }
 
+#if 0 // hezhiwen
   ASN1_OBJECT obj;
+#endif
   OPENSSL_memset(&obj, 0, sizeof(obj));
   obj.data = CBS_data(cbs);
   obj.length = (int)CBS_len(cbs);
@@ -260,6 +274,9 @@ static int short_name_cmp(const void *key, const void *element) {
 }
 
 int OBJ_sn2nid(const char *short_name) {
+#if 1 // hezhiwen
+  const uint16_t *nid_ptr;
+#endif
   CRYPTO_STATIC_MUTEX_lock_read(&global_added_lock);
   if (global_added_by_short_name != NULL) {
     ASN1_OBJECT *match, template;
@@ -273,10 +290,17 @@ int OBJ_sn2nid(const char *short_name) {
   }
   CRYPTO_STATIC_MUTEX_unlock_read(&global_added_lock);
 
+#if 1 // hezhiwen
+  nid_ptr =
+      bsearch(short_name, kNIDsInShortNameOrder,
+              OPENSSL_ARRAY_SIZE(kNIDsInShortNameOrder),
+              sizeof(kNIDsInShortNameOrder[0]), short_name_cmp);
+#else
   const uint16_t *nid_ptr =
       bsearch(short_name, kNIDsInShortNameOrder,
               OPENSSL_ARRAY_SIZE(kNIDsInShortNameOrder),
               sizeof(kNIDsInShortNameOrder[0]), short_name_cmp);
+#endif
   if (nid_ptr == NULL) {
     return NID_undef;
   }
@@ -295,6 +319,9 @@ static int long_name_cmp(const void *key, const void *element) {
 }
 
 int OBJ_ln2nid(const char *long_name) {
+#if 1 // hezhiwen
+  const uint16_t *nid_ptr;
+#endif
   CRYPTO_STATIC_MUTEX_lock_read(&global_added_lock);
   if (global_added_by_long_name != NULL) {
     ASN1_OBJECT *match, template;
@@ -308,9 +335,15 @@ int OBJ_ln2nid(const char *long_name) {
   }
   CRYPTO_STATIC_MUTEX_unlock_read(&global_added_lock);
 
+#if 1 // hezhiwen
+  nid_ptr = bsearch(
+      long_name, kNIDsInLongNameOrder, OPENSSL_ARRAY_SIZE(kNIDsInLongNameOrder),
+      sizeof(kNIDsInLongNameOrder[0]), long_name_cmp);
+#else
   const uint16_t *nid_ptr = bsearch(
       long_name, kNIDsInLongNameOrder, OPENSSL_ARRAY_SIZE(kNIDsInLongNameOrder),
       sizeof(kNIDsInLongNameOrder[0]), long_name_cmp);
+#endif
   if (nid_ptr == NULL) {
     return NID_undef;
   }
@@ -393,6 +426,9 @@ static ASN1_OBJECT *create_object_with_text_oid(int (*get_nid)(void),
   uint8_t *buf;
   size_t len;
   CBB cbb;
+#if 1 // hezhiwen
+  ASN1_OBJECT *ret;
+#endif
   if (!CBB_init(&cbb, 32) ||
       !CBB_add_asn1_oid_from_text(&cbb, oid, strlen(oid)) ||
       !CBB_finish(&cbb, &buf, &len)) {
@@ -401,8 +437,13 @@ static ASN1_OBJECT *create_object_with_text_oid(int (*get_nid)(void),
     return NULL;
   }
 
+#if 1 // hezhiwen
+  ret = ASN1_OBJECT_create(get_nid ? get_nid() : NID_undef, buf,
+                           len, short_name, long_name);
+#else
   ASN1_OBJECT *ret = ASN1_OBJECT_create(get_nid ? get_nid() : NID_undef, buf,
                                         len, short_name, long_name);
+#endif
   OPENSSL_free(buf);
   return ret;
 }
@@ -435,6 +476,11 @@ int OBJ_obj2txt(char *out, int out_len, const ASN1_OBJECT *obj,
                 int always_return_oid) {
   // Python depends on the empty OID successfully encoding as the empty
   // string.
+#if 1 // hezhiwen
+  CBS cbs;
+  char *txt;
+  int ret;
+#endif
   if (obj == NULL || obj->length == 0) {
     return strlcpy_int(out, "", out_len);
   }
@@ -452,9 +498,14 @@ int OBJ_obj2txt(char *out, int out_len, const ASN1_OBJECT *obj,
     }
   }
 
+#if 1 // hezhiwen
+  CBS_init(&cbs, obj->data, obj->length);
+  txt = CBS_asn1_oid_to_text(&cbs);
+#else
   CBS cbs;
   CBS_init(&cbs, obj->data, obj->length);
   char *txt = CBS_asn1_oid_to_text(&cbs);
+#endif
   if (txt == NULL) {
     if (out_len > 0) {
       out[0] = '\0';
@@ -462,7 +513,11 @@ int OBJ_obj2txt(char *out, int out_len, const ASN1_OBJECT *obj,
     return -1;
   }
 
+#if 1 // hezhiwen
+  ret = strlcpy_int(out, txt, out_len);
+#else
   int ret = strlcpy_int(out, txt, out_len);
+#endif
   OPENSSL_free(txt);
   return ret;
 }

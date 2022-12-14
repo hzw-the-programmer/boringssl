@@ -68,7 +68,12 @@ static fiat_p256_limb_t fiat_p256_nz(
 
 static void fiat_p256_copy(fiat_p256_limb_t out[FIAT_P256_NLIMBS],
                            const fiat_p256_limb_t in1[FIAT_P256_NLIMBS]) {
+#if 1 // hezhiwen
+  size_t i;
+  for (i = 0; i < FIAT_P256_NLIMBS; i++) {
+#else
   for (size_t i = 0; i < FIAT_P256_NLIMBS; i++) {
+#endif
     out[i] = in1[i];
   }
 }
@@ -109,6 +114,10 @@ static void fiat_p256_inv_square(fiat_p256_felem out,
   // This implements the addition chain described in
   // https://briansmith.org/ecc-inversion-addition-chains-01#p256_field_inversion
   fiat_p256_felem x2, x3, x6, x12, x15, x30, x32;
+#if 1 // hezhiwen
+  int i;
+  fiat_p256_felem ret;
+#endif
   fiat_p256_square(x2, in);   // 2^2 - 2^1
   fiat_p256_mul(x2, x2, in);  // 2^2 - 2^0
 
@@ -116,25 +125,41 @@ static void fiat_p256_inv_square(fiat_p256_felem out,
   fiat_p256_mul(x3, x3, in);  // 2^3 - 2^0
 
   fiat_p256_square(x6, x3);
+#if 1 // hezhiwen
+  for (i = 1; i < 3; i++) {
+#else
   for (int i = 1; i < 3; i++) {
+#endif
     fiat_p256_square(x6, x6);
   }                           // 2^6 - 2^3
   fiat_p256_mul(x6, x6, x3);  // 2^6 - 2^0
 
   fiat_p256_square(x12, x6);
+#if 1 // hezhiwen
+  for (i = 1; i < 6; i++) {
+#else
   for (int i = 1; i < 6; i++) {
+#endif
     fiat_p256_square(x12, x12);
   }                             // 2^12 - 2^6
   fiat_p256_mul(x12, x12, x6);  // 2^12 - 2^0
 
   fiat_p256_square(x15, x12);
+#if 1 // hezhiwen
+  for (i = 1; i < 3; i++) {
+#else
   for (int i = 1; i < 3; i++) {
+#endif
     fiat_p256_square(x15, x15);
   }                             // 2^15 - 2^3
   fiat_p256_mul(x15, x15, x3);  // 2^15 - 2^0
 
   fiat_p256_square(x30, x15);
+#if 1 // hezhiwen
+  for (i = 1; i < 15; i++) {
+#else
   for (int i = 1; i < 15; i++) {
+#endif
     fiat_p256_square(x30, x30);
   }                              // 2^30 - 2^15
   fiat_p256_mul(x30, x30, x15);  // 2^30 - 2^0
@@ -143,24 +168,42 @@ static void fiat_p256_inv_square(fiat_p256_felem out,
   fiat_p256_square(x32, x32);   // 2^32 - 2^2
   fiat_p256_mul(x32, x32, x2);  // 2^32 - 2^0
 
+#if 0 // hezhiwen
   fiat_p256_felem ret;
+#endif
   fiat_p256_square(ret, x32);
+#if 1 // hezhiwen
+  for (i = 1; i < 31 + 1; i++) {
+#else
   for (int i = 1; i < 31 + 1; i++) {
+#endif
     fiat_p256_square(ret, ret);
   }                             // 2^64 - 2^32
   fiat_p256_mul(ret, ret, in);  // 2^64 - 2^32 + 2^0
 
+#if 1 // hezhiwen
+  for (i = 0; i < 96 + 32; i++) {
+#else
   for (int i = 0; i < 96 + 32; i++) {
+#endif
     fiat_p256_square(ret, ret);
   }                              // 2^192 - 2^160 + 2^128
   fiat_p256_mul(ret, ret, x32);  // 2^192 - 2^160 + 2^128 + 2^32 - 2^0
 
+#if 1 // hezhiwen
+  for (i = 0; i < 32; i++) {
+#else
   for (int i = 0; i < 32; i++) {
+#endif
     fiat_p256_square(ret, ret);
   }                              // 2^224 - 2^192 + 2^160 + 2^64 - 2^32
   fiat_p256_mul(ret, ret, x32);  // 2^224 - 2^192 + 2^160 + 2^64 - 2^0
 
+#if 1 // hezhiwen
+  for (i = 0; i < 30; i++) {
+#else
   for (int i = 0; i < 30; i++) {
+#endif
     fiat_p256_square(ret, ret);
   }                              // 2^254 - 2^222 + 2^190 + 2^94 - 2^30
   fiat_p256_mul(ret, ret, x30);  // 2^254 - 2^222 + 2^190 + 2^94 - 2^0
@@ -262,12 +305,29 @@ static void fiat_p256_point_add(fiat_p256_felem x3, fiat_p256_felem y3,
   fiat_p256_felem x_out, y_out, z_out;
   fiat_p256_limb_t z1nz = fiat_p256_nz(z1);
   fiat_p256_limb_t z2nz = fiat_p256_nz(z2);
+#if 1 // hezhiwen
+  fiat_p256_felem u1, s1, two_z1z2;
+  fiat_p256_felem u2;
+  fiat_p256_felem h;
+  fiat_p256_limb_t xneq;
+  fiat_p256_felem z1z1z1;
+  fiat_p256_felem s2;
+  fiat_p256_felem r;
+  fiat_p256_limb_t yneq;
+  fiat_p256_limb_t is_nontrivial_double;
+  fiat_p256_felem i;
+  fiat_p256_felem j;
+  fiat_p256_felem v;
+  fiat_p256_felem s1j;
+#endif
 
   // z1z1 = z1z1 = z1**2
   fiat_p256_felem z1z1;
   fiat_p256_square(z1z1, z1);
 
+#if 0 // hezhiwen
   fiat_p256_felem u1, s1, two_z1z2;
+#endif
   if (!mixed) {
     // z2z2 = z2**2
     fiat_p256_felem z2z2;
@@ -297,52 +357,79 @@ static void fiat_p256_point_add(fiat_p256_felem x3, fiat_p256_felem y3,
   }
 
   // u2 = x2*z1z1
+#if 0 // hezhiwen
   fiat_p256_felem u2;
+#endif
   fiat_p256_mul(u2, x2, z1z1);
 
   // h = u2 - u1
+#if 0 // hezhiwen
   fiat_p256_felem h;
+#endif
   fiat_p256_sub(h, u2, u1);
 
+#if 1 // hezhiwen
+  xneq = fiat_p256_nz(h);
+#else
   fiat_p256_limb_t xneq = fiat_p256_nz(h);
+#endif
 
   // z_out = two_z1z2 * h
   fiat_p256_mul(z_out, h, two_z1z2);
 
   // z1z1z1 = z1 * z1z1
+#if 0 // hezhiwen
   fiat_p256_felem z1z1z1;
+#endif
   fiat_p256_mul(z1z1z1, z1, z1z1);
 
   // s2 = y2 * z1**3
+#if 0 // hezhiwen
   fiat_p256_felem s2;
+#endif
   fiat_p256_mul(s2, y2, z1z1z1);
 
   // r = (s2 - s1)*2
+#if 0 // hezhiwen
   fiat_p256_felem r;
+#endif
   fiat_p256_sub(r, s2, s1);
   fiat_p256_add(r, r, r);
 
+#if 1 // hezhiwen
+  yneq = fiat_p256_nz(r);
+  is_nontrivial_double = constant_time_is_zero_w(xneq | yneq) &
+                         ~constant_time_is_zero_w(z1nz) &
+                         ~constant_time_is_zero_w(z2nz);
+#else
   fiat_p256_limb_t yneq = fiat_p256_nz(r);
 
   fiat_p256_limb_t is_nontrivial_double = constant_time_is_zero_w(xneq | yneq) &
                                           ~constant_time_is_zero_w(z1nz) &
                                           ~constant_time_is_zero_w(z2nz);
+#endif
   if (is_nontrivial_double) {
     fiat_p256_point_double(x3, y3, z3, x1, y1, z1);
     return;
   }
 
   // I = (2h)**2
+#if 0 // hezhiwen
   fiat_p256_felem i;
+#endif
   fiat_p256_add(i, h, h);
   fiat_p256_square(i, i);
 
   // J = h * I
+#if 0 // hezhiwen
   fiat_p256_felem j;
+#endif
   fiat_p256_mul(j, h, i);
 
   // V = U1 * I
+#if 0 // hezhiwen
   fiat_p256_felem v;
+#endif
   fiat_p256_mul(v, u1, i);
 
   // x_out = r**2 - J - 2V
@@ -354,7 +441,9 @@ static void fiat_p256_point_add(fiat_p256_felem x3, fiat_p256_felem y3,
   // y_out = r(V-x_out) - 2 * s1 * J
   fiat_p256_sub(y_out, v, x_out);
   fiat_p256_mul(y_out, y_out, r);
+#if 0 // hezhiwen
   fiat_p256_felem s1j;
+#endif
   fiat_p256_mul(s1j, s1, j);
   fiat_p256_sub(y_out, y_out, s1j);
   fiat_p256_sub(y_out, y_out, s1j);
@@ -375,8 +464,15 @@ static void fiat_p256_point_add(fiat_p256_felem x3, fiat_p256_felem y3,
 static void fiat_p256_select_point_affine(
     const fiat_p256_limb_t idx, size_t size,
     const fiat_p256_felem pre_comp[/*size*/][2], fiat_p256_felem out[3]) {
+#if 1 // hezhiwen
+  size_t i;
+#endif
   OPENSSL_memset(out, 0, sizeof(fiat_p256_felem) * 3);
+#if 1 // hezhiwen
+  for (i = 0; i < size; i++) {
+#else
   for (size_t i = 0; i < size; i++) {
+#endif
     fiat_p256_limb_t mismatch = i ^ (idx - 1);
     fiat_p256_cmovznz(out[0], mismatch, pre_comp[i][0], out[0]);
     fiat_p256_cmovznz(out[1], mismatch, pre_comp[i][1], out[1]);
@@ -389,8 +485,15 @@ static void fiat_p256_select_point_affine(
 static void fiat_p256_select_point(const fiat_p256_limb_t idx, size_t size,
                                    const fiat_p256_felem pre_comp[/*size*/][3],
                                    fiat_p256_felem out[3]) {
+#if 1 // hezhiwen
+  size_t i;
+#endif
   OPENSSL_memset(out, 0, sizeof(fiat_p256_felem) * 3);
+#if 1 // hezhiwen
+  for (i = 0; i < size; i++) {
+#else
   for (size_t i = 0; i < size; i++) {
+#endif
     fiat_p256_limb_t mismatch = i ^ idx;
     fiat_p256_cmovznz(out[0], mismatch, pre_comp[i][0], out[0]);
     fiat_p256_cmovznz(out[1], mismatch, pre_comp[i][1], out[1]);
@@ -419,12 +522,17 @@ static crypto_word_t fiat_p256_get_bit(const EC_SCALAR *in, int i) {
 static int ec_GFp_nistp256_point_get_affine_coordinates(
     const EC_GROUP *group, const EC_RAW_POINT *point, EC_FELEM *x_out,
     EC_FELEM *y_out) {
+#if 1 // hezhiwen
+  fiat_p256_felem z1, z2;
+#endif
   if (ec_GFp_simple_is_at_infinity(group, point)) {
     OPENSSL_PUT_ERROR(EC, EC_R_POINT_AT_INFINITY);
     return 0;
   }
 
+#if 0 // hezhiwen
   fiat_p256_felem z1, z2;
+#endif
   fiat_p256_from_generic(z1, &point->Z);
   fiat_p256_inv_square(z2, z1);
 
@@ -479,12 +587,22 @@ static void ec_GFp_nistp256_point_mul(const EC_GROUP *group, EC_RAW_POINT *r,
                                       const EC_RAW_POINT *p,
                                       const EC_SCALAR *scalar) {
   fiat_p256_felem p_pre_comp[17][3];
+#if 1 // hezhiwen
+  size_t j;
+  fiat_p256_felem nq[3] = {{0}, {0}, {0}}, ftmp, tmp[3];
+  int skip = 1;
+  size_t i;
+#endif
   OPENSSL_memset(&p_pre_comp, 0, sizeof(p_pre_comp));
   // Precompute multiples.
   fiat_p256_from_generic(p_pre_comp[1][0], &p->X);
   fiat_p256_from_generic(p_pre_comp[1][1], &p->Y);
   fiat_p256_from_generic(p_pre_comp[1][2], &p->Z);
+#if 1 // hezhiwen
+  for (j = 2; j <= 16; ++j) {
+#else
   for (size_t j = 2; j <= 16; ++j) {
+#endif
     if (j & 1) {
       fiat_p256_point_add(p_pre_comp[j][0], p_pre_comp[j][1], p_pre_comp[j][2],
                           p_pre_comp[1][0], p_pre_comp[1][1], p_pre_comp[1][2],
@@ -497,12 +615,16 @@ static void ec_GFp_nistp256_point_mul(const EC_GROUP *group, EC_RAW_POINT *r,
     }
   }
 
+#if 1 // hezhiwen
+  for (i = 255; i < 256; i--) {
+#else
   // Set nq to the point at infinity.
   fiat_p256_felem nq[3] = {{0}, {0}, {0}}, ftmp, tmp[3];
 
   // Loop over |scalar| msb-to-lsb, incorporating |p_pre_comp| every 5th round.
   int skip = 1;  // Save two point operations in the first round.
   for (size_t i = 255; i < 256; i--) {
+#endif
     // double
     if (!skip) {
       fiat_p256_point_double(nq[0], nq[1], nq[2], nq[0], nq[1], nq[2]);
@@ -511,12 +633,17 @@ static void ec_GFp_nistp256_point_mul(const EC_GROUP *group, EC_RAW_POINT *r,
     // do other additions every 5 doublings
     if (i % 5 == 0) {
       crypto_word_t bits = fiat_p256_get_bit(scalar, i + 4) << 5;
+    #if 1 // hezhiwen
+      crypto_word_t sign, digit;
+    #endif
       bits |= fiat_p256_get_bit(scalar, i + 3) << 4;
       bits |= fiat_p256_get_bit(scalar, i + 2) << 3;
       bits |= fiat_p256_get_bit(scalar, i + 1) << 2;
       bits |= fiat_p256_get_bit(scalar, i) << 1;
       bits |= fiat_p256_get_bit(scalar, i - 1);
+    #if 0 // hezhiwen
       crypto_word_t sign, digit;
+    #endif
       ec_GFp_nistp_recode_scalar_bits(&sign, &digit, bits);
 
       // select the point to add or subtract, in constant time.
@@ -549,13 +676,23 @@ static void ec_GFp_nistp256_point_mul_base(const EC_GROUP *group,
   fiat_p256_felem nq[3] = {{0}, {0}, {0}}, tmp[3];
 
   int skip = 1;  // Save two point operations in the first round.
+#if 1 // hezhiwen
+  size_t i;
+  for (i = 31; i < 32; i--) {
+    crypto_word_t bits;
+#else
   for (size_t i = 31; i < 32; i--) {
+#endif
     if (!skip) {
       fiat_p256_point_double(nq[0], nq[1], nq[2], nq[0], nq[1], nq[2]);
     }
 
     // First, look 32 bits upwards.
+  #if 1 // hezhiwen
+    bits = fiat_p256_get_bit(scalar, i + 224) << 3;
+  #else
     crypto_word_t bits = fiat_p256_get_bit(scalar, i + 224) << 3;
+  #endif
     bits |= fiat_p256_get_bit(scalar, i + 160) << 2;
     bits |= fiat_p256_get_bit(scalar, i + 96) << 1;
     bits |= fiat_p256_get_bit(scalar, i + 32);
@@ -598,13 +735,26 @@ static void ec_GFp_nistp256_point_mul_public(const EC_GROUP *group,
 #define P256_WSIZE_PUBLIC 4
   // Precompute multiples of |p|. p_pre_comp[i] is (2*i+1) * |p|.
   fiat_p256_felem p_pre_comp[1 << (P256_WSIZE_PUBLIC - 1)][3];
+#if 1 // hezhiwen
+  fiat_p256_felem p2[3];
+  int8_t p_wNAF[257];
+  int skip = 1;
+  fiat_p256_felem ret[3] = {{0}, {0}, {0}};
+  int i;
+#endif
   fiat_p256_from_generic(p_pre_comp[0][0], &p->X);
   fiat_p256_from_generic(p_pre_comp[0][1], &p->Y);
   fiat_p256_from_generic(p_pre_comp[0][2], &p->Z);
+#if 0 // hezhiwen
   fiat_p256_felem p2[3];
+#endif
   fiat_p256_point_double(p2[0], p2[1], p2[2], p_pre_comp[0][0],
                          p_pre_comp[0][1], p_pre_comp[0][2]);
+#if 1 // hezhiwen
+  for (i = 1; i < OPENSSL_ARRAY_SIZE(p_pre_comp); i++) {
+#else
   for (size_t i = 1; i < OPENSSL_ARRAY_SIZE(p_pre_comp); i++) {
+#endif
     fiat_p256_point_add(p_pre_comp[i][0], p_pre_comp[i][1], p_pre_comp[i][2],
                         p_pre_comp[i - 1][0], p_pre_comp[i - 1][1],
                         p_pre_comp[i - 1][2], 0 /* not mixed */, p2[0], p2[1],
@@ -612,13 +762,20 @@ static void ec_GFp_nistp256_point_mul_public(const EC_GROUP *group,
   }
 
   // Set up the coefficients for |p_scalar|.
+#if 0 // hezhiwen
   int8_t p_wNAF[257];
+#endif
   ec_compute_wNAF(group, p_wNAF, p_scalar, 256, P256_WSIZE_PUBLIC);
 
   // Set |ret| to the point at infinity.
+#if 1 // hezhiwen
+  for (i = 256; i >= 0; i--) {
+    int digit;
+#else
   int skip = 1;  // Save some point operations.
   fiat_p256_felem ret[3] = {{0}, {0}, {0}};
   for (int i = 256; i >= 0; i--) {
+#endif
     if (!skip) {
       fiat_p256_point_double(ret[0], ret[1], ret[2], ret[0], ret[1], ret[2]);
     }
@@ -655,9 +812,15 @@ static void ec_GFp_nistp256_point_mul_public(const EC_GROUP *group,
       }
     }
 
+  #if 1 // hezhiwen
+    digit = p_wNAF[i];
+  #else
     int digit = p_wNAF[i];
+  #endif
     if (digit != 0) {
+    #if 0 // hezhiwen
       assert(digit & 1);
+    #endif
       size_t idx = (size_t)(digit < 0 ? (-digit) >> 1 : digit >> 1);
       fiat_p256_felem *y = &p_pre_comp[idx][1], tmp;
       if (digit < 0) {
@@ -685,6 +848,11 @@ static void ec_GFp_nistp256_point_mul_public(const EC_GROUP *group,
 static int ec_GFp_nistp256_cmp_x_coordinate(const EC_GROUP *group,
                                             const EC_RAW_POINT *p,
                                             const EC_SCALAR *r) {
+#if 1 // hezhiwen
+  fiat_p256_felem Z2_mont;
+  fiat_p256_felem r_Z2;
+  fiat_p256_felem X;
+#endif
   if (ec_GFp_simple_is_at_infinity(group, p)) {
     return 0;
   }
@@ -692,15 +860,21 @@ static int ec_GFp_nistp256_cmp_x_coordinate(const EC_GROUP *group,
   // We wish to compare X/Z^2 with r. This is equivalent to comparing X with
   // r*Z^2. Note that X and Z are represented in Montgomery form, while r is
   // not.
+#if 0 // hezhiwen
   fiat_p256_felem Z2_mont;
+#endif
   fiat_p256_from_generic(Z2_mont, &p->Z);
   fiat_p256_mul(Z2_mont, Z2_mont, Z2_mont);
 
+#if 0 // hezhiwen
   fiat_p256_felem r_Z2;
+#endif
   fiat_p256_from_words(r_Z2, r->words);  // r < order < p, so this is valid.
   fiat_p256_mul(r_Z2, r_Z2, Z2_mont);
 
+#if 0 // hezhiwen
   fiat_p256_felem X;
+#endif
   fiat_p256_from_generic(X, &p->X);
   fiat_p256_from_montgomery(X, X);
 

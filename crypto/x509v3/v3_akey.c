@@ -176,8 +176,13 @@ static void *v2i_AUTHORITY_KEYID(const X509V3_EXT_METHOD *method,
   cert = ctx->issuer_cert;
 
   if (keyid) {
+  #if 1 // hezhiwen
+    const X509_EXTENSION *ext;
+    j = X509_get_ext_by_NID(cert, NID_subject_key_identifier, -1);
+  #else
     j = X509_get_ext_by_NID(cert, NID_subject_key_identifier, -1);
     const X509_EXTENSION *ext;
+  #endif
     if ((j >= 0) && (ext = X509_get_ext(cert, j))) {
       ikeyid = X509V3_EXT_d2i(ext);
     }

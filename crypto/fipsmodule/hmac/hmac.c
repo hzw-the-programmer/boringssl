@@ -70,14 +70,23 @@ uint8_t *HMAC(const EVP_MD *evp_md, const void *key, size_t key_len,
               const uint8_t *data, size_t data_len, uint8_t *out,
               unsigned int *out_len) {
   HMAC_CTX ctx;
+#if 1 // hezhiwen
+  int ok;
+#endif
   HMAC_CTX_init(&ctx);
 
   // The underlying hash functions should not set the FIPS service indicator
   // until all operations have completed.
   FIPS_service_indicator_lock_state();
+#if 1 // hezhiwen
+  ok = HMAC_Init_ex(&ctx, key, key_len, evp_md, NULL) &&
+       HMAC_Update(&ctx, data, data_len) &&
+       HMAC_Final(&ctx, out, out_len);
+#else
   const int ok = HMAC_Init_ex(&ctx, key, key_len, evp_md, NULL) &&
                  HMAC_Update(&ctx, data, data_len) &&
                  HMAC_Final(&ctx, out, out_len);
+#endif
   FIPS_service_indicator_unlock_state();
 
   HMAC_CTX_cleanup(&ctx);
@@ -148,6 +157,9 @@ int HMAC_Init_ex(HMAC_CTX *ctx, const void *key, size_t key_len,
     uint8_t pad[EVP_MAX_MD_BLOCK_SIZE];
     uint8_t key_block[EVP_MAX_MD_BLOCK_SIZE];
     unsigned key_block_len;
+  #if 1 // hezhiwen
+    size_t i;
+  #endif
 
     size_t block_size = EVP_MD_block_size(md);
     assert(block_size <= sizeof(key_block));
@@ -168,7 +180,11 @@ int HMAC_Init_ex(HMAC_CTX *ctx, const void *key, size_t key_len,
       OPENSSL_memset(&key_block[key_block_len], 0, sizeof(key_block) - key_block_len);
     }
 
+  #if 1 // hezhiwen
+    for (i = 0; i < EVP_MAX_MD_BLOCK_SIZE; i++) {
+  #else
     for (size_t i = 0; i < EVP_MAX_MD_BLOCK_SIZE; i++) {
+  #endif
       pad[i] = 0x36 ^ key_block[i];
     }
     if (!EVP_DigestInit_ex(&ctx->i_ctx, md, impl) ||
@@ -176,7 +192,11 @@ int HMAC_Init_ex(HMAC_CTX *ctx, const void *key, size_t key_len,
       goto out;
     }
 
+  #if 1 // hezhiwen
+    for (i = 0; i < EVP_MAX_MD_BLOCK_SIZE; i++) {
+  #else
     for (size_t i = 0; i < EVP_MAX_MD_BLOCK_SIZE; i++) {
+  #endif
       pad[i] = 0x5c ^ key_block[i];
     }
     if (!EVP_DigestInit_ex(&ctx->o_ctx, md, impl) ||

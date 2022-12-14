@@ -179,12 +179,19 @@ void EC_KEY_free(EC_KEY *r) {
 }
 
 EC_KEY *EC_KEY_dup(const EC_KEY *src) {
+#if 1 // hezhiwen
+  EC_KEY *ret;
+#endif
   if (src == NULL) {
     OPENSSL_PUT_ERROR(EC, ERR_R_PASSED_NULL_PARAMETER);
     return NULL;
   }
 
+#if 1 // hezhiwen
+  ret = EC_KEY_new();
+#else
   EC_KEY *ret = EC_KEY_new();
+#endif
   if (ret == NULL) {
     return NULL;
   }
@@ -238,12 +245,19 @@ const BIGNUM *EC_KEY_get0_private_key(const EC_KEY *key) {
 }
 
 int EC_KEY_set_private_key(EC_KEY *key, const BIGNUM *priv_key) {
+#if 1 // hezhiwen
+  EC_WRAPPED_SCALAR *scalar;
+#endif
   if (key->group == NULL) {
     OPENSSL_PUT_ERROR(EC, EC_R_MISSING_PARAMETERS);
     return 0;
   }
 
+#if 1 // hezhiwen
+  scalar = ec_wrapped_scalar_new(key->group);
+#else
   EC_WRAPPED_SCALAR *scalar = ec_wrapped_scalar_new(key->group);
+#endif
   if (scalar == NULL) {
     return 0;
   }
@@ -346,11 +360,19 @@ int EC_KEY_check_fips(const EC_KEY *key) {
   if (key->priv_key) {
     uint8_t data[16] = {0};
     ECDSA_SIG *sig = ECDSA_do_sign(data, sizeof(data), key);
+  #if 1 // hezhiwen
+    int ok;
+  #endif
     if (boringssl_fips_break_test("ECDSA_PWCT")) {
       data[0] = ~data[0];
     }
+  #if 1 // hezhiwen
+    ok = sig != NULL &&
+         ECDSA_do_verify(data, sizeof(data), sig, key);
+  #else
     int ok = sig != NULL &&
              ECDSA_do_verify(data, sizeof(data), sig, key);
+  #endif
     ECDSA_SIG_free(sig);
     if (!ok) {
       OPENSSL_PUT_ERROR(EC, EC_R_PUBLIC_KEY_VALIDATION_FAILED);
@@ -395,15 +417,26 @@ err:
 }
 
 int EC_KEY_oct2key(EC_KEY *key, const uint8_t *in, size_t len, BN_CTX *ctx) {
+#if 1 // hezhiwen
+  EC_POINT *point;
+  int ok;
+#endif
   if (key->group == NULL) {
     OPENSSL_PUT_ERROR(EC, EC_R_MISSING_PARAMETERS);
     return 0;
   }
 
+#if 1 // hezhiwen
+  point = EC_POINT_new(key->group);
+  ok = point != NULL &&
+       EC_POINT_oct2point(key->group, point, in, len, ctx) &&
+       EC_KEY_set_public_key(key, point);
+#else
   EC_POINT *point = EC_POINT_new(key->group);
   int ok = point != NULL &&
            EC_POINT_oct2point(key->group, point, in, len, ctx) &&
            EC_KEY_set_public_key(key, point);
+#endif
   EC_POINT_free(point);
   return ok;
 }
@@ -419,6 +452,10 @@ size_t EC_KEY_key2buf(const EC_KEY *key, point_conversion_form_t form,
 }
 
 int EC_KEY_oct2priv(EC_KEY *key, const uint8_t *in, size_t len) {
+#if 1 // hezhiwen
+  BIGNUM *priv_key;
+  int ok;
+#endif
   if (key->group == NULL) {
     OPENSSL_PUT_ERROR(EC, EC_R_MISSING_PARAMETERS);
     return 0;
@@ -429,20 +466,34 @@ int EC_KEY_oct2priv(EC_KEY *key, const uint8_t *in, size_t len) {
     return 0;
   }
 
+#if 1 // hezhiwen
+  priv_key = BN_bin2bn(in, len, NULL);
+  ok = priv_key != NULL &&  //
+       EC_KEY_set_private_key(key, priv_key);
+#else
   BIGNUM *priv_key = BN_bin2bn(in, len, NULL);
   int ok = priv_key != NULL &&  //
            EC_KEY_set_private_key(key, priv_key);
+#endif
   BN_free(priv_key);
   return ok;
 }
 
 size_t EC_KEY_priv2oct(const EC_KEY *key, uint8_t *out, size_t max_out) {
+#if 1 // hezhiwen
+  size_t len;
+  size_t bytes_written;
+#endif
   if (key->group == NULL || key->priv_key == NULL) {
     OPENSSL_PUT_ERROR(EC, EC_R_MISSING_PARAMETERS);
     return 0;
   }
 
+#if 1 // hezhiwen
+  len = BN_num_bytes(EC_GROUP_get0_order(key->group));
+#else
   size_t len = BN_num_bytes(EC_GROUP_get0_order(key->group));
+#endif
   if (out == NULL) {
     return len;
   }
@@ -452,20 +503,34 @@ size_t EC_KEY_priv2oct(const EC_KEY *key, uint8_t *out, size_t max_out) {
     return 0;
   }
 
+#if 0 // hezhiwen
   size_t bytes_written;
+#endif
   ec_scalar_to_bytes(key->group, out, &bytes_written, &key->priv_key->scalar);
   assert(bytes_written == len);
   return len;
 }
 
 size_t EC_KEY_priv2buf(const EC_KEY *key, uint8_t **out_buf) {
+#if 1 // hezhiwen
+  size_t len;
+  uint8_t *buf;
+#endif
   *out_buf = NULL;
+#if 1 // hezhiwen
+  len = EC_KEY_priv2oct(key, NULL, 0);
+#else
   size_t len = EC_KEY_priv2oct(key, NULL, 0);
+#endif
   if (len == 0) {
     return 0;
   }
 
+#if 1 // hezhiwen
+  buf = OPENSSL_malloc(len);
+#else
   uint8_t *buf = OPENSSL_malloc(len);
+#endif
   if (buf == NULL) {
     OPENSSL_PUT_ERROR(EC, ERR_R_MALLOC_FAILURE);
     return 0;
@@ -482,6 +547,11 @@ size_t EC_KEY_priv2buf(const EC_KEY *key, uint8_t **out_buf) {
 }
 
 int EC_KEY_generate_key(EC_KEY *key) {
+#if 1 // hezhiwen
+  static const uint8_t kDefaultAdditionalData[32] = {0};
+  EC_WRAPPED_SCALAR *priv_key;
+  EC_POINT *pub_key;
+#endif
   if (key == NULL || key->group == NULL) {
     OPENSSL_PUT_ERROR(EC, ERR_R_PASSED_NULL_PARAMETER);
     return 0;
@@ -493,9 +563,14 @@ int EC_KEY_generate_key(EC_KEY *key) {
     return 0;
   }
 
+#if 1 // hezhiwen
+  priv_key = ec_wrapped_scalar_new(key->group);
+  pub_key = EC_POINT_new(key->group);
+#else
   static const uint8_t kDefaultAdditionalData[32] = {0};
   EC_WRAPPED_SCALAR *priv_key = ec_wrapped_scalar_new(key->group);
   EC_POINT *pub_key = EC_POINT_new(key->group);
+#endif
   if (priv_key == NULL || pub_key == NULL ||
       // Generate the private key by testing candidates (FIPS 186-4 B.4.2).
       !ec_random_nonzero_scalar(key->group, &priv_key->scalar,

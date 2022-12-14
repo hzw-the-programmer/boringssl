@@ -89,24 +89,42 @@ IMPLEMENT_ASN1_FUNCTIONS_const(RSA_PSS_PARAMS)
 
 // Given an MGF1 Algorithm ID decode to an Algorithm Identifier
 static X509_ALGOR *rsa_mgf1_decode(const X509_ALGOR *alg) {
+#if 1 // hezhiwen
+  const uint8_t *p;
+  int plen;
+#endif
   if (OBJ_obj2nid(alg->algorithm) != NID_mgf1 ||
       alg->parameter == NULL ||
       alg->parameter->type != V_ASN1_SEQUENCE) {
     return NULL;
   }
 
+#if 1 // hezhiwen
+  p = alg->parameter->value.sequence->data;
+  plen = alg->parameter->value.sequence->length;
+#else
   const uint8_t *p = alg->parameter->value.sequence->data;
   int plen = alg->parameter->value.sequence->length;
+#endif
   return d2i_X509_ALGOR(NULL, &p, plen);
 }
 
 static RSA_PSS_PARAMS *rsa_pss_decode(const X509_ALGOR *alg) {
+#if 1 // hezhiwen
+  const uint8_t *p;
+  int plen;
+#endif
   if (alg->parameter == NULL || alg->parameter->type != V_ASN1_SEQUENCE) {
     return NULL;
   }
 
+#if 1 // hezhiwen
+  p = alg->parameter->value.sequence->data;
+  plen = alg->parameter->value.sequence->length;
+#else
   const uint8_t *p = alg->parameter->value.sequence->data;
   int plen = alg->parameter->value.sequence->length;
+#endif
   return d2i_RSA_PSS_PARAMS(NULL, &p, plen);
 }
 
@@ -133,7 +151,9 @@ static int rsa_md_to_algor(X509_ALGOR **palg, const EVP_MD *md) {
 // digest |mgf1md|, which must be an allowed PSS digest.
 static int rsa_md_to_mgf1(X509_ALGOR **palg, const EVP_MD *mgf1md) {
   // SHA-1 should be omitted (DEFAULT), but we do not allow SHA-1.
+#if 0 // hezhiwen
   assert(is_allowed_pss_md(mgf1md));
+#endif
   X509_ALGOR *algtmp = NULL;
   ASN1_STRING *stmp = NULL;
   // need to embed algorithm ID inside another
@@ -159,12 +179,19 @@ err:
 }
 
 static const EVP_MD *rsa_algor_to_md(const X509_ALGOR *alg) {
+#if 1 // hezhiwen
+  const EVP_MD *md;
+#endif
   if (!alg) {
     // If omitted, PSS defaults to SHA-1, which we do not allow.
     OPENSSL_PUT_ERROR(X509, X509_R_INVALID_PSS_PARAMETERS);
     return NULL;
   }
+#if 1 // hezhiwen
+  md = EVP_get_digestbyobj(alg->algorithm);
+#else
   const EVP_MD *md = EVP_get_digestbyobj(alg->algorithm);
+#endif
   if (md == NULL || !is_allowed_pss_md(md)) {
     OPENSSL_PUT_ERROR(X509, X509_R_INVALID_PSS_PARAMETERS);
     return NULL;
@@ -173,18 +200,30 @@ static const EVP_MD *rsa_algor_to_md(const X509_ALGOR *alg) {
 }
 
 static const EVP_MD *rsa_mgf1_to_md(const X509_ALGOR *alg) {
+#if 1 // hezhiwen
+  X509_ALGOR *maskHash;
+  const EVP_MD *ret;
+#endif
   if (!alg) {
     // If omitted, PSS defaults to MGF-1 with SHA-1, which we do not allow.
     OPENSSL_PUT_ERROR(X509, X509_R_INVALID_PSS_PARAMETERS);
     return NULL;
   }
   // Check mask and lookup mask hash algorithm.
+#if 1 // hezhiwen
+  maskHash = rsa_mgf1_decode(alg);
+#else
   X509_ALGOR *maskHash = rsa_mgf1_decode(alg);
+#endif
   if (maskHash == NULL) {
     OPENSSL_PUT_ERROR(X509, X509_R_INVALID_PSS_PARAMETERS);
     return NULL;
   }
+#if 1 // hezhiwen
+  ret = rsa_algor_to_md(maskHash);
+#else
   const EVP_MD *ret = rsa_algor_to_md(maskHash);
+#endif
   X509_ALGOR_free(maskHash);
   return ret;
 }
@@ -192,6 +231,12 @@ static const EVP_MD *rsa_mgf1_to_md(const X509_ALGOR *alg) {
 int x509_rsa_ctx_to_pss(EVP_MD_CTX *ctx, X509_ALGOR *algor) {
   const EVP_MD *sigmd, *mgf1md;
   int saltlen;
+#if 1 // hezhiwen
+  int md_len;
+  int ret = 0;
+  ASN1_STRING *os = NULL;
+  RSA_PSS_PARAMS *pss;
+#endif
   if (!EVP_PKEY_CTX_get_signature_md(ctx->pctx, &sigmd) ||
       !EVP_PKEY_CTX_get_rsa_mgf1_md(ctx->pctx, &mgf1md) ||
       !EVP_PKEY_CTX_get_rsa_pss_saltlen(ctx->pctx, &saltlen)) {
@@ -202,7 +247,11 @@ int x509_rsa_ctx_to_pss(EVP_MD_CTX *ctx, X509_ALGOR *algor) {
     OPENSSL_PUT_ERROR(X509, X509_R_INVALID_PSS_PARAMETERS);
     return 0;
   }
+#if 1 // hezhiwen
+  md_len = (int)EVP_MD_size(sigmd);
+#else
   int md_len = (int)EVP_MD_size(sigmd);
+#endif
   if (saltlen == -1) {
     saltlen = md_len;
   } else if (saltlen != md_len) {
@@ -210,9 +259,13 @@ int x509_rsa_ctx_to_pss(EVP_MD_CTX *ctx, X509_ALGOR *algor) {
     return 0;
   }
 
+#if 1 // hezhiwen
+  pss = RSA_PSS_PARAMS_new();
+#else
   int ret = 0;
   ASN1_STRING *os = NULL;
   RSA_PSS_PARAMS *pss = RSA_PSS_PARAMS_new();
+#endif
   if (!pss) {
     goto err;
   }
@@ -247,7 +300,14 @@ err:
 
 int x509_rsa_pss_to_ctx(EVP_MD_CTX *ctx, const X509_ALGOR *sigalg,
                         EVP_PKEY *pkey) {
+#if 1 // hezhiwen
+  const EVP_MD *mgf1md;
+  const EVP_MD *md;
+  uint64_t salt_len = 0;
+  EVP_PKEY_CTX *pctx;
+#else
   assert(OBJ_obj2nid(sigalg->algorithm) == NID_rsassaPss);
+#endif
 
   // Decode PSS parameters
   int ret = 0;
@@ -257,8 +317,13 @@ int x509_rsa_pss_to_ctx(EVP_MD_CTX *ctx, const X509_ALGOR *sigalg,
     goto err;
   }
 
+#if 1 // hezhiwen
+  mgf1md = rsa_mgf1_to_md(pss->maskGenAlgorithm);
+  md = rsa_algor_to_md(pss->hashAlgorithm);
+#else
   const EVP_MD *mgf1md = rsa_mgf1_to_md(pss->maskGenAlgorithm);
   const EVP_MD *md = rsa_algor_to_md(pss->hashAlgorithm);
+#endif
   if (mgf1md == NULL || md == NULL) {
     goto err;
   }
@@ -271,7 +336,9 @@ int x509_rsa_pss_to_ctx(EVP_MD_CTX *ctx, const X509_ALGOR *sigalg,
 
   // We require the salt length be the hash length. The DEFAULT value is 20, but
   // this does not match any supported salt length.
+#if 0 // hezhiwen
   uint64_t salt_len = 0;
+#endif
   if (pss->saltLength == NULL ||
       !ASN1_INTEGER_get_uint64(&salt_len, pss->saltLength) ||
       salt_len != EVP_MD_size(md)) {
@@ -288,7 +355,9 @@ int x509_rsa_pss_to_ctx(EVP_MD_CTX *ctx, const X509_ALGOR *sigalg,
     goto err;
   }
 
+#if 0 // hezhiwen
   EVP_PKEY_CTX *pctx;
+#endif
   if (!EVP_DigestVerifyInit(ctx, &pctx, md, NULL, pkey) ||
       !EVP_PKEY_CTX_set_rsa_padding(pctx, RSA_PKCS1_PSS_PADDING) ||
       !EVP_PKEY_CTX_set_rsa_pss_saltlen(pctx, (int)salt_len) ||
@@ -305,7 +374,9 @@ err:
 
 int x509_print_rsa_pss_params(BIO *bp, const X509_ALGOR *sigalg, int indent,
                               ASN1_PCTX *pctx) {
+#if 0 // hezhiwen
   assert(OBJ_obj2nid(sigalg->algorithm) == NID_rsassaPss);
+#endif
 
   int rv = 0;
   X509_ALGOR *maskHash = NULL;

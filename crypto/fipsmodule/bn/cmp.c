@@ -66,12 +66,22 @@
 
 static int bn_cmp_words_consttime(const BN_ULONG *a, size_t a_len,
                                   const BN_ULONG *b, size_t b_len) {
+#if 1 // hezhiwen
+  int ret = 0;
+  size_t min;
+  size_t i;
+#endif
   static_assert(sizeof(BN_ULONG) <= sizeof(crypto_word_t),
                 "crypto_word_t is too small");
+#if 1 // hezhiwen
+  min = a_len < b_len ? a_len : b_len;
+  for (i = 0; i < min; i++) {
+#else
   int ret = 0;
   // Process the common words in little-endian order.
   size_t min = a_len < b_len ? a_len : b_len;
   for (size_t i = 0; i < min; i++) {
+#endif
     crypto_word_t eq = constant_time_eq_w(a[i], b[i]);
     crypto_word_t lt = constant_time_lt_w(a[i], b[i]);
     ret =
@@ -81,13 +91,23 @@ static int bn_cmp_words_consttime(const BN_ULONG *a, size_t a_len,
   // If |a| or |b| has non-zero words beyond |min|, they take precedence.
   if (a_len < b_len) {
     crypto_word_t mask = 0;
+  #if 1 // hezhiwen
+    size_t i;
+    for (i = a_len; i < b_len; i++) {
+  #else
     for (size_t i = a_len; i < b_len; i++) {
+  #endif
       mask |= b[i];
     }
     ret = constant_time_select_int(constant_time_is_zero_w(mask), ret, -1);
   } else if (b_len < a_len) {
     crypto_word_t mask = 0;
+  #if 1 // hezhiwen
+    size_t i;
+    for (i = b_len; i < a_len; i++) {
+  #else
     for (size_t i = b_len; i < a_len; i++) {
+  #endif
       mask |= a[i];
     }
     ret = constant_time_select_int(constant_time_is_zero_w(mask), ret, 1);
@@ -101,6 +121,9 @@ int BN_ucmp(const BIGNUM *a, const BIGNUM *b) {
 }
 
 int BN_cmp(const BIGNUM *a, const BIGNUM *b) {
+#if 1 // hezhiwen
+  int ret;
+#endif
   if ((a == NULL) || (b == NULL)) {
     if (a != NULL) {
       return -1;
@@ -120,7 +143,11 @@ int BN_cmp(const BIGNUM *a, const BIGNUM *b) {
     return 1;
   }
 
+#if 1 // hezhiwen
+  ret = BN_ucmp(a, b);
+#else
   int ret = BN_ucmp(a, b);
+#endif
   return a->neg ? -ret : ret;
 }
 
@@ -129,11 +156,20 @@ int bn_less_than_words(const BN_ULONG *a, const BN_ULONG *b, size_t len) {
 }
 
 int BN_abs_is_word(const BIGNUM *bn, BN_ULONG w) {
+#if 1 // hezhiwen
+  BN_ULONG mask;
+  int i;
+#endif
   if (bn->width == 0) {
     return w == 0;
   }
+#if 1 // hezhiwen
+  mask = bn->d[0] ^ w;
+  for (i = 1; i < bn->width; i++) {
+#else
   BN_ULONG mask = bn->d[0] ^ w;
   for (int i = 1; i < bn->width; i++) {
+#endif
     mask |= bn->d[i];
   }
   return mask == 0;
@@ -167,12 +203,19 @@ int BN_is_odd(const BIGNUM *bn) {
 }
 
 int BN_is_pow2(const BIGNUM *bn) {
+#if 1 // hezhiwen
+  int i;
+#endif
   int width = bn_minimal_width(bn);
   if (width == 0 || bn->neg) {
     return 0;
   }
 
+#if 1 // hezhiwen
+  for (i = 0; i < width - 1; i++) {
+#else
   for (int i = 0; i < width - 1; i++) {
+#endif
     if (bn->d[i] != 0) {
       return 0;
     }
@@ -183,16 +226,33 @@ int BN_is_pow2(const BIGNUM *bn) {
 
 int BN_equal_consttime(const BIGNUM *a, const BIGNUM *b) {
   BN_ULONG mask = 0;
+#if 1 // hezhiwen
+  int i;
+  int min;
+#endif
   // If |a| or |b| has more words than the other, all those words must be zero.
+#if 1 // hezhiwen
+  for (i = a->width; i < b->width; i++) {
+#else
   for (int i = a->width; i < b->width; i++) {
+#endif
     mask |= b->d[i];
   }
+#if 1 // hezhiwen
+  for (i = b->width; i < a->width; i++) {
+#else
   for (int i = b->width; i < a->width; i++) {
+#endif
     mask |= a->d[i];
   }
   // Common words must match.
+#if 1 // hezhiwen
+  min = a->width < b->width ? a->width : b->width;
+  for (i = 0; i < min; i++) {
+#else
   int min = a->width < b->width ? a->width : b->width;
   for (int i = 0; i < min; i++) {
+#endif
     mask |= (a->d[i] ^ b->d[i]);
   }
   // The sign bit must match.

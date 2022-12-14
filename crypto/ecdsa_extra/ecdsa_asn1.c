@@ -68,21 +68,35 @@
 
 int ECDSA_sign(int type, const uint8_t *digest, size_t digest_len, uint8_t *sig,
                unsigned int *sig_len, const EC_KEY *eckey) {
+#if 1 // hezhiwen
+  int ret = 0;
+  ECDSA_SIG *s;
+  CBB cbb;
+  size_t len;
+#endif
   if (eckey->ecdsa_meth && eckey->ecdsa_meth->sign) {
     return eckey->ecdsa_meth->sign(digest, digest_len, sig, sig_len,
                                    (EC_KEY*) eckey /* cast away const */);
   }
 
+#if 1 // hezhiwen
+  s = ECDSA_do_sign(digest, digest_len, eckey);
+#else
   int ret = 0;
   ECDSA_SIG *s = ECDSA_do_sign(digest, digest_len, eckey);
+#endif
   if (s == NULL) {
     *sig_len = 0;
     goto err;
   }
 
+#if 1 // hezhiwen
+  CBB_init_fixed(&cbb, sig, ECDSA_size(eckey));
+#else
   CBB cbb;
   CBB_init_fixed(&cbb, sig, ECDSA_size(eckey));
   size_t len;
+#endif
   if (!ECDSA_SIG_marshal(&cbb, s) ||
       !CBB_finish(&cbb, NULL, &len)) {
     OPENSSL_PUT_ERROR(ECDSA, ECDSA_R_ENCODE_ERROR);
@@ -102,6 +116,9 @@ int ECDSA_verify(int type, const uint8_t *digest, size_t digest_len,
   ECDSA_SIG *s;
   int ret = 0;
   uint8_t *der = NULL;
+#if 1 // hezhiwen
+  size_t der_len;
+#endif
 
   // Decode the ECDSA signature.
   s = ECDSA_SIG_from_bytes(sig, sig_len);
@@ -110,7 +127,9 @@ int ECDSA_verify(int type, const uint8_t *digest, size_t digest_len,
   }
 
   // Defend against potential laxness in the DER parser.
+#if 0 // hezhiwen
   size_t der_len;
+#endif
   if (!ECDSA_SIG_to_bytes(&der, &der_len, s) ||
       der_len != sig_len || OPENSSL_memcmp(sig, der, sig_len) != 0) {
     // This should never happen. crypto/bytestring is strictly DER.
@@ -128,11 +147,16 @@ err:
 
 
 size_t ECDSA_size(const EC_KEY *key) {
+#if 1 // hezhiwen
+  size_t group_order_size;
+#endif
   if (key == NULL) {
     return 0;
   }
 
+#if 0 // hezhiwen
   size_t group_order_size;
+#endif
   if (key->ecdsa_meth && key->ecdsa_meth->group_order_size) {
     group_order_size = key->ecdsa_meth->group_order_size(key);
   } else {
@@ -149,10 +173,15 @@ size_t ECDSA_size(const EC_KEY *key) {
 
 ECDSA_SIG *ECDSA_SIG_parse(CBS *cbs) {
   ECDSA_SIG *ret = ECDSA_SIG_new();
+#if 1 // hezhiwen
+  CBS child;
+#endif
   if (ret == NULL) {
     return NULL;
   }
+#if 0 // hezhiwen
   CBS child;
+#endif
   if (!CBS_get_asn1(cbs, &child, CBS_ASN1_SEQUENCE) ||
       !BN_parse_asn1_unsigned(&child, ret->r) ||
       !BN_parse_asn1_unsigned(&child, ret->s) ||
@@ -166,8 +195,14 @@ ECDSA_SIG *ECDSA_SIG_parse(CBS *cbs) {
 
 ECDSA_SIG *ECDSA_SIG_from_bytes(const uint8_t *in, size_t in_len) {
   CBS cbs;
+#if 1 // hezhiwen
+  ECDSA_SIG *ret;
+  CBS_init(&cbs, in, in_len);
+  ret = ECDSA_SIG_parse(&cbs);
+#else
   CBS_init(&cbs, in, in_len);
   ECDSA_SIG *ret = ECDSA_SIG_parse(&cbs);
+#endif
   if (ret == NULL || CBS_len(&cbs) != 0) {
     OPENSSL_PUT_ERROR(ECDSA, ECDSA_R_BAD_SIGNATURE);
     ECDSA_SIG_free(ret);
@@ -205,10 +240,15 @@ int ECDSA_SIG_to_bytes(uint8_t **out_bytes, size_t *out_len,
 // der_len_len returns the number of bytes needed to represent a length of |len|
 // in DER.
 static size_t der_len_len(size_t len) {
+#if 1 // hezhiwen
+  size_t ret = 1;
+#endif
   if (len < 0x80) {
     return 1;
   }
+#if 0 // hezhiwen
   size_t ret = 1;
+#endif
   while (len > 0) {
     ret++;
     len >>= 8;
@@ -220,16 +260,28 @@ size_t ECDSA_SIG_max_len(size_t order_len) {
   // Compute the maximum length of an |order_len| byte integer. Defensively
   // assume that the leading 0x00 is included.
   size_t integer_len = 1 /* tag */ + der_len_len(order_len + 1) + 1 + order_len;
+#if 1 // hezhiwen
+  size_t value_len;
+  size_t ret;
+#endif
   if (integer_len < order_len) {
     return 0;
   }
   // An ECDSA signature is two INTEGERs.
+#if 1 // hezhiwen
+  value_len = 2 * integer_len;
+#else
   size_t value_len = 2 * integer_len;
+#endif
   if (value_len < integer_len) {
     return 0;
   }
   // Add the header.
+#if 1 // hezhiwen
+  ret = 1 /* tag */ + der_len_len(value_len) + value_len;
+#else
   size_t ret = 1 /* tag */ + der_len_len(value_len) + value_len;
+#endif
   if (ret < value_len) {
     return 0;
   }
@@ -237,12 +289,21 @@ size_t ECDSA_SIG_max_len(size_t order_len) {
 }
 
 ECDSA_SIG *d2i_ECDSA_SIG(ECDSA_SIG **out, const uint8_t **inp, long len) {
+#if 1 // hezhiwen
+  CBS cbs;
+  ECDSA_SIG *ret;
+#endif
   if (len < 0) {
     return NULL;
   }
+#if 1 // hezhiwen
+  CBS_init(&cbs, *inp, (size_t)len);
+  ret = ECDSA_SIG_parse(&cbs);
+#else
   CBS cbs;
   CBS_init(&cbs, *inp, (size_t)len);
   ECDSA_SIG *ret = ECDSA_SIG_parse(&cbs);
+#endif
   if (ret == NULL) {
     return NULL;
   }

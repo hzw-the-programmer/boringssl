@@ -102,21 +102,37 @@ int BN_add(BIGNUM *r, const BIGNUM *a, const BIGNUM *b) {
 
 int bn_uadd_consttime(BIGNUM *r, const BIGNUM *a, const BIGNUM *b) {
   // Widths are public, so we normalize to make |a| the larger one.
+#if 1 // hezhiwen
+  int max;
+  int min;
+  BN_ULONG carry;
+  int i;
+#endif
   if (a->width < b->width) {
     const BIGNUM *tmp = a;
     a = b;
     b = tmp;
   }
 
+#if 1 // hezhiwen
+  max = a->width;
+  min = b->width;
+#else
   int max = a->width;
   int min = b->width;
+#endif
   if (!bn_wexpand(r, max + 1)) {
     return 0;
   }
   r->width = max + 1;
 
+#if 1 // hezhiwen
+  carry = bn_add_words(r->d, a->d, b->d, min);
+  for (i = min; i < max; i++) {
+#else
   BN_ULONG carry = bn_add_words(r->d, a->d, b->d, min);
   for (int i = min; i < max; i++) {
+#endif
     // |r| and |a| may alias, so use a temporary.
     BN_ULONG tmp = carry + a->d[i];
     carry = tmp < a->d[i];
@@ -227,6 +243,10 @@ int bn_usub_consttime(BIGNUM *r, const BIGNUM *a, const BIGNUM *b) {
   // |b| may have more words than |a| given non-minimal inputs, but all words
   // beyond |a->width| must then be zero.
   int b_width = b->width;
+#if 1 // hezhiwen
+  BN_ULONG borrow;
+  int i;
+#endif
   if (b_width > a->width) {
     if (!bn_fits_in_words(b, a->width)) {
       OPENSSL_PUT_ERROR(BN, BN_R_ARG2_LT_ARG3);
@@ -239,8 +259,13 @@ int bn_usub_consttime(BIGNUM *r, const BIGNUM *a, const BIGNUM *b) {
     return 0;
   }
 
+#if 1 // hezhiwen
+  borrow = bn_sub_words(r->d, a->d, b->d, b_width);
+  for (i = b_width; i < a->width; i++) {
+#else
   BN_ULONG borrow = bn_sub_words(r->d, a->d, b->d, b_width);
   for (int i = b_width; i < a->width; i++) {
+#endif
     // |r| and |a| may alias, so use a temporary.
     BN_ULONG tmp = a->d[i];
     r->d[i] = a->d[i] - borrow;

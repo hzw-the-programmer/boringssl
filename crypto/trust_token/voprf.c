@@ -63,11 +63,16 @@ static int voprf_init_method(VOPRF_METHOD *method, int curve_nid,
 static int cbb_add_point(CBB *out, const EC_GROUP *group,
                          const EC_AFFINE *point) {
   size_t len = ec_point_byte_len(group,  POINT_CONVERSION_UNCOMPRESSED);
+#if 1 // hezhiwen
+  uint8_t *p;
+#endif
   if (len == 0) {
     return 0;
   }
 
+#if 0 // hezhiwen
   uint8_t *p;
+#endif
   return CBB_add_space(out, &p, len) &&
          ec_point_to_bytes(group, point, POINT_CONVERSION_UNCOMPRESSED, p,
                            len) == len &&
@@ -149,9 +154,14 @@ static int voprf_derive_key_from_secret(const VOPRF_METHOD *method,
   EC_SCALAR priv;
   int ok = 0;
   CBB cbb;
+#if 0 // hezhiwen
   CBB_zero(&cbb);
+#endif
   uint8_t *buf = NULL;
   size_t len;
+#if 1 // hezhiwen
+  CBB_zero(&cbb);
+#endif
   if (!CBB_init(&cbb, 0) ||
       !CBB_add_bytes(&cbb, kKeygenLabel, sizeof(kKeygenLabel)) ||
       !CBB_add_bytes(&cbb, secret, secret_len) ||
@@ -185,13 +195,18 @@ static int voprf_issuer_key_from_bytes(const VOPRF_METHOD *method,
                                        TRUST_TOKEN_ISSUER_KEY *key,
                                        const uint8_t *in, size_t len) {
   const EC_GROUP *group = method->group;
+#if 1 // hezhiwen
+  EC_RAW_POINT pub;
+#endif
   if (!ec_scalar_from_bytes(group, &key->xs, in, len)) {
     OPENSSL_PUT_ERROR(TRUST_TOKEN, TRUST_TOKEN_R_DECODE_FAILURE);
     return 0;
   }
 
   // Recompute the public key.
+#if 0 // hezhiwen
   EC_RAW_POINT pub;
+#endif
   if (!ec_point_mul_scalar_base(group, &pub, &key->xs) ||
       !ec_jacobian_to_affine(group, &key->pubs, &pub)) {
     return 0;
@@ -205,15 +220,26 @@ static STACK_OF(TRUST_TOKEN_PRETOKEN) *
   const EC_GROUP *group = method->group;
   STACK_OF(TRUST_TOKEN_PRETOKEN) *pretokens =
       sk_TRUST_TOKEN_PRETOKEN_new_null();
+#if 1 // hezhiwen
+  size_t i;
+#endif
   if (pretokens == NULL) {
     OPENSSL_PUT_ERROR(TRUST_TOKEN, ERR_R_MALLOC_FAILURE);
     goto err;
   }
 
+#if 1 // hezhiwen
+  for (i = 0; i < count; i++) {
+#else
   for (size_t i = 0; i < count; i++) {
+#endif
     // Insert |pretoken| into |pretokens| early to simplify error-handling.
     TRUST_TOKEN_PRETOKEN *pretoken =
         OPENSSL_malloc(sizeof(TRUST_TOKEN_PRETOKEN));
+  #if 1 // hezhiwen
+    EC_SCALAR r;
+    EC_RAW_POINT P, Tp;
+  #endif
     if (pretoken == NULL ||
         !sk_TRUST_TOKEN_PRETOKEN_push(pretokens, pretoken)) {
       OPENSSL_PUT_ERROR(TRUST_TOKEN, ERR_R_MALLOC_FAILURE);
@@ -224,7 +250,9 @@ static STACK_OF(TRUST_TOKEN_PRETOKEN) *
     RAND_bytes(pretoken->t, sizeof(pretoken->t));
 
     // We sample r in Montgomery form to simplify inverting.
+  #if 0 // hezhiwen
     EC_SCALAR r;
+  #endif
     if (!ec_random_nonzero_scalar(group, &r,
                                   kDefaultAdditionalData)) {
       OPENSSL_PUT_ERROR(TRUST_TOKEN, ERR_R_MALLOC_FAILURE);
@@ -238,7 +266,9 @@ static STACK_OF(TRUST_TOKEN_PRETOKEN) *
     ec_scalar_from_montgomery(group, &pretoken->r, &pretoken->r);
 
     // Tp is the blinded token in the VOPRF protocol.
+  #if 0 // hezhiwen
     EC_RAW_POINT P, Tp;
+  #endif
     if (!method->hash_to_group(group, &P, pretoken->t) ||
         !ec_point_mul_scalar(group, &Tp, &P, &r) ||
         !ec_jacobian_to_affine(group, &pretoken->Tp, &Tp)) {
@@ -265,9 +295,14 @@ static int hash_to_scalar_dleq(const VOPRF_METHOD *method, EC_SCALAR *out,
 
   int ok = 0;
   CBB cbb;
+#if 0 // hezhiwen
   CBB_zero(&cbb);
+#endif
   uint8_t *buf = NULL;
   size_t len;
+#if 1 // hezhiwen
+  CBB_zero(&cbb);
+#endif
   if (!CBB_init(&cbb, 0) ||
       !CBB_add_bytes(&cbb, kDLEQLabel, sizeof(kDLEQLabel)) ||
       !cbb_add_point(&cbb, method->group, X) ||
@@ -292,17 +327,27 @@ err:
 static int hash_to_scalar_batch(const VOPRF_METHOD *method, EC_SCALAR *out,
                                 const CBB *points, size_t index) {
   static const uint8_t kDLEQBatchLabel[] = "DLEQ BATCH";
+#if 1 // hezhiwen
+  int ok = 0;
+  CBB cbb;
+  uint8_t *buf = NULL;
+  size_t len;
+#endif
   if (index > 0xffff) {
     // The protocol supports only two-byte batches.
     OPENSSL_PUT_ERROR(TRUST_TOKEN, ERR_R_OVERFLOW);
     return 0;
   }
 
+#if 1 // hezhiwen
+  CBB_zero(&cbb);
+#else
   int ok = 0;
   CBB cbb;
   CBB_zero(&cbb);
   uint8_t *buf = NULL;
   size_t len;
+#endif
   if (!CBB_init(&cbb, 0) ||
       !CBB_add_bytes(&cbb, kDLEQBatchLabel, sizeof(kDLEQBatchLabel)) ||
       !CBB_add_bytes(&cbb, CBB_data(points), CBB_len(points)) ||
@@ -334,6 +379,12 @@ static int dleq_generate(const VOPRF_METHOD *method, CBB *cbb,
     num_idx,
   };
   EC_RAW_POINT jacobians[num_idx];
+#if 1 // hezhiwen
+  EC_AFFINE affines[num_idx];
+  EC_SCALAR c;
+  EC_SCALAR c_mont;
+  EC_SCALAR u;
+#endif
 
   // Setup the DLEQ proof.
   EC_SCALAR r;
@@ -345,7 +396,9 @@ static int dleq_generate(const VOPRF_METHOD *method, CBB *cbb,
     return 0;
   }
 
+#if 0 // hezhiwen
   EC_AFFINE affines[num_idx];
+#endif
   jacobians[idx_T] = *T;
   jacobians[idx_W] = *W;
   if (!ec_jacobian_to_affine_batch(group, affines, jacobians, num_idx)) {
@@ -353,7 +406,9 @@ static int dleq_generate(const VOPRF_METHOD *method, CBB *cbb,
   }
 
   // Compute c = Hc(...).
+#if 0 // hezhiwen
   EC_SCALAR c;
+#endif
   if (!hash_to_scalar_dleq(method, &c, &priv->pubs, &affines[idx_T],
                            &affines[idx_W], &affines[idx_k0],
                            &affines[idx_k1])) {
@@ -361,11 +416,15 @@ static int dleq_generate(const VOPRF_METHOD *method, CBB *cbb,
   }
 
 
+#if 0 // hezhiwen
   EC_SCALAR c_mont;
+#endif
   ec_scalar_to_montgomery(group, &c_mont, &c);
 
   // u = r + c*xs
+#if 0 // hezhiwen
   EC_SCALAR u;
+#endif
   ec_scalar_mul_montgomery(group, &u, &priv->xs, &c_mont);
   ec_scalar_add(group, &u, &r, &u);
 
@@ -382,8 +441,18 @@ static int dleq_generate(const VOPRF_METHOD *method, CBB *cbb,
 static int mul_public_2(const EC_GROUP *group, EC_RAW_POINT *out,
                         const EC_RAW_POINT *p0, const EC_SCALAR *scalar0,
                         const EC_RAW_POINT *p1, const EC_SCALAR *scalar1) {
+#if 1 // hezhiwen
+  EC_RAW_POINT points[2] = {0};
+  EC_SCALAR scalars[2] = {0};
+
+  points[0] = *p0;
+  points[1] = *p1;
+  scalars[0] = *scalar0;
+  scalars[1] = *scalar1;
+#else
   EC_RAW_POINT points[2] = {*p0, *p1};
   EC_SCALAR scalars[2] = {*scalar0, *scalar1};
+#endif
   return ec_point_mul_scalar_public_batch(group, out, /*g_scalar=*/NULL, points,
                                           scalars, 2);
 }
@@ -402,6 +471,12 @@ static int dleq_verify(const VOPRF_METHOD *method, CBS *cbs,
     num_idx,
   };
   EC_RAW_POINT jacobians[num_idx];
+#if 1 // hezhiwen
+  EC_RAW_POINT pubs;
+  EC_SCALAR minus_c;
+  EC_AFFINE affines[num_idx];
+  EC_SCALAR calculated;
+#endif
 
   // Decode the DLEQ proof.
   EC_SCALAR c, u;
@@ -412,9 +487,13 @@ static int dleq_verify(const VOPRF_METHOD *method, CBS *cbs,
   }
 
   // k0;k1 = u*(G;T) - c*(pub;W)
+#if 0 // hezhiwen
   EC_RAW_POINT pubs;
+#endif
   ec_affine_to_jacobian(group, &pubs, &pub->pubs);
+#if 0 // hezhiwen
   EC_SCALAR minus_c;
+#endif
   ec_scalar_neg(group, &minus_c, &c);
   if (!ec_point_mul_scalar_public(group, &jacobians[idx_k0], &u, &pubs,
                                   &minus_c) ||
@@ -423,7 +502,9 @@ static int dleq_verify(const VOPRF_METHOD *method, CBS *cbs,
   }
 
   // Check the DLEQ proof.
+#if 0 // hezhiwen
   EC_AFFINE affines[num_idx];
+#endif
   jacobians[idx_T] = *T;
   jacobians[idx_W] = *W;
   if (!ec_jacobian_to_affine_batch(group, affines, jacobians, num_idx)) {
@@ -431,7 +512,9 @@ static int dleq_verify(const VOPRF_METHOD *method, CBS *cbs,
   }
 
   // Compute c = Hc(...).
+#if 0 // hezhiwen
   EC_SCALAR calculated;
+#endif
   if (!hash_to_scalar_dleq(method, &calculated, &pub->pubs, &affines[idx_T],
                            &affines[idx_W], &affines[idx_k0],
                            &affines[idx_k1])) {
@@ -451,6 +534,17 @@ static int voprf_sign(const VOPRF_METHOD *method,
                       const TRUST_TOKEN_ISSUER_KEY *key, CBB *cbb, CBS *cbs,
                       size_t num_requested, size_t num_to_issue) {
   const EC_GROUP *group = method->group;
+#if 1 // hezhiwen
+  int ret = 0;
+  EC_RAW_POINT *BTs;
+  EC_RAW_POINT *Zs;
+  EC_SCALAR *es;
+  CBB batch_cbb;
+  size_t i;
+  EC_RAW_POINT BT_batch, Z_batch;
+  CBB proof;
+  size_t point_len;
+#endif
   if (num_requested < num_to_issue) {
     OPENSSL_PUT_ERROR(TRUST_TOKEN, ERR_R_INTERNAL_ERROR);
     return 0;
@@ -462,11 +556,17 @@ static int voprf_sign(const VOPRF_METHOD *method,
     return 0;
   }
 
+#if 1 // hezhiwen
+  BTs = OPENSSL_malloc(num_to_issue * sizeof(EC_RAW_POINT));
+  Zs = OPENSSL_malloc(num_to_issue * sizeof(EC_RAW_POINT));
+  es = OPENSSL_malloc(num_to_issue * sizeof(EC_SCALAR));
+#else
   int ret = 0;
   EC_RAW_POINT *BTs = OPENSSL_malloc(num_to_issue * sizeof(EC_RAW_POINT));
   EC_RAW_POINT *Zs = OPENSSL_malloc(num_to_issue * sizeof(EC_RAW_POINT));
   EC_SCALAR *es = OPENSSL_malloc(num_to_issue * sizeof(EC_SCALAR));
   CBB batch_cbb;
+#endif
   CBB_zero(&batch_cbb);
   if (!BTs ||
       !Zs ||
@@ -477,7 +577,11 @@ static int voprf_sign(const VOPRF_METHOD *method,
     goto err;
   }
 
+#if 1 // hezhiwen
+  for (i = 0; i < num_to_issue; i++) {
+#else
   for (size_t i = 0; i < num_to_issue; i++) {
+#endif
     EC_AFFINE BT_affine, Z_affine;
     EC_RAW_POINT BT, Z;
     if (!cbs_get_point(cbs, group, &BT_affine)) {
@@ -507,13 +611,19 @@ static int voprf_sign(const VOPRF_METHOD *method,
   // The DLEQ batching construction is described in appendix B of
   // https://eprint.iacr.org/2020/072/20200324:214215. Note the additional
   // computations all act on public inputs.
+#if 1 // hezhiwen
+  for (i = 0; i < num_to_issue; i++) {
+#else
   for (size_t i = 0; i < num_to_issue; i++) {
+#endif
     if (!hash_to_scalar_batch(method, &es[i], &batch_cbb, i)) {
       goto err;
     }
   }
 
+#if 0 // hezhiwen
   EC_RAW_POINT BT_batch, Z_batch;
+#endif
   if (!ec_point_mul_scalar_public_batch(group, &BT_batch,
                                         /*g_scalar=*/NULL, BTs, es,
                                         num_to_issue) ||
@@ -523,7 +633,9 @@ static int voprf_sign(const VOPRF_METHOD *method,
     goto err;
   }
 
+#if 0 // hezhiwen
   CBB proof;
+#endif
   if (!CBB_add_u16_length_prefixed(cbb, &proof) ||
       !dleq_generate(method, &proof, key, &BT_batch, &Z_batch) ||
       !CBB_flush(cbb)) {
@@ -531,7 +643,11 @@ static int voprf_sign(const VOPRF_METHOD *method,
   }
 
   // Skip over any unused requests.
+#if 1 // hezhiwen
+  point_len = 1 + 2 * BN_num_bytes(&group->field);
+#else
   size_t point_len = 1 + 2 * BN_num_bytes(&group->field);
+#endif
   if (!CBS_skip(cbs, point_len * (num_requested - num_to_issue))) {
     OPENSSL_PUT_ERROR(TRUST_TOKEN, TRUST_TOKEN_R_DECODE_FAILURE);
     goto err;
@@ -552,13 +668,28 @@ static STACK_OF(TRUST_TOKEN) *
                   const STACK_OF(TRUST_TOKEN_PRETOKEN) * pretokens, CBS *cbs,
                   size_t count, uint32_t key_id) {
   const EC_GROUP *group = method->group;
+#if 1 // hezhiwen
+  int ok = 0;
+  STACK_OF(TRUST_TOKEN) *ret;
+  EC_RAW_POINT *BTs;
+  EC_RAW_POINT *Zs;
+  EC_SCALAR *es;
+  CBB batch_cbb;
+  size_t i;
+  EC_RAW_POINT BT_batch, Z_batch;
+  CBS proof;
+#endif
   if (count > sk_TRUST_TOKEN_PRETOKEN_num(pretokens)) {
     OPENSSL_PUT_ERROR(TRUST_TOKEN, TRUST_TOKEN_R_DECODE_FAILURE);
     return NULL;
   }
 
+#if 1 // hezhiwen
+  ret = sk_TRUST_TOKEN_new_null();
+#else
   int ok = 0;
   STACK_OF(TRUST_TOKEN) *ret = sk_TRUST_TOKEN_new_null();
+#endif
   if (ret == NULL) {
     OPENSSL_PUT_ERROR(TRUST_TOKEN, ERR_R_MALLOC_FAILURE);
     return NULL;
@@ -569,10 +700,16 @@ static STACK_OF(TRUST_TOKEN) *
     OPENSSL_PUT_ERROR(TRUST_TOKEN, ERR_R_OVERFLOW);
     return 0;
   }
+#if 1 // hezhiwen
+  BTs = OPENSSL_malloc(count * sizeof(EC_RAW_POINT));
+  Zs = OPENSSL_malloc(count * sizeof(EC_RAW_POINT));
+  es = OPENSSL_malloc(count * sizeof(EC_SCALAR));
+#else
   EC_RAW_POINT *BTs = OPENSSL_malloc(count * sizeof(EC_RAW_POINT));
   EC_RAW_POINT *Zs = OPENSSL_malloc(count * sizeof(EC_RAW_POINT));
   EC_SCALAR *es = OPENSSL_malloc(count * sizeof(EC_SCALAR));
   CBB batch_cbb;
+#endif
   CBB_zero(&batch_cbb);
   if (!BTs ||
       !Zs ||
@@ -583,11 +720,22 @@ static STACK_OF(TRUST_TOKEN) *
     goto err;
   }
 
+#if 1 // hezhiwen
+  for (i = 0; i < count; i++) {
+#else
   for (size_t i = 0; i < count; i++) {
+#endif
     const TRUST_TOKEN_PRETOKEN *pretoken =
         sk_TRUST_TOKEN_PRETOKEN_value(pretokens, i);
 
     EC_AFFINE Z_affine;
+  #if 1 // hezhiwen
+    EC_RAW_POINT N;
+    EC_AFFINE N_affine;
+    CBB token_cbb;
+    size_t point_len;
+    TRUST_TOKEN *token;
+  #endif
     if (!cbs_get_point(cbs, group, &Z_affine)) {
       OPENSSL_PUT_ERROR(TRUST_TOKEN, TRUST_TOKEN_R_DECODE_FAILURE);
       goto err;
@@ -604,8 +752,10 @@ static STACK_OF(TRUST_TOKEN) *
 
     // Unblind the token.
     // pretoken->r is rinv.
+  #if 0 // hezhiwen
     EC_RAW_POINT N;
     EC_AFFINE N_affine;
+  #endif
     if (!ec_point_mul_scalar(group, &N, &Zs[i], &pretoken->r) ||
         !ec_jacobian_to_affine(group, &N_affine, &N)) {
       goto err;
@@ -613,8 +763,12 @@ static STACK_OF(TRUST_TOKEN) *
 
     // Serialize the token. Include |key_id| to avoid an extra copy in the layer
     // above.
+  #if 1 // hezhiwen
+    point_len = 1 + 2 * BN_num_bytes(&group->field);
+  #else
     CBB token_cbb;
     size_t point_len = 1 + 2 * BN_num_bytes(&group->field);
+  #endif
     if (!CBB_init(&token_cbb, 4 + TRUST_TOKEN_NONCE_SIZE + (2 + point_len)) ||
         !CBB_add_u32(&token_cbb, key_id) ||
         !CBB_add_bytes(&token_cbb, pretoken->t, TRUST_TOKEN_NONCE_SIZE) ||
@@ -624,8 +778,13 @@ static STACK_OF(TRUST_TOKEN) *
       goto err;
     }
 
+  #if 1 // hezhiwen
+    token =
+        TRUST_TOKEN_new(CBB_data(&token_cbb), CBB_len(&token_cbb));
+  #else
     TRUST_TOKEN *token =
         TRUST_TOKEN_new(CBB_data(&token_cbb), CBB_len(&token_cbb));
+  #endif
     CBB_cleanup(&token_cbb);
     if (token == NULL ||
         !sk_TRUST_TOKEN_push(ret, token)) {
@@ -638,13 +797,19 @@ static STACK_OF(TRUST_TOKEN) *
   // The DLEQ batching construction is described in appendix B of
   // https://eprint.iacr.org/2020/072/20200324:214215. Note the additional
   // computations all act on public inputs.
+#if 1 // hezhiwen
+  for (i = 0; i < count; i++) {
+#else
   for (size_t i = 0; i < count; i++) {
+#endif
     if (!hash_to_scalar_batch(method, &es[i], &batch_cbb, i)) {
       goto err;
     }
   }
 
+#if 0 // hezhiwen
   EC_RAW_POINT BT_batch, Z_batch;
+#endif
   if (!ec_point_mul_scalar_public_batch(group, &BT_batch,
                                         /*g_scalar=*/NULL, BTs, es, count) ||
       !ec_point_mul_scalar_public_batch(group, &Z_batch,
@@ -652,7 +817,9 @@ static STACK_OF(TRUST_TOKEN) *
     goto err;
   }
 
+#if 0 // hezhiwen
   CBS proof;
+#endif
   if (!CBS_get_u16_length_prefixed(cbs, &proof) ||
       !dleq_verify(method, &proof, key, &BT_batch, &Z_batch) ||
       CBS_len(&proof) != 0) {
@@ -679,8 +846,15 @@ static int voprf_read(const VOPRF_METHOD *method,
                       const uint8_t *token, size_t token_len) {
   const EC_GROUP *group = method->group;
   CBS cbs;
+#if 1 // hezhiwen
+  EC_AFFINE Ws;
+  EC_RAW_POINT T;
+  EC_RAW_POINT Ws_calculated;
+  CBS_init(&cbs, token, token_len);
+#else
   CBS_init(&cbs, token, token_len);
   EC_AFFINE Ws;
+#endif
   if (!CBS_copy_bytes(&cbs, out_nonce, TRUST_TOKEN_NONCE_SIZE) ||
       !cbs_get_point(&cbs, group, &Ws) ||
       CBS_len(&cbs) != 0) {
@@ -689,12 +863,16 @@ static int voprf_read(const VOPRF_METHOD *method,
   }
 
 
+#if 0 // hezhiwen
   EC_RAW_POINT T;
+#endif
   if (!method->hash_to_group(group, &T, out_nonce)) {
     return 0;
   }
 
+#if 0 // hezhiwen
   EC_RAW_POINT Ws_calculated;
+#endif
   if (!ec_point_mul_scalar(group, &Ws_calculated, &T, &key->xs) ||
       !ec_affine_jacobian_equal(group, &Ws, &Ws_calculated)) {
     OPENSSL_PUT_ERROR(TRUST_TOKEN, TRUST_TOKEN_R_BAD_VALIDITY_CHECK);

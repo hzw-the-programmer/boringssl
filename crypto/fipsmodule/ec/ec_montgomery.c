@@ -177,6 +177,9 @@ static void ec_GFp_mont_felem_exp(const EC_GROUP *group, EC_FELEM *out,
 static int ec_GFp_mont_point_get_affine_coordinates(const EC_GROUP *group,
                                                     const EC_RAW_POINT *point,
                                                     EC_FELEM *x, EC_FELEM *y) {
+#if 1 // hezhiwen
+  EC_FELEM z1, z2;
+#endif
   if (ec_GFp_simple_is_at_infinity(group, point)) {
     OPENSSL_PUT_ERROR(EC, EC_R_POINT_AT_INFINITY);
     return 0;
@@ -184,7 +187,9 @@ static int ec_GFp_mont_point_get_affine_coordinates(const EC_GROUP *group,
 
   // Transform (X, Y, Z) into (x, y) := (X/Z^2, Y/Z^3). Note the check above
   // ensures |point->Z| is non-zero, so the inverse always exists.
+#if 0 // hezhiwen
   EC_FELEM z1, z2;
+#endif
   ec_GFp_mont_felem_inv0(group, &z2, &point->Z);
   ec_GFp_mont_felem_sqr(group, &z1, &z2);
 
@@ -204,6 +209,10 @@ static int ec_GFp_mont_jacobian_to_affine_batch(const EC_GROUP *group,
                                                 EC_AFFINE *out,
                                                 const EC_RAW_POINT *in,
                                                 size_t num) {
+#if 1 // hezhiwen
+  size_t i;
+  EC_FELEM zinvprod;
+#endif
   if (num == 0) {
     return 1;
   }
@@ -211,7 +220,11 @@ static int ec_GFp_mont_jacobian_to_affine_batch(const EC_GROUP *group,
   // Compute prefix products of all Zs. Use |out[i].X| as scratch space
   // to store these values.
   out[0].X = in[0].Z;
+#if 1 // hezhiwen
+  for (i = 1; i < num; i++) {
+#else
   for (size_t i = 1; i < num; i++) {
+#endif
     ec_GFp_mont_felem_mul(group, &out[i].X, &out[i - 1].X, &in[i].Z);
   }
 
@@ -222,9 +235,15 @@ static int ec_GFp_mont_jacobian_to_affine_batch(const EC_GROUP *group,
   }
 
   // Invert the product of all Zs.
+#if 0 // hezhiwen
   EC_FELEM zinvprod;
+#endif
   ec_GFp_mont_felem_inv0(group, &zinvprod, &out[num - 1].X);
+#if 1 // hezhiwen
+  for (i = num - 1; i < num; i--) {
+#else
   for (size_t i = num - 1; i < num; i--) {
+#endif
     // Our loop invariant is that |zinvprod| is Z0^-1 * Z1^-1 * ... * Zi^-1.
     // Recover Zi^-1 by multiplying by the previous product.
     EC_FELEM zinv, zinv2;
@@ -248,6 +267,29 @@ static int ec_GFp_mont_jacobian_to_affine_batch(const EC_GROUP *group,
 
 void ec_GFp_mont_add(const EC_GROUP *group, EC_RAW_POINT *out,
                      const EC_RAW_POINT *a, const EC_RAW_POINT *b) {
+#if 1 // hezhiwen
+  EC_FELEM x_out, y_out, z_out;
+  BN_ULONG z1nz;
+  BN_ULONG z2nz;
+
+  EC_FELEM z1z1;
+  EC_FELEM z2z2;
+  EC_FELEM u1;
+  EC_FELEM two_z1z2;
+  EC_FELEM s1;
+  EC_FELEM u2;
+  EC_FELEM h;
+  BN_ULONG xneq;
+  EC_FELEM z1z1z1;
+  EC_FELEM s2;
+  EC_FELEM r;
+  BN_ULONG yneq;
+  BN_ULONG is_nontrivial_double;
+  EC_FELEM i;
+  EC_FELEM j;
+  EC_FELEM v;
+  EC_FELEM s1j;
+#endif
   if (a == b) {
     ec_GFp_mont_dbl(group, out, a);
     return;
@@ -259,80 +301,123 @@ void ec_GFp_mont_add(const EC_GROUP *group, EC_RAW_POINT *out,
   // Coq transcription and correctness proof:
   // <https://github.com/davidben/fiat-crypto/blob/c7b95f62b2a54b559522573310e9b487327d219a/src/Curves/Weierstrass/Jacobian.v#L467>
   // <https://github.com/davidben/fiat-crypto/blob/c7b95f62b2a54b559522573310e9b487327d219a/src/Curves/Weierstrass/Jacobian.v#L544>
+#if 1 // hezhiwen
+  z1nz = ec_felem_non_zero_mask(group, &a->Z);
+  z2nz = ec_felem_non_zero_mask(group, &b->Z);
+#else
   EC_FELEM x_out, y_out, z_out;
   BN_ULONG z1nz = ec_felem_non_zero_mask(group, &a->Z);
   BN_ULONG z2nz = ec_felem_non_zero_mask(group, &b->Z);
+#endif
 
   // z1z1 = z1z1 = z1**2
+#if 0 // hezhiwen
   EC_FELEM z1z1;
+#endif
   ec_GFp_mont_felem_sqr(group, &z1z1, &a->Z);
 
   // z2z2 = z2**2
+#if 0 // hezhiwen
   EC_FELEM z2z2;
+#endif
   ec_GFp_mont_felem_sqr(group, &z2z2, &b->Z);
 
   // u1 = x1*z2z2
+#if 0 // hezhiwen
   EC_FELEM u1;
+#endif
   ec_GFp_mont_felem_mul(group, &u1, &a->X, &z2z2);
 
   // two_z1z2 = (z1 + z2)**2 - (z1z1 + z2z2) = 2z1z2
+#if 0 // hezhiwen
   EC_FELEM two_z1z2;
+#endif
   ec_felem_add(group, &two_z1z2, &a->Z, &b->Z);
   ec_GFp_mont_felem_sqr(group, &two_z1z2, &two_z1z2);
   ec_felem_sub(group, &two_z1z2, &two_z1z2, &z1z1);
   ec_felem_sub(group, &two_z1z2, &two_z1z2, &z2z2);
 
   // s1 = y1 * z2**3
+#if 0 // hezhiwen
   EC_FELEM s1;
+#endif
   ec_GFp_mont_felem_mul(group, &s1, &b->Z, &z2z2);
   ec_GFp_mont_felem_mul(group, &s1, &s1, &a->Y);
 
   // u2 = x2*z1z1
+#if 0 // hezhiwen
   EC_FELEM u2;
+#endif
   ec_GFp_mont_felem_mul(group, &u2, &b->X, &z1z1);
 
   // h = u2 - u1
+#if 0 // hezhiwen
   EC_FELEM h;
+#endif
   ec_felem_sub(group, &h, &u2, &u1);
 
+#if 1 // hezhiwen
+  xneq = ec_felem_non_zero_mask(group, &h);
+#else
   BN_ULONG xneq = ec_felem_non_zero_mask(group, &h);
+#endif
 
   // z_out = two_z1z2 * h
   ec_GFp_mont_felem_mul(group, &z_out, &h, &two_z1z2);
 
   // z1z1z1 = z1 * z1z1
+#if 0 // hezhiwen
   EC_FELEM z1z1z1;
+#endif
   ec_GFp_mont_felem_mul(group, &z1z1z1, &a->Z, &z1z1);
 
   // s2 = y2 * z1**3
+#if 0 // hezhiwen
   EC_FELEM s2;
+#endif
   ec_GFp_mont_felem_mul(group, &s2, &b->Y, &z1z1z1);
 
   // r = (s2 - s1)*2
+#if 0 // hezhiwen
   EC_FELEM r;
+#endif
   ec_felem_sub(group, &r, &s2, &s1);
   ec_felem_add(group, &r, &r, &r);
 
+#if 1 // hezhiwen
+  yneq = ec_felem_non_zero_mask(group, &r);
+#else
   BN_ULONG yneq = ec_felem_non_zero_mask(group, &r);
+#endif
 
   // This case will never occur in the constant-time |ec_GFp_mont_mul|.
+#if 1 // hezhiwen
+  is_nontrivial_double = ~xneq & ~yneq & z1nz & z2nz;
+#else
   BN_ULONG is_nontrivial_double = ~xneq & ~yneq & z1nz & z2nz;
+#endif
   if (is_nontrivial_double) {
     ec_GFp_mont_dbl(group, out, a);
     return;
   }
 
   // I = (2h)**2
+#if 0 // hezhiwen
   EC_FELEM i;
+#endif
   ec_felem_add(group, &i, &h, &h);
   ec_GFp_mont_felem_sqr(group, &i, &i);
 
   // J = h * I
+#if 0 // hezhiwen
   EC_FELEM j;
+#endif
   ec_GFp_mont_felem_mul(group, &j, &h, &i);
 
   // V = U1 * I
+#if 0 // hezhiwen
   EC_FELEM v;
+#endif
   ec_GFp_mont_felem_mul(group, &v, &u1, &i);
 
   // x_out = r**2 - J - 2V
@@ -344,7 +429,9 @@ void ec_GFp_mont_add(const EC_GROUP *group, EC_RAW_POINT *out,
   // y_out = r(V-x_out) - 2 * s1 * J
   ec_felem_sub(group, &y_out, &v, &x_out);
   ec_GFp_mont_felem_mul(group, &y_out, &y_out, &r);
+#if 0 // hezhiwen
   EC_FELEM s1j;
+#endif
   ec_GFp_mont_felem_mul(group, &s1j, &s1, &j);
   ec_felem_sub(group, &y_out, &y_out, &s1j);
   ec_felem_sub(group, &y_out, &y_out, &s1j);
@@ -410,13 +497,19 @@ void ec_GFp_mont_dbl(const EC_GROUP *group, EC_RAW_POINT *r,
     // <https://github.com/davidben/fiat-crypto/blob/c7b95f62b2a54b559522573310e9b487327d219a/src/Curves/Weierstrass/Jacobian.v#L102>
     // <https://github.com/davidben/fiat-crypto/blob/c7b95f62b2a54b559522573310e9b487327d219a/src/Curves/Weierstrass/Jacobian.v#L534>
     EC_FELEM xx, yy, yyyy, zz;
+  #if 1 // hezhiwen
+    EC_FELEM s;
+    EC_FELEM m;
+  #endif
     ec_GFp_mont_felem_sqr(group, &xx, &a->X);
     ec_GFp_mont_felem_sqr(group, &yy, &a->Y);
     ec_GFp_mont_felem_sqr(group, &yyyy, &yy);
     ec_GFp_mont_felem_sqr(group, &zz, &a->Z);
 
     // s = 2*((x_in + yy)^2 - xx - yyyy)
+  #if 0 // hezhiwen
     EC_FELEM s;
+  #endif
     ec_felem_add(group, &s, &a->X, &yy);
     ec_GFp_mont_felem_sqr(group, &s, &s);
     ec_felem_sub(group, &s, &s, &xx);
@@ -424,7 +517,9 @@ void ec_GFp_mont_dbl(const EC_GROUP *group, EC_RAW_POINT *r,
     ec_felem_add(group, &s, &s, &s);
 
     // m = 3*xx + a*zz^2
+  #if 0 // hezhiwen
     EC_FELEM m;
+  #endif
     ec_GFp_mont_felem_sqr(group, &m, &zz);
     ec_GFp_mont_felem_mul(group, &m, &group->a, &m);
     ec_felem_add(group, &m, &m, &xx);
@@ -455,6 +550,9 @@ void ec_GFp_mont_dbl(const EC_GROUP *group, EC_RAW_POINT *r,
 static int ec_GFp_mont_cmp_x_coordinate(const EC_GROUP *group,
                                         const EC_RAW_POINT *p,
                                         const EC_SCALAR *r) {
+#if 1 // hezhiwen
+  EC_FELEM r_Z2, Z2_mont, X;
+#endif
   if (!group->field_greater_than_order ||
       group->field.width != group->order.width) {
     // Do not bother optimizing this case. p > order in all commonly-used
@@ -469,7 +567,9 @@ static int ec_GFp_mont_cmp_x_coordinate(const EC_GROUP *group,
   // We wish to compare X/Z^2 with r. This is equivalent to comparing X with
   // r*Z^2. Note that X and Z are represented in Montgomery form, while r is
   // not.
+#if 0 // hezhiwen
   EC_FELEM r_Z2, Z2_mont, X;
+#endif
   ec_GFp_mont_felem_mul(group, &Z2_mont, &p->Z, &p->Z);
   // r < order < p, so this is valid.
   OPENSSL_memcpy(r_Z2.words, r->words, group->field.width * sizeof(BN_ULONG));

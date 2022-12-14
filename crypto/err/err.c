@@ -186,12 +186,19 @@ static struct CRYPTO_STATIC_MUTEX global_next_library_mutex =
 
 static void err_state_free(void *statep) {
   ERR_STATE *state = statep;
+#if 1 // hezhiwen
+  unsigned i;
+#endif
 
   if (state == NULL) {
     return;
   }
 
+#if 1 // hezhiwen
+  for (i = 0; i < ERR_NUM_ERRORS; i++) {
+#else
   for (unsigned i = 0; i < ERR_NUM_ERRORS; i++) {
+#endif
     err_clear(&state->errors[i]);
   }
   OPENSSL_free(state->to_free);
@@ -402,12 +409,22 @@ static const char *err_string_lookup(uint32_t lib, uint32_t key,
   //
   // Values are sorted based on treating the |lib| and |key| part as an
   // unsigned integer.
+#if 1 // hezhiwen
+  uint32_t search_key;
+  const uint32_t *result;
+#endif
   if (lib >= (1 << 6) || key >= (1 << 11)) {
     return NULL;
   }
+#if 1 // hezhiwen
+  search_key = lib << 26 | key << 15;
+  result = bsearch(&search_key, values, num_values,
+                   sizeof(uint32_t), err_string_cmp);
+#else
   uint32_t search_key = lib << 26 | key << 15;
   const uint32_t *result = bsearch(&search_key, values, num_values,
                                    sizeof(uint32_t), err_string_cmp);
+#endif
   if (result == NULL) {
     return NULL;
   }
@@ -529,10 +546,23 @@ char *ERR_error_string(uint32_t packed_error, char *ret) {
 }
 
 char *ERR_error_string_n(uint32_t packed_error, char *buf, size_t len) {
+#if 1 // hezhiwen
+  unsigned lib;
+  unsigned reason;
+  const char *lib_str;
+  const char *reason_str;
+  char lib_buf[64], reason_buf[64];
+#endif
   if (len == 0) {
     return NULL;
   }
 
+#if 1 // hezhiwen
+  lib = ERR_GET_LIB(packed_error);
+  reason = ERR_GET_REASON(packed_error);
+  lib_str = err_lib_error_string(packed_error);
+  reason_str = err_reason_error_string(packed_error);
+#else
   unsigned lib = ERR_GET_LIB(packed_error);
   unsigned reason = ERR_GET_REASON(packed_error);
 
@@ -540,6 +570,7 @@ char *ERR_error_string_n(uint32_t packed_error, char *buf, size_t len) {
   const char *reason_str = err_reason_error_string(packed_error);
 
   char lib_buf[64], reason_buf[64];
+#endif
   if (lib_str == NULL) {
     BIO_snprintf(lib_buf, sizeof(lib_buf), "lib(%u)", lib);
     lib_str = lib_buf;
@@ -613,7 +644,9 @@ void ERR_print_errors_cb(ERR_print_errors_callback_t callback, void *ctx) {
 }
 
 static int print_errors_to_file(const char* msg, size_t msg_len, void* ctx) {
+#if 0 // hezhiwen
   assert(msg[msg_len] == '\0');
+#endif
   FILE* fp = ctx;
   int res = fputs(msg, fp);
   return res < 0 ? 0 : 1;
@@ -813,10 +846,17 @@ struct err_save_state_st {
 };
 
 void ERR_SAVE_STATE_free(ERR_SAVE_STATE *state) {
+#if 1 // hezhiwen
+  size_t i;
+#endif
   if (state == NULL) {
     return;
   }
+#if 1 // hezhiwen
+  for (i = 0; i < state->num_errors; i++) {
+#else
   for (size_t i = 0; i < state->num_errors; i++) {
+#endif
     err_clear(&state->errors[i]);
   }
   OPENSSL_free(state->errors);
@@ -825,19 +865,34 @@ void ERR_SAVE_STATE_free(ERR_SAVE_STATE *state) {
 
 ERR_SAVE_STATE *ERR_save_state(void) {
   ERR_STATE *const state = err_get_state();
+#if 1 // hezhiwen
+  ERR_SAVE_STATE *ret;
+  size_t num_errors;
+  size_t i;
+#endif
   if (state == NULL || state->top == state->bottom) {
     return NULL;
   }
 
+#if 1 // hezhiwen
+  ret = OPENSSL_malloc(sizeof(ERR_SAVE_STATE));
+#else
   ERR_SAVE_STATE *ret = OPENSSL_malloc(sizeof(ERR_SAVE_STATE));
+#endif
   if (ret == NULL) {
     return NULL;
   }
 
   // Errors are stored in the range (bottom, top].
+#if 1 // hezhiwen
+  num_errors = state->top >= state->bottom
+                   ? state->top - state->bottom
+                   : ERR_NUM_ERRORS + state->top - state->bottom;
+#else
   size_t num_errors = state->top >= state->bottom
                           ? state->top - state->bottom
                           : ERR_NUM_ERRORS + state->top - state->bottom;
+#endif
   assert(num_errors < ERR_NUM_ERRORS);
   ret->errors = OPENSSL_malloc(num_errors * sizeof(struct err_error_st));
   if (ret->errors == NULL) {
@@ -847,7 +902,11 @@ ERR_SAVE_STATE *ERR_save_state(void) {
   OPENSSL_memset(ret->errors, 0, num_errors * sizeof(struct err_error_st));
   ret->num_errors = num_errors;
 
+#if 1 // hezhiwen
+  for (i = 0; i < num_errors; i++) {
+#else
   for (size_t i = 0; i < num_errors; i++) {
+#endif
     size_t j = (state->bottom + i + 1) % ERR_NUM_ERRORS;
     err_copy(&ret->errors[i], &state->errors[j]);
   }
@@ -855,17 +914,29 @@ ERR_SAVE_STATE *ERR_save_state(void) {
 }
 
 void ERR_restore_state(const ERR_SAVE_STATE *state) {
+#if 1 // hezhiwen
+  ERR_STATE *dst;
+  size_t i;
+#endif
   if (state == NULL || state->num_errors == 0) {
     ERR_clear_error();
     return;
   }
 
+#if 1 // hezhiwen
+  dst = err_get_state();
+#else
   ERR_STATE *const dst = err_get_state();
+#endif
   if (dst == NULL) {
     return;
   }
 
+#if 1 // hezhiwen
+  for (i = 0; i < state->num_errors; i++) {
+#else
   for (size_t i = 0; i < state->num_errors; i++) {
+#endif
     err_copy(&dst->errors[i], &state->errors[i]);
   }
   dst->top = state->num_errors - 1;

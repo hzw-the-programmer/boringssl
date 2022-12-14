@@ -67,11 +67,16 @@
 int ASN1_item_sign(const ASN1_ITEM *it, X509_ALGOR *algor1, X509_ALGOR *algor2,
                    ASN1_BIT_STRING *signature, void *asn, EVP_PKEY *pkey,
                    const EVP_MD *type) {
+#if 1 // hezhiwen
+  EVP_MD_CTX ctx;
+#endif
   if (signature->type != V_ASN1_BIT_STRING) {
     OPENSSL_PUT_ERROR(ASN1, ASN1_R_WRONG_TYPE);
     return 0;
   }
+#if 0 // hezhiwen
   EVP_MD_CTX ctx;
+#endif
   EVP_MD_CTX_init(&ctx);
   if (!EVP_DigestSignInit(&ctx, NULL, type, NULL, pkey)) {
     EVP_MD_CTX_cleanup(&ctx);

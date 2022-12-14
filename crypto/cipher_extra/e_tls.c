@@ -58,6 +58,11 @@ static int aead_tls_init(EVP_AEAD_CTX *ctx, const uint8_t *key, size_t key_len,
                          size_t tag_len, enum evp_aead_direction_t dir,
                          const EVP_CIPHER *cipher, const EVP_MD *md,
                          char implicit_iv) {
+#if 1 // hezhiwen
+  size_t mac_key_len;
+  size_t enc_key_len;
+  AEAD_TLS_CTX *tls_ctx;
+#endif
   if (tag_len != EVP_AEAD_DEFAULT_TAG_LENGTH &&
       tag_len != EVP_MD_size(md)) {
     OPENSSL_PUT_ERROR(CIPHER, CIPHER_R_UNSUPPORTED_TAG_SIZE);
@@ -69,12 +74,21 @@ static int aead_tls_init(EVP_AEAD_CTX *ctx, const uint8_t *key, size_t key_len,
     return 0;
   }
 
+#if 1 // hezhiwen
+  mac_key_len = EVP_MD_size(md);
+  enc_key_len = EVP_CIPHER_key_length(cipher);
+#else
   size_t mac_key_len = EVP_MD_size(md);
   size_t enc_key_len = EVP_CIPHER_key_length(cipher);
+#endif
   assert(mac_key_len + enc_key_len +
          (implicit_iv ? EVP_CIPHER_iv_length(cipher) : 0) == key_len);
 
+#if 1 // hezhiwen
+  tls_ctx = (AEAD_TLS_CTX *)&ctx->state;
+#else
   AEAD_TLS_CTX *tls_ctx = (AEAD_TLS_CTX *)&ctx->state;
+#endif
   EVP_CIPHER_CTX_init(&tls_ctx->cipher_ctx);
   HMAC_CTX_init(&tls_ctx->hmac_ctx);
   assert(mac_key_len <= EVP_MAX_MD_SIZE);
@@ -96,20 +110,42 @@ static int aead_tls_init(EVP_AEAD_CTX *ctx, const uint8_t *key, size_t key_len,
 
 static size_t aead_tls_tag_len(const EVP_AEAD_CTX *ctx, const size_t in_len,
                                const size_t extra_in_len) {
+#if 1 // hezhiwen
+  const AEAD_TLS_CTX *tls_ctx;
+  size_t hmac_len;
+  size_t block_size;
+  size_t pad_len;
+#endif
   assert(extra_in_len == 0);
+#if 1 // hezhiwen
+  tls_ctx = (AEAD_TLS_CTX *)&ctx->state;
+#else
   const AEAD_TLS_CTX *tls_ctx = (AEAD_TLS_CTX *)&ctx->state;
+#endif
 
+#if 1 // hezhiwen
+  hmac_len = HMAC_size(&tls_ctx->hmac_ctx);
+#else
   const size_t hmac_len = HMAC_size(&tls_ctx->hmac_ctx);
+#endif
   if (EVP_CIPHER_CTX_mode(&tls_ctx->cipher_ctx) != EVP_CIPH_CBC_MODE) {
     // The NULL cipher.
     return hmac_len;
   }
 
+#if 1 // hezhiwen
+  block_size = EVP_CIPHER_CTX_block_size(&tls_ctx->cipher_ctx);
+#else
   const size_t block_size = EVP_CIPHER_CTX_block_size(&tls_ctx->cipher_ctx);
+#endif
   // An overflow of |in_len + hmac_len| doesn't affect the result mod
   // |block_size|, provided that |block_size| is a smaller power of two.
   assert(block_size != 0 && (block_size & (block_size - 1)) == 0);
+#if 1 // hezhiwen
+  pad_len = block_size - (in_len + hmac_len) % block_size;
+#else
   const size_t pad_len = block_size - (in_len + hmac_len) % block_size;
+#endif
   return hmac_len + pad_len;
 }
 
@@ -122,6 +158,15 @@ static int aead_tls_seal_scatter(const EVP_AEAD_CTX *ctx, uint8_t *out,
                                  const size_t extra_in_len, const uint8_t *ad,
                                  const size_t ad_len) {
   AEAD_TLS_CTX *tls_ctx = (AEAD_TLS_CTX *)&ctx->state;
+#if 1 // hezhiwen
+  uint8_t ad_extra[2];
+  uint8_t mac[EVP_MAX_MD_SIZE];
+  unsigned mac_len;
+  int len;
+  unsigned block_size;
+  size_t early_mac_len;
+  size_t tag_len;
+#endif
 
   if (!tls_ctx->cipher_ctx.encrypt) {
     // Unlike a normal AEAD, a TLS AEAD may only be used in one direction.
@@ -152,14 +197,18 @@ static int aead_tls_seal_scatter(const EVP_AEAD_CTX *ctx, uint8_t *out,
 
   // To allow for CBC mode which changes cipher length, |ad| doesn't include the
   // length for legacy ciphers.
+#if 0 // hezhiwen
   uint8_t ad_extra[2];
+#endif
   ad_extra[0] = (uint8_t)(in_len >> 8);
   ad_extra[1] = (uint8_t)(in_len & 0xff);
 
   // Compute the MAC. This must be first in case the operation is being done
   // in-place.
+#if 0 // hezhiwen
   uint8_t mac[EVP_MAX_MD_SIZE];
   unsigned mac_len;
+#endif
   if (!HMAC_Init_ex(&tls_ctx->hmac_ctx, NULL, 0, NULL, NULL) ||
       !HMAC_Update(&tls_ctx->hmac_ctx, ad, ad_len) ||
       !HMAC_Update(&tls_ctx->hmac_ctx, ad_extra, sizeof(ad_extra)) ||
@@ -176,22 +225,38 @@ static int aead_tls_seal_scatter(const EVP_AEAD_CTX *ctx, uint8_t *out,
   }
 
   // Encrypt the input.
+#if 0 // hezhiwen
   int len;
+#endif
   if (!EVP_EncryptUpdate(&tls_ctx->cipher_ctx, out, &len, in, (int)in_len)) {
     return 0;
   }
 
+#if 1 // hezhiwen
+  block_size = EVP_CIPHER_CTX_block_size(&tls_ctx->cipher_ctx);
+#else
   unsigned block_size = EVP_CIPHER_CTX_block_size(&tls_ctx->cipher_ctx);
+#endif
 
   // Feed the MAC into the cipher in two steps. First complete the final partial
   // block from encrypting the input and split the result between |out| and
   // |out_tag|. Then feed the rest.
 
+#if 1 // hezhiwen
+  early_mac_len = (block_size - (in_len % block_size)) % block_size;
+#else
   const size_t early_mac_len = (block_size - (in_len % block_size)) % block_size;
+#endif
   if (early_mac_len != 0) {
+  #if 1 // hezhiwen
+    uint8_t buf[EVP_MAX_BLOCK_LENGTH];
+    int buf_len;
+    assert(len + block_size - early_mac_len == in_len);
+  #else
     assert(len + block_size - early_mac_len == in_len);
     uint8_t buf[EVP_MAX_BLOCK_LENGTH];
     int buf_len;
+  #endif
     if (!EVP_EncryptUpdate(&tls_ctx->cipher_ctx, buf, &buf_len, mac,
                            (int)early_mac_len)) {
       return 0;
@@ -200,7 +265,11 @@ static int aead_tls_seal_scatter(const EVP_AEAD_CTX *ctx, uint8_t *out,
     OPENSSL_memcpy(out + len, buf, block_size - early_mac_len);
     OPENSSL_memcpy(out_tag, buf + block_size - early_mac_len, early_mac_len);
   }
+#if 1 // hezhiwen
+  tag_len = early_mac_len;
+#else
   size_t tag_len = early_mac_len;
+#endif
 
   if (!EVP_EncryptUpdate(&tls_ctx->cipher_ctx, out_tag + tag_len, &len,
                          mac + tag_len, mac_len - tag_len)) {
@@ -209,12 +278,20 @@ static int aead_tls_seal_scatter(const EVP_AEAD_CTX *ctx, uint8_t *out,
   tag_len += len;
 
   if (block_size > 1) {
+  #if 1 // hezhiwen
+    uint8_t padding[256];
+    unsigned padding_len = block_size - ((in_len + mac_len) % block_size);
+
+    assert(block_size <= 256);
+    assert(EVP_CIPHER_CTX_mode(&tls_ctx->cipher_ctx) == EVP_CIPH_CBC_MODE);
+  #else
     assert(block_size <= 256);
     assert(EVP_CIPHER_CTX_mode(&tls_ctx->cipher_ctx) == EVP_CIPH_CBC_MODE);
 
     // Compute padding and feed that into the cipher.
     uint8_t padding[256];
     unsigned padding_len = block_size - ((in_len + mac_len) % block_size);
+  #endif
     OPENSSL_memset(padding, padding_len - 1, padding_len);
     if (!EVP_EncryptUpdate(&tls_ctx->cipher_ctx, out_tag + tag_len, &len,
                            padding, (int)padding_len)) {
@@ -238,6 +315,19 @@ static int aead_tls_open(const EVP_AEAD_CTX *ctx, uint8_t *out, size_t *out_len,
                          size_t nonce_len, const uint8_t *in, size_t in_len,
                          const uint8_t *ad, size_t ad_len) {
   AEAD_TLS_CTX *tls_ctx = (AEAD_TLS_CTX *)&ctx->state;
+#if 1 // hezhiwen
+  size_t total = 0;
+  int len;
+  size_t data_plus_mac_len;
+  crypto_word_t padding_ok;
+  size_t data_len;
+  uint8_t ad_fixed[13];
+  uint8_t mac[EVP_MAX_MD_SIZE];
+  size_t mac_len;
+  uint8_t record_mac_tmp[EVP_MAX_MD_SIZE];
+  uint8_t *record_mac;
+  crypto_word_t good;
+#endif
 
   if (tls_ctx->cipher_ctx.encrypt) {
     // Unlike a normal AEAD, a TLS AEAD may only be used in one direction.
@@ -281,8 +371,10 @@ static int aead_tls_open(const EVP_AEAD_CTX *ctx, uint8_t *out, size_t *out_len,
   }
 
   // Decrypt to get the plaintext + MAC + padding.
+#if 0 // hezhiwen
   size_t total = 0;
   int len;
+#endif
   if (!EVP_DecryptUpdate(&tls_ctx->cipher_ctx, out, &len, in, (int)in_len)) {
     return 0;
   }
@@ -297,8 +389,10 @@ static int aead_tls_open(const EVP_AEAD_CTX *ctx, uint8_t *out, size_t *out_len,
 
   // Remove CBC padding. Code from here on is timing-sensitive with respect to
   // |padding_ok| and |data_plus_mac_len| for CBC ciphers.
+#if 0 // hezhiwen
   size_t data_plus_mac_len;
   crypto_word_t padding_ok;
+#endif
   if (EVP_CIPHER_CTX_mode(&tls_ctx->cipher_ctx) == EVP_CIPH_CBC_MODE) {
     if (!EVP_tls_cbc_remove_padding(
             &padding_ok, &data_plus_mac_len, out, total,
@@ -315,7 +409,11 @@ static int aead_tls_open(const EVP_AEAD_CTX *ctx, uint8_t *out, size_t *out_len,
     // already been checked against the MAC size at the top of the function.
     assert(data_plus_mac_len >= HMAC_size(&tls_ctx->hmac_ctx));
   }
+#if 1 // hezhiwen
+  data_len = data_plus_mac_len - HMAC_size(&tls_ctx->hmac_ctx);
+#else
   size_t data_len = data_plus_mac_len - HMAC_size(&tls_ctx->hmac_ctx);
+#endif
 
   // At this point, if the padding is valid, the first |data_plus_mac_len| bytes
   // after |out| are the plaintext and MAC. Otherwise, |data_plus_mac_len| is
@@ -323,17 +421,21 @@ static int aead_tls_open(const EVP_AEAD_CTX *ctx, uint8_t *out, size_t *out_len,
 
   // To allow for CBC mode which changes cipher length, |ad| doesn't include the
   // length for legacy ciphers.
+#if 0 // hezhiwen
   uint8_t ad_fixed[13];
+#endif
   OPENSSL_memcpy(ad_fixed, ad, 11);
   ad_fixed[11] = (uint8_t)(data_len >> 8);
   ad_fixed[12] = (uint8_t)(data_len & 0xff);
   ad_len += 2;
 
   // Compute the MAC and extract the one in the record.
+#if 0 // hezhiwen
   uint8_t mac[EVP_MAX_MD_SIZE];
   size_t mac_len;
   uint8_t record_mac_tmp[EVP_MAX_MD_SIZE];
   uint8_t *record_mac;
+#endif
   if (EVP_CIPHER_CTX_mode(&tls_ctx->cipher_ctx) == EVP_CIPH_CBC_MODE &&
       EVP_tls_cbc_record_digest_supported(tls_ctx->hmac_ctx.md)) {
     if (!EVP_tls_cbc_digest_record(tls_ctx->hmac_ctx.md, mac, &mac_len,
@@ -347,11 +449,17 @@ static int aead_tls_open(const EVP_AEAD_CTX *ctx, uint8_t *out, size_t *out_len,
     record_mac = record_mac_tmp;
     EVP_tls_cbc_copy_mac(record_mac, mac_len, out, data_plus_mac_len, total);
   } else {
+  #if 1 // hezhiwen
+    unsigned mac_len_u;
+  #endif
+
     // We should support the constant-time path for all CBC-mode ciphers
     // implemented.
     assert(EVP_CIPHER_CTX_mode(&tls_ctx->cipher_ctx) != EVP_CIPH_CBC_MODE);
 
+  #if 0 // hezhiwen
     unsigned mac_len_u;
+  #endif
     if (!HMAC_Init_ex(&tls_ctx->hmac_ctx, NULL, 0, NULL, NULL) ||
         !HMAC_Update(&tls_ctx->hmac_ctx, ad_fixed, ad_len) ||
         !HMAC_Update(&tls_ctx->hmac_ctx, out, data_len) ||
@@ -368,8 +476,13 @@ static int aead_tls_open(const EVP_AEAD_CTX *ctx, uint8_t *out, size_t *out_len,
   // safe to simply perform the padding check first, but it would not be under a
   // different choice of MAC location on padding failure. See
   // EVP_tls_cbc_remove_padding.
+#if 1 // hezhiwen
+  good =
+      constant_time_eq_int(CRYPTO_memcmp(record_mac, mac, mac_len), 0);
+#else
   crypto_word_t good =
       constant_time_eq_int(CRYPTO_memcmp(record_mac, mac, mac_len), 0);
+#endif
   good &= padding_ok;
   CONSTTIME_DECLASSIFY(&good, sizeof(good));
   if (!good) {

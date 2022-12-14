@@ -150,6 +150,9 @@ void BN_CTX_start(BN_CTX *ctx) {
 }
 
 BIGNUM *BN_CTX_get(BN_CTX *ctx) {
+#if 1 // hezhiwen
+  BIGNUM *ret;
+#endif
   // Once any operation has failed, they all do.
   if (ctx->error) {
     if (ctx->defer_error) {
@@ -178,7 +181,11 @@ BIGNUM *BN_CTX_get(BN_CTX *ctx) {
     }
   }
 
+#if 1 // hezhiwen
+  ret = sk_BIGNUM_value(ctx->bignums, ctx->used);
+#else
   BIGNUM *ret = sk_BIGNUM_value(ctx->bignums, ctx->used);
+#endif
   BN_zero(ret);
   // This is bounded by |sk_BIGNUM_num|, so it cannot overflow.
   ctx->used++;
@@ -212,11 +219,19 @@ static int BN_STACK_push(BN_STACK *st, size_t idx) {
     // This function intentionally does not push to the error queue on error.
     // Error-reporting is deferred to |BN_CTX_get|.
     size_t new_size = st->size != 0 ? st->size * 3 / 2 : BN_CTX_START_FRAMES;
+  #if 1 // hezhiwen
+    size_t *new_indexes;
+  #endif
     if (new_size <= st->size || new_size > ((size_t)-1) / sizeof(size_t)) {
       return 0;
     }
+  #if 1 // hezhiwen
+    new_indexes =
+        OPENSSL_realloc(st->indexes, new_size * sizeof(size_t));
+  #else
     size_t *new_indexes =
         OPENSSL_realloc(st->indexes, new_size * sizeof(size_t));
+  #endif
     if (new_indexes == NULL) {
       return 0;
     }

@@ -247,7 +247,10 @@ int SHA512_Final(uint8_t out[SHA512_DIGEST_LENGTH], SHA512_CTX *sha) {
 static int sha512_final_impl(uint8_t *out, size_t md_len, SHA512_CTX *sha) {
   uint8_t *p = sha->p;
   size_t n = sha->num;
-
+#if 1 // hezhiwen
+  size_t out_words;
+  size_t i;
+#endif
   p[n] = 0x80;  // There always is a room for one
   n++;
   if (n > (sizeof(sha->p) - 16)) {
@@ -269,8 +272,13 @@ static int sha512_final_impl(uint8_t *out, size_t md_len, SHA512_CTX *sha) {
   }
 
   assert(md_len % 8 == 0);
+#if 1 // hezhiwen
+  out_words = md_len / 8;
+  for (i = 0; i < out_words; i++) {
+#else
   const size_t out_words = md_len / 8;
   for (size_t i = 0; i < out_words; i++) {
+#endif
     CRYPTO_store_u64_be(out, sha->h[i]);
     out += 8;
   }

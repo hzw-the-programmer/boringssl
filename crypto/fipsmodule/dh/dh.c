@@ -187,12 +187,18 @@ int DH_set_length(DH *dh, unsigned priv_length) {
 }
 
 int DH_generate_key(DH *dh) {
+#if 0 // hezhiwen
   boringssl_ensure_ffdh_self_test();
+#endif
 
   int ok = 0;
   int generate_new_key = 0;
   BN_CTX *ctx = NULL;
   BIGNUM *pub_key = NULL, *priv_key = NULL;
+
+#if 1 // hezhiwen
+  boringssl_ensure_ffdh_self_test();
+#endif
 
   if (BN_num_bits(dh->p) > OPENSSL_DH_MAX_MODULUS_BITS) {
     OPENSSL_PUT_ERROR(DH, DH_R_MODULUS_TOO_LARGE);
@@ -277,6 +283,11 @@ err:
 
 static int dh_compute_key(DH *dh, BIGNUM *out_shared_key,
                           const BIGNUM *peers_key, BN_CTX *ctx) {
+#if 1 // hezhiwen
+  int check_result;
+  int ret = 0;
+  BIGNUM *p_minus_1;
+#endif
   if (BN_num_bits(dh->p) > OPENSSL_DH_MAX_MODULUS_BITS) {
     OPENSSL_PUT_ERROR(DH, DH_R_MODULUS_TOO_LARGE);
     return 0;
@@ -287,15 +298,22 @@ static int dh_compute_key(DH *dh, BIGNUM *out_shared_key,
     return 0;
   }
 
+#if 0 // hezhiwen
   int check_result;
+#endif
   if (!DH_check_pub_key(dh, peers_key, &check_result) || check_result) {
     OPENSSL_PUT_ERROR(DH, DH_R_INVALID_PUBKEY);
     return 0;
   }
 
+#if 1 // hezhiwen
+  BN_CTX_start(ctx);
+  p_minus_1 = BN_CTX_get(ctx);
+#else
   int ret = 0;
   BN_CTX_start(ctx);
   BIGNUM *p_minus_1 = BN_CTX_get(ctx);
+#endif
 
   if (!p_minus_1 ||
       !BN_MONT_CTX_set_locked(&dh->method_mont_p, &dh->method_mont_p_lock,
@@ -328,14 +346,24 @@ static int dh_compute_key(DH *dh, BIGNUM *out_shared_key,
 int dh_compute_key_padded_no_self_test(unsigned char *out,
                                        const BIGNUM *peers_key, DH *dh) {
   BN_CTX *ctx = BN_CTX_new();
+#if 1 // hezhiwen
+  int dh_size;
+  int ret = -1;
+  BIGNUM *shared_key;
+#endif
   if (ctx == NULL) {
     return -1;
   }
   BN_CTX_start(ctx);
 
+#if 1 // hezhiwen
+  dh_size = DH_size(dh);
+  shared_key = BN_CTX_get(ctx);
+#else
   int dh_size = DH_size(dh);
   int ret = -1;
   BIGNUM *shared_key = BN_CTX_get(ctx);
+#endif
   if (shared_key &&
       dh_compute_key(dh, shared_key, peers_key, ctx) &&
       BN_bn2bin_padded(out, dh_size, shared_key)) {
@@ -354,16 +382,30 @@ int DH_compute_key_padded(unsigned char *out, const BIGNUM *peers_key, DH *dh) {
 }
 
 int DH_compute_key(unsigned char *out, const BIGNUM *peers_key, DH *dh) {
+#if 1 // hezhiwen
+  BN_CTX *ctx;
+  int ret = -1;
+  BIGNUM *shared_key;
+#else
   boringssl_ensure_ffdh_self_test();
+#endif
 
+#if 1 // hezhiwen
+  ctx = BN_CTX_new();
+#else
   BN_CTX *ctx = BN_CTX_new();
+#endif
   if (ctx == NULL) {
     return -1;
   }
   BN_CTX_start(ctx);
 
+#if 1 // hezhiwen
+  shared_key = BN_CTX_get(ctx);
+#else
   int ret = -1;
   BIGNUM *shared_key = BN_CTX_get(ctx);
+#endif
   if (shared_key && dh_compute_key(dh, shared_key, peers_key, ctx)) {
     // A |BIGNUM|'s byte count fits in |int|.
     ret = (int)BN_bn2bin(shared_key, out);
@@ -377,19 +419,35 @@ int DH_compute_key(unsigned char *out, const BIGNUM *peers_key, DH *dh) {
 int DH_compute_key_hashed(DH *dh, uint8_t *out, size_t *out_len,
                           size_t max_out_len, const BIGNUM *peers_key,
                           const EVP_MD *digest) {
+#if 1 // hezhiwen
+  int ret = 0;
+  size_t dh_len;
+  uint8_t *shared_bytes;
+  unsigned out_len_unsigned;
+  size_t digest_len;
+#endif
   *out_len = (size_t)-1;
 
+#if 1 // hezhiwen
+  digest_len = EVP_MD_size(digest);
+#else
   const size_t digest_len = EVP_MD_size(digest);
+#endif
   if (digest_len > max_out_len) {
     return 0;
   }
 
   FIPS_service_indicator_lock_state();
 
+#if 1 // hezhiwen
+  dh_len = DH_size(dh);
+  shared_bytes = OPENSSL_malloc(dh_len);
+#else
   int ret = 0;
   const size_t dh_len = DH_size(dh);
   uint8_t *shared_bytes = OPENSSL_malloc(dh_len);
   unsigned out_len_unsigned;
+#endif
   if (!shared_bytes ||
       // SP 800-56A is ambiguous about whether the output should be padded prior
       // to revision three. But revision three, section C.1, awkwardly specifies

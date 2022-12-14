@@ -222,9 +222,16 @@ int DSA_generate_parameters_ex(DSA *dsa, unsigned bits, const uint8_t *seed_in,
   BN_CTX *ctx = NULL;
   unsigned int h = 2;
   const EVP_MD *evpmd;
+#if 1 // hezhiwen
+  size_t qsize;
+#endif
 
   evpmd = (bits >= 2048) ? EVP_sha256() : EVP_sha1();
+#if 1 // hezhiwen
+  qsize = EVP_MD_size(evpmd);
+#else
   size_t qsize = EVP_MD_size(evpmd);
+#endif
 
   if (bits < 512) {
     bits = 512;
@@ -265,12 +272,20 @@ int DSA_generate_parameters_ex(DSA *dsa, unsigned bits, const uint8_t *seed_in,
   for (;;) {
     // Find q.
     for (;;) {
+    #if 1 // hezhiwen
+      int use_random_seed;
+      size_t i;
+    #endif
       // step 1
       if (!BN_GENCB_call(cb, BN_GENCB_GENERATED, m++)) {
         goto err;
       }
 
+    #if 1 // hezhiwen
+      use_random_seed = (seed_in == NULL);
+    #else
       int use_random_seed = (seed_in == NULL);
+    #endif
       if (use_random_seed) {
         if (!RAND_bytes(seed, qsize)) {
           goto err;
@@ -282,7 +297,11 @@ int DSA_generate_parameters_ex(DSA *dsa, unsigned bits, const uint8_t *seed_in,
       OPENSSL_memcpy(buf, seed, qsize);
       OPENSSL_memcpy(buf2, seed, qsize);
       // precompute "SEED + 1" for step 7:
+    #if 1 // hezhiwen
+      for (i = qsize - 1; i < qsize; i--) {
+    #else
       for (size_t i = qsize - 1; i < qsize; i--) {
+    #endif
         buf[i]++;
         if (buf[i] != 0) {
           break;
@@ -294,7 +313,11 @@ int DSA_generate_parameters_ex(DSA *dsa, unsigned bits, const uint8_t *seed_in,
           !EVP_Digest(buf, qsize, buf2, NULL, evpmd, NULL)) {
         goto err;
       }
+    #if 1 // hezhiwen
+      for (i = 0; i < qsize; i++) {
+    #else
       for (size_t i = 0; i < qsize; i++) {
+    #endif
         md[i] ^= buf2[i];
       }
 
@@ -338,7 +361,12 @@ int DSA_generate_parameters_ex(DSA *dsa, unsigned bits, const uint8_t *seed_in,
       // now 'buf' contains "SEED + offset - 1"
       for (k = 0; k <= n; k++) {
         // obtain "SEED + offset + k" by incrementing:
+      #if 1 // hezhiwen
+        size_t i;
+        for (i = qsize - 1; i < qsize; i--) {
+      #else
         for (size_t i = qsize - 1; i < qsize; i--) {
+      #endif
           buf[i]++;
           if (buf[i] != 0) {
             break;
@@ -577,27 +605,51 @@ int DSA_SIG_set0(DSA_SIG *sig, BIGNUM *r, BIGNUM *s) {
 // neither inputs nor outputs are in Montgomery form.
 static int mod_mul_consttime(BIGNUM *r, const BIGNUM *a, const BIGNUM *b,
                              const BN_MONT_CTX *mont, BN_CTX *ctx) {
+#if 1 // hezhiwen
+  BIGNUM *tmp;
+  int ok;
+#endif
   BN_CTX_start(ctx);
+#if 1 // hezhiwen
+  tmp = BN_CTX_get(ctx);
+#else
   BIGNUM *tmp = BN_CTX_get(ctx);
+#endif
   // |BN_mod_mul_montgomery| removes a factor of R, so we cancel it with a
   // single |BN_to_montgomery| which adds one factor of R.
+#if 1 // hezhiwen
+  ok = tmp != NULL &&
+       BN_to_montgomery(tmp, a, mont, ctx) &&
+       BN_mod_mul_montgomery(r, tmp, b, mont, ctx);
+#else
   int ok = tmp != NULL &&
            BN_to_montgomery(tmp, a, mont, ctx) &&
            BN_mod_mul_montgomery(r, tmp, b, mont, ctx);
+#endif
   BN_CTX_end(ctx);
   return ok;
 }
 
 DSA_SIG *DSA_do_sign(const uint8_t *digest, size_t digest_len, const DSA *dsa) {
+#if 0 // hezhiwen
   if (!dsa_check_parameters(dsa)) {
     return NULL;
   }
+#endif
 
   BIGNUM *kinv = NULL, *r = NULL, *s = NULL;
   BIGNUM m;
   BIGNUM xr;
   BN_CTX *ctx = NULL;
   DSA_SIG *ret = NULL;
+
+#if 1 // hezhiwen
+  size_t q_width;
+
+  if (!dsa_check_parameters(dsa)) {
+    return NULL;
+  }
+#endif
 
   BN_init(&m);
   BN_init(&xr);
@@ -630,7 +682,11 @@ redo:
   // violates |bn_mod_add_consttime| and |mod_mul_consttime|'s preconditions.
   // (The underlying algorithms could accept looser bounds, but we reduce for
   // simplicity.)
+#if 1 // hezhiwen
+  q_width = bn_minimal_width(dsa->q);
+#else
   size_t q_width = bn_minimal_width(dsa->q);
+#endif
   if (!bn_resize_words(&m, q_width) ||
       !bn_resize_words(&xr, q_width)) {
     goto err;
@@ -683,17 +739,29 @@ int DSA_do_verify(const uint8_t *digest, size_t digest_len, DSA_SIG *sig,
 
 int DSA_do_check_signature(int *out_valid, const uint8_t *digest,
                            size_t digest_len, DSA_SIG *sig, const DSA *dsa) {
+#if 1 // hezhiwen
+  int ret = 0;
+  BIGNUM u1, u2, t1;
+  BN_CTX *ctx;
+  unsigned q_bits;
+#endif
   *out_valid = 0;
   if (!dsa_check_parameters(dsa)) {
     return 0;
   }
 
+#if 0 // hezhiwen
   int ret = 0;
   BIGNUM u1, u2, t1;
+#endif
   BN_init(&u1);
   BN_init(&u2);
   BN_init(&t1);
+#if 1 // hezhiwen
+  ctx = BN_CTX_new();
+#else
   BN_CTX *ctx = BN_CTX_new();
+#endif
   if (ctx == NULL) {
     goto err;
   }
@@ -716,7 +784,11 @@ int DSA_do_check_signature(int *out_valid, const uint8_t *digest,
   }
 
   // save M in u1
+#if 1 // hezhiwen
+  q_bits = BN_num_bits(dsa->q);
+#else
   unsigned q_bits = BN_num_bits(dsa->q);
+#endif
   if (digest_len > (q_bits >> 3)) {
     // if the digest length is greater than the size of q use the
     // BN_num_bits(dsa->q) leftmost bits of the digest, see
@@ -802,19 +874,31 @@ int DSA_check_signature(int *out_valid, const uint8_t *digest,
   DSA_SIG *s = NULL;
   int ret = 0;
   uint8_t *der = NULL;
+#if 1 // hezhiwen
+  const uint8_t *sigp;
+  int der_len;
+#endif
 
   s = DSA_SIG_new();
   if (s == NULL) {
     goto err;
   }
 
+#if 1 // hezhiwen
+  sigp = sig;
+#else
   const uint8_t *sigp = sig;
+#endif
   if (d2i_DSA_SIG(&s, &sigp, sig_len) == NULL || sigp != sig + sig_len) {
     goto err;
   }
 
   // Ensure that the signature uses DER and doesn't have trailing garbage.
+#if 1 // hezhiwen
+  der_len = i2d_DSA_SIG(s, &der);
+#else
   int der_len = i2d_DSA_SIG(s, &der);
+#endif
   if (der_len < 0 || (size_t)der_len != sig_len ||
       OPENSSL_memcmp(sig, der, sig_len)) {
     goto err;
@@ -831,10 +915,15 @@ err:
 // der_len_len returns the number of bytes needed to represent a length of |len|
 // in DER.
 static size_t der_len_len(size_t len) {
+#if 1 // hezhiwen
+  size_t ret = 1;
+#endif
   if (len < 0x80) {
     return 1;
   }
+#if 0 // hezhiwen
   size_t ret = 1;
+#endif
   while (len > 0) {
     ret++;
     len >>= 8;
@@ -847,16 +936,28 @@ int DSA_size(const DSA *dsa) {
   // Compute the maximum length of an |order_len| byte integer. Defensively
   // assume that the leading 0x00 is included.
   size_t integer_len = 1 /* tag */ + der_len_len(order_len + 1) + 1 + order_len;
+#if 1 // hezhiwen
+  size_t value_len;
+  size_t ret;
+#endif
   if (integer_len < order_len) {
     return 0;
   }
   // A DSA signature is two INTEGERs.
+#if 1 // hezhiwen
+  value_len = 2 * integer_len;
+#else
   size_t value_len = 2 * integer_len;
+#endif
   if (value_len < integer_len) {
     return 0;
   }
   // Add the header.
+#if 1 // hezhiwen
+  ret = 1 /* tag */ + der_len_len(value_len) + value_len;
+#else
   size_t ret = 1 /* tag */ + der_len_len(value_len) + value_len;
+#endif
   if (ret < value_len) {
     return 0;
   }
@@ -865,16 +966,28 @@ int DSA_size(const DSA *dsa) {
 
 static int dsa_sign_setup(const DSA *dsa, BN_CTX *ctx, BIGNUM **out_kinv,
                           BIGNUM **out_r) {
+#if 1 // hezhiwen
+  int ret = 0;
+  BIGNUM k;
+  BIGNUM *r;
+  BIGNUM *kinv;
+#endif
   if (!dsa->p || !dsa->q || !dsa->g) {
     OPENSSL_PUT_ERROR(DSA, DSA_R_MISSING_PARAMETERS);
     return 0;
   }
 
+#if 1 // hezhiwen
+  BN_init(&k);
+  r = BN_new();
+  kinv = BN_new();
+#else
   int ret = 0;
   BIGNUM k;
   BN_init(&k);
   BIGNUM *r = BN_new();
   BIGNUM *kinv = BN_new();
+#endif
   if (r == NULL || kinv == NULL ||
       // Get random k
       !BN_rand_range_ex(&k, 1, dsa->q) ||
@@ -938,11 +1051,18 @@ void *DSA_get_ex_data(const DSA *dsa, int idx) {
 }
 
 DH *DSA_dup_DH(const DSA *dsa) {
+#if 1 // hezhiwen
+  DH *ret;
+#endif
   if (dsa == NULL) {
     return NULL;
   }
 
+#if 1 // hezhiwen
+  ret = DH_new();
+#else
   DH *ret = DH_new();
+#endif
   if (ret == NULL) {
     goto err;
   }

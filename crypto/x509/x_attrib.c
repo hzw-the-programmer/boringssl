@@ -71,13 +71,22 @@ IMPLEMENT_ASN1_FUNCTIONS_const(X509_ATTRIBUTE)
 IMPLEMENT_ASN1_DUP_FUNCTION_const(X509_ATTRIBUTE)
 
 X509_ATTRIBUTE *X509_ATTRIBUTE_create(int nid, int attrtype, void *value) {
+#if 1 // hezhiwen
+  X509_ATTRIBUTE *ret;
+  ASN1_TYPE *val;
+#endif
   ASN1_OBJECT *obj = OBJ_nid2obj(nid);
   if (obj == NULL) {
     return NULL;
   }
 
+#if 1 // hezhiwen
+  ret = X509_ATTRIBUTE_new();
+  val = ASN1_TYPE_new();
+#else
   X509_ATTRIBUTE *ret = X509_ATTRIBUTE_new();
   ASN1_TYPE *val = ASN1_TYPE_new();
+#endif
   if (ret == NULL || val == NULL) {
     goto err;
   }

@@ -33,6 +33,9 @@ static_assert(sizeof(BN_ULONG) * BN_MONT_CTX_N0_LIMBS == sizeof(uint64_t),
 uint64_t bn_mont_n0(const BIGNUM *n) {
   // These conditions are checked by the caller, |BN_MONT_CTX_set| or
   // |BN_MONT_CTX_new_consttime|.
+#if 1 // hezhiwen
+  uint64_t n_mod_r;
+#endif
   assert(!BN_is_zero(n));
   assert(!BN_is_negative(n));
   assert(BN_is_odd(n));
@@ -69,7 +72,11 @@ uint64_t bn_mont_n0(const BIGNUM *n) {
 
   // n_mod_r = n % r. As explained above, this is done by taking the lowest
   // |BN_MONT_CTX_N0_LIMBS| limbs of |n|.
+#if 1 // hezhiwen
+  n_mod_r = n->d[0];
+#else
   uint64_t n_mod_r = n->d[0];
+#endif
 #if BN_MONT_CTX_N0_LIMBS == 2
   if (n->width > 1) {
     n_mod_r |= (uint64_t)n->d[1] << BN_BITS2;
@@ -102,7 +109,11 @@ uint64_t bn_mont_n0(const BIGNUM *n) {
 // multiplication. This implementation does the negation implicitly by doing
 // the computations as a difference instead of a sum.
 static uint64_t bn_neg_inv_mod_r_u64(uint64_t n) {
+#if 1 // hezhiwen
+  size_t i;
+#else
   assert(n % 2 == 1);
+#endif
 
   // alpha == 2**(lg r - 1) == r / 2.
   static const uint64_t alpha = UINT64_C(1) << (LG_LITTLE_R - 1);
@@ -114,7 +125,14 @@ static uint64_t bn_neg_inv_mod_r_u64(uint64_t n) {
 
   // The invariant maintained from here on is:
   // 2**(lg r - i) == u*2*alpha - v*beta.
+#if 1 // hezhiwen
+  for (i = 0; i < LG_LITTLE_R; ++i) {
+    uint64_t u_is_odd;
+    uint64_t beta_if_u_is_odd;
+    uint64_t alpha_if_u_is_odd;
+#else
   for (size_t i = 0; i < LG_LITTLE_R; ++i) {
+#endif
 #if BN_BITS2 == 64 && defined(BN_ULLONG)
     assert((BN_ULLONG)(1) << (LG_LITTLE_R - i) ==
            ((BN_ULLONG)u * 2 * alpha) - ((BN_ULLONG)v * beta));
@@ -122,9 +140,12 @@ static uint64_t bn_neg_inv_mod_r_u64(uint64_t n) {
 
     // Delete a common factor of 2 in u and v if |u| is even. Otherwise, set
     // |u = (u + beta) / 2| and |v = (v / 2) + alpha|.
-
+  #if 1 // hezhiwen
+    u_is_odd = UINT64_C(0) - (u & 1);
+  #else
     uint64_t u_is_odd = UINT64_C(0) - (u & 1);  // Either 0xff..ff or 0.
-
+  #endif
+  
     // The addition can overflow, so use Dietz's method for it.
     //
     // Dietz calculates (x+y)/2 by (x⊕y)>>1 + x&y. This is valid for all
@@ -144,10 +165,18 @@ static uint64_t bn_neg_inv_mod_r_u64(uint64_t n) {
     //        (bvlshr (bvadd x y) one)))
     // )))
     // (check-sat)
+  #if 1 // hezhiwen
+    beta_if_u_is_odd = beta & u_is_odd;
+  #else
     uint64_t beta_if_u_is_odd = beta & u_is_odd;  // Either |beta| or 0.
+  #endif
     u = ((u ^ beta_if_u_is_odd) >> 1) + (u & beta_if_u_is_odd);
 
+  #if 1 // hezhiwen
+    alpha_if_u_is_odd = alpha & u_is_odd;
+  #else
     uint64_t alpha_if_u_is_odd = alpha & u_is_odd;  // Either |alpha| or 0.
+  #endif
     v = (v >> 1) + alpha_if_u_is_odd;
   }
 
@@ -161,13 +190,20 @@ static uint64_t bn_neg_inv_mod_r_u64(uint64_t n) {
 
 int bn_mod_exp_base_2_consttime(BIGNUM *r, unsigned p, const BIGNUM *n,
                                 BN_CTX *ctx) {
+#if 1 // hezhiwen
+  unsigned n_bits;
+#endif
   assert(!BN_is_zero(n));
   assert(!BN_is_negative(n));
   assert(BN_is_odd(n));
 
   BN_zero(r);
 
+#if 1 // hezhiwen
+  n_bits = BN_num_bits(n);
+#else
   unsigned n_bits = BN_num_bits(n);
+#endif
   assert(n_bits != 0);
   assert(p > n_bits);
   if (n_bits == 1) {

@@ -273,6 +273,10 @@ SPAKE2_CTX *SPAKE2_CTX_new(enum spake2_role_t my_role,
                            const uint8_t *my_name, size_t my_name_len,
                            const uint8_t *their_name, size_t their_name_len) {
   SPAKE2_CTX *ctx = OPENSSL_malloc(sizeof(SPAKE2_CTX));
+#if 1 // hezhiwen
+  CBS my_name_cbs, their_name_cbs;
+#endif
+
   if (ctx == NULL) {
     return NULL;
   }
@@ -280,7 +284,9 @@ SPAKE2_CTX *SPAKE2_CTX_new(enum spake2_role_t my_role,
   OPENSSL_memset(ctx, 0, sizeof(SPAKE2_CTX));
   ctx->my_role = my_role;
 
+#if 0 // hezhiwen
   CBS my_name_cbs, their_name_cbs;
+#endif
   CBS_init(&my_name_cbs, my_name, my_name_len);
   CBS_init(&their_name_cbs, their_name, their_name_len);
   if (!CBS_stow(&my_name_cbs, &ctx->my_name, &ctx->my_name_len) ||
@@ -344,6 +350,16 @@ static void scalar_add(scalar *dest, const scalar *src) {
 int SPAKE2_generate_msg(SPAKE2_CTX *ctx, uint8_t *out, size_t *out_len,
                          size_t max_out_len, const uint8_t *password,
                          size_t password_len) {
+#if 1 // hezhiwen
+  uint8_t private_tmp[64];
+  ge_p3 P;
+  uint8_t password_tmp[SHA512_DIGEST_LENGTH];
+  scalar password_scalar;
+  ge_p3 mask;
+  ge_cached mask_cached;
+  ge_p1p1 Pstar;
+  ge_p2 Pstar_proj;
+#endif
   if (ctx->state != spake2_state_init) {
     return 0;
   }
@@ -352,7 +368,9 @@ int SPAKE2_generate_msg(SPAKE2_CTX *ctx, uint8_t *out, size_t *out_len,
     return 0;
   }
 
+#if 0 // hezhiwen
   uint8_t private_tmp[64];
+#endif
   RAND_bytes(private_tmp, sizeof(private_tmp));
   x25519_sc_reduce(private_tmp);
   // Multiply by the cofactor (eight) so that we'll clear it when operating on
@@ -360,11 +378,15 @@ int SPAKE2_generate_msg(SPAKE2_CTX *ctx, uint8_t *out, size_t *out_len,
   left_shift_3(private_tmp);
   OPENSSL_memcpy(ctx->private_key, private_tmp, sizeof(ctx->private_key));
 
+#if 0 // hezhiwen
   ge_p3 P;
+#endif
   x25519_ge_scalarmult_base(&P, ctx->private_key);
 
   // mask = h(password) * <N or M>.
+#if 0 // hezhiwen
   uint8_t password_tmp[SHA512_DIGEST_LENGTH];
+#endif
   SHA512(password, password_len, password_tmp);
   OPENSSL_memcpy(ctx->password_hash, password_tmp, sizeof(ctx->password_hash));
   x25519_sc_reduce(password_tmp);
@@ -383,7 +405,9 @@ int SPAKE2_generate_msg(SPAKE2_CTX *ctx, uint8_t *out, size_t *out_len,
   // is one. So adding it will flip the LSB. Adding twice it will flip the next
   // bit and so one for all the bottom three bits.
 
+#if 0 // hezhiwen
   scalar password_scalar;
+#endif
   OPENSSL_memcpy(&password_scalar, password_tmp, sizeof(password_scalar));
 
   // |password_scalar| is the result of |x25519_sc_reduce| and thus is, at
@@ -418,20 +442,28 @@ int SPAKE2_generate_msg(SPAKE2_CTX *ctx, uint8_t *out, size_t *out_len,
   OPENSSL_memcpy(ctx->password_scalar, password_scalar.words,
                  sizeof(ctx->password_scalar));
 
+#if 0 // hezhiwen
   ge_p3 mask;
+#endif
   x25519_ge_scalarmult_small_precomp(&mask, ctx->password_scalar,
                                      ctx->my_role == spake2_role_alice
                                          ? kSpakeMSmallPrecomp
                                          : kSpakeNSmallPrecomp);
 
   // P* = P + mask.
+#if 0 // hezhiwen
   ge_cached mask_cached;
+#endif
   x25519_ge_p3_to_cached(&mask_cached, &mask);
+#if 0 // hezhiwen
   ge_p1p1 Pstar;
+#endif
   x25519_ge_add(&Pstar, &P, &mask_cached);
 
   // Encode P*
+#if 0 // hezhiwen
   ge_p2 Pstar_proj;
+#endif
   x25519_ge_p1p1_to_p2(&Pstar_proj, &Pstar);
   x25519_ge_tobytes(ctx->my_msg, &Pstar_proj);
 
@@ -460,39 +492,65 @@ static void update_with_length_prefix(SHA512_CTX *sha, const uint8_t *data,
 int SPAKE2_process_msg(SPAKE2_CTX *ctx, uint8_t *out_key, size_t *out_key_len,
                        size_t max_out_key_len, const uint8_t *their_msg,
                        size_t their_msg_len) {
+#if 1 // hezhiwen
+  ge_p3 Qstar;
+  ge_p3 peers_mask;
+  ge_cached peers_mask_cached;
+  ge_p1p1 Q_compl;
+  ge_p3 Q_ext;
+  ge_p2 dh_shared;
+  uint8_t dh_shared_encoded[32];
+  SHA512_CTX sha;
+  uint8_t key[SHA512_DIGEST_LENGTH];
+  size_t to_copy;
+#endif
   if (ctx->state != spake2_state_msg_generated ||
       their_msg_len != 32) {
     return 0;
   }
 
+#if 0 // hezhiwen
   ge_p3 Qstar;
+#endif
   if (!x25519_ge_frombytes_vartime(&Qstar, their_msg)) {
     // Point received from peer was not on the curve.
     return 0;
   }
 
   // Unmask peer's value.
+#if 0 // hezhiwen
   ge_p3 peers_mask;
+#endif
   x25519_ge_scalarmult_small_precomp(&peers_mask, ctx->password_scalar,
                                     ctx->my_role == spake2_role_alice
                                         ? kSpakeNSmallPrecomp
                                         : kSpakeMSmallPrecomp);
 
+#if 0 // hezhiwen
   ge_cached peers_mask_cached;
+#endif
   x25519_ge_p3_to_cached(&peers_mask_cached, &peers_mask);
 
+#if 0 // hezhiwen
   ge_p1p1 Q_compl;
   ge_p3 Q_ext;
+#endif
   x25519_ge_sub(&Q_compl, &Qstar, &peers_mask_cached);
   x25519_ge_p1p1_to_p3(&Q_ext, &Q_compl);
 
+#if 0 // hezhiwen
   ge_p2 dh_shared;
+#endif
   x25519_ge_scalarmult(&dh_shared, ctx->private_key, &Q_ext);
 
+#if 0 // hezhiwen
   uint8_t dh_shared_encoded[32];
+#endif
   x25519_ge_tobytes(dh_shared_encoded, &dh_shared);
 
+#if 0 // hezhiwen
   SHA512_CTX sha;
+#endif
   SHA512_Init(&sha);
   if (ctx->my_role == spake2_role_alice) {
     update_with_length_prefix(&sha, ctx->my_name, ctx->my_name_len);
@@ -509,10 +567,16 @@ int SPAKE2_process_msg(SPAKE2_CTX *ctx, uint8_t *out_key, size_t *out_key_len,
   update_with_length_prefix(&sha, ctx->password_hash,
                             sizeof(ctx->password_hash));
 
+#if 0 // hezhiwen
   uint8_t key[SHA512_DIGEST_LENGTH];
+#endif
   SHA512_Final(key, &sha);
 
+#if 1 // hezhiwen
+  to_copy = max_out_key_len;
+#else
   size_t to_copy = max_out_key_len;
+#endif
   if (to_copy > sizeof(key)) {
     to_copy = sizeof(key);
   }

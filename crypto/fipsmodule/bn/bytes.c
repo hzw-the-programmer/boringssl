@@ -63,11 +63,23 @@
 
 void bn_big_endian_to_words(BN_ULONG *out, size_t out_len, const uint8_t *in,
                             size_t in_len) {
+#if 1 // hezhiwen
+  size_t i;
+  for (i = 0; i < out_len; i++) {
+#else
   for (size_t i = 0; i < out_len; i++) {
+#endif
     if (in_len < sizeof(BN_ULONG)) {
+    #if 1 // hezhiwen
+      size_t j;
+    #endif
       // Load the last partial word.
       BN_ULONG word = 0;
+    #if 1 // hezhiwen
+      for (j = 0; j < in_len; j++) {
+    #else
       for (size_t j = 0; j < in_len; j++) {
+    #endif
         word = (word << 8) | in[j];
       }
       in_len = 0;
@@ -86,6 +98,9 @@ void bn_big_endian_to_words(BN_ULONG *out, size_t out_len, const uint8_t *in,
 }
 
 BIGNUM *BN_bin2bn(const uint8_t *in, size_t len, BIGNUM *ret) {
+#if 1 // hezhiwen
+  size_t num_words;
+#endif
   BIGNUM *bn = NULL;
   if (ret == NULL) {
     bn = BN_new();
@@ -100,7 +115,11 @@ BIGNUM *BN_bin2bn(const uint8_t *in, size_t len, BIGNUM *ret) {
     return ret;
   }
 
+#if 1 // hezhiwen
+  num_words = ((len - 1) / BN_BYTES) + 1;
+#else
   size_t num_words = ((len - 1) / BN_BYTES) + 1;
+#endif
   if (!bn_wexpand(ret, num_words)) {
     BN_free(bn);
     return NULL;
@@ -118,6 +137,9 @@ BIGNUM *BN_bin2bn(const uint8_t *in, size_t len, BIGNUM *ret) {
 
 BIGNUM *BN_le2bn(const uint8_t *in, size_t len, BIGNUM *ret) {
   BIGNUM *bn = NULL;
+#if 1 // hezhiwen
+  size_t num_words;
+#endif
   if (ret == NULL) {
     bn = BN_new();
     if (bn == NULL) {
@@ -133,7 +155,11 @@ BIGNUM *BN_le2bn(const uint8_t *in, size_t len, BIGNUM *ret) {
   }
 
   // Reserve enough space in |ret|.
+#if 1 // hezhiwen
+  num_words = ((len - 1) / BN_BYTES) + 1;
+#else
   size_t num_words = ((len - 1) / BN_BYTES) + 1;
+#endif
   if (!bn_wexpand(ret, num_words)) {
     BN_free(bn);
     return NULL;
@@ -156,7 +182,12 @@ static int fits_in_bytes(const BN_ULONG *words, size_t num_words,
   const uint8_t *bytes = (const uint8_t *)words;
   size_t tot_bytes = num_words * sizeof(BN_ULONG);
   uint8_t mask = 0;
+#if 1 // hezhiwen
+  size_t i;
+  for (i = num_bytes; i < tot_bytes; i++) {
+#else
   for (size_t i = num_bytes; i < tot_bytes; i++) {
+#endif
     mask |= bytes[i];
   }
   return mask == 0;
@@ -164,18 +195,32 @@ static int fits_in_bytes(const BN_ULONG *words, size_t num_words,
 
 void bn_words_to_big_endian(uint8_t *out, size_t out_len, const BN_ULONG *in,
                             size_t in_len) {
+#if 1 // hezhiwen
+  const uint8_t *bytes;
+  size_t num_bytes;
+  size_t i;
+#endif
   // The caller should have selected an output length without truncation.
   assert(fits_in_bytes(in, in_len, out_len));
 
   // We only support little-endian platforms, so the internal representation is
   // also little-endian as bytes. We can simply copy it in reverse.
+#if 1 // hezhiwen
+  bytes = (const uint8_t *)in;
+  num_bytes = in_len * sizeof(BN_ULONG);
+#else
   const uint8_t *bytes = (const uint8_t *)in;
   size_t num_bytes = in_len * sizeof(BN_ULONG);
+#endif
   if (out_len < num_bytes) {
     num_bytes = out_len;
   }
 
+#if 1 // hezhiwen
+  for (i = 0; i < num_bytes; i++) {
+#else
   for (size_t i = 0; i < num_bytes; i++) {
+#endif
     out[out_len - i - 1] = bytes[i];
   }
   // Pad out the rest of the buffer with zeroes.
@@ -189,14 +234,23 @@ size_t BN_bn2bin(const BIGNUM *in, uint8_t *out) {
 }
 
 int BN_bn2le_padded(uint8_t *out, size_t len, const BIGNUM *in) {
+#if 1 // hezhiwen
+  const uint8_t *bytes;
+  size_t num_bytes;
+#endif
   if (!fits_in_bytes(in->d, in->width, len)) {
     return 0;
   }
 
   // We only support little-endian platforms, so we can simply memcpy into the
   // internal representation.
+#if 1 // hezhiwen
+  bytes = (const uint8_t *)in->d;
+  num_bytes = in->width * BN_BYTES;
+#else
   const uint8_t *bytes = (const uint8_t *)in->d;
   size_t num_bytes = in->width * BN_BYTES;
+#endif
   if (len < num_bytes) {
     num_bytes = len;
   }

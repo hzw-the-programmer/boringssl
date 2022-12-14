@@ -36,9 +36,16 @@ static_assert(sizeof(block_t) == 64, "block_t has padding");
 // in-place.
 static void salsa208_word_specification(block_t *inout) {
   block_t x;
+#if 1 // hezhiwen
+  int i;
+#endif
   OPENSSL_memcpy(&x, inout, sizeof(x));
 
+#if 1 // hezhiwen
+  for (i = 8; i > 0; i -= 2) {
+#else
   for (int i = 8; i > 0; i -= 2) {
+#endif
     x.words[4] ^= CRYPTO_rotl_u32(x.words[0] + x.words[12], 7);
     x.words[8] ^= CRYPTO_rotl_u32(x.words[4] + x.words[0], 9);
     x.words[12] ^= CRYPTO_rotl_u32(x.words[8] + x.words[4], 13);
@@ -73,14 +80,23 @@ static void salsa208_word_specification(block_t *inout) {
     x.words[15] ^= CRYPTO_rotl_u32(x.words[14] + x.words[13], 18);
   }
 
+#if 1 // hezhiwen
+  for (i = 0; i < 16; ++i) {
+#else
   for (int i = 0; i < 16; ++i) {
+#endif
     inout->words[i] += x.words[i];
   }
 }
 
 // xor_block sets |*out| to be |*a| XOR |*b|.
 static void xor_block(block_t *out, const block_t *a, const block_t *b) {
+#if 1 // hezhiwen
+  size_t i;
+  for (i = 0; i < 16; i++) {
+#else
   for (size_t i = 0; i < 16; i++) {
+#endif
     out->words[i] = a->words[i] ^ b->words[i];
   }
 }
@@ -89,11 +105,20 @@ static void xor_block(block_t *out, const block_t *a, const block_t *b) {
 // is written to |out|. |out| and |B| may not alias and must be each one scrypt
 // block (2 * |r| Salsa20 blocks) long.
 static void scryptBlockMix(block_t *out, const block_t *B, uint64_t r) {
+#if 1 // hezhiwen
+  block_t X;
+  uint64_t i;
+#endif
   assert(out != B);
 
+#if 1 // hezhiwen
+  OPENSSL_memcpy(&X, &B[r * 2 - 1], sizeof(X));
+  for (i = 0; i < r * 2; i++) {
+#else
   block_t X;
   OPENSSL_memcpy(&X, &B[r * 2 - 1], sizeof(X));
   for (uint64_t i = 0; i < r * 2; i++) {
+#endif
     xor_block(&X, &X, &B[i]);
     salsa208_word_specification(&X);
 
@@ -109,19 +134,35 @@ static void scryptBlockMix(block_t *out, const block_t *B, uint64_t r) {
 // blocks (2 * |r| * |N| Salsa20 blocks).
 static void scryptROMix(block_t *B, uint64_t r, uint64_t N, block_t *T,
                         block_t *V) {
+#if 1 // hezhiwen
+  uint64_t i;
+  size_t k;
+#endif
   // Steps 1 and 2.
   OPENSSL_memcpy(V, B, 2 * r * sizeof(block_t));
+#if 1 // hezhiwen
+  for (i = 1; i < N; i++) {
+#else
   for (uint64_t i = 1; i < N; i++) {
+#endif
     scryptBlockMix(&V[2 * r * i /* scrypt block i */],
                    &V[2 * r * (i - 1) /* scrypt block i-1 */], r);
   }
   scryptBlockMix(B, &V[2 * r * (N - 1) /* scrypt block N-1 */], r);
 
   // Step 3.
+#if 1 // hezhiwen
+  for (i = 0; i < N; i++) {
+#else
   for (uint64_t i = 0; i < N; i++) {
+#endif
     // Note this assumes |N| <= 2^32 and is a power of 2.
     uint32_t j = B[2 * r - 1].words[0] & (N - 1);
+  #if 1 // hezhiwen
+    for (k = 0; k < 2 * r; k++) {
+  #else
     for (size_t k = 0; k < 2 * r; k++) {
+  #endif
       xor_block(&T[k], &B[k], &V[2 * r * j + k]);
     }
     scryptBlockMix(B, T, r);
@@ -144,6 +185,18 @@ int EVP_PBE_scrypt(const char *password, size_t password_len,
                    const uint8_t *salt, size_t salt_len, uint64_t N, uint64_t r,
                    uint64_t p, size_t max_mem, uint8_t *out_key,
                    size_t key_len) {
+#if 1 // hezhiwen
+  size_t max_scrypt_blocks;
+  size_t B_blocks;
+  size_t B_bytes;
+  size_t T_blocks;
+  size_t V_blocks;
+  block_t *B;
+  int ret = 0;
+  block_t *T;
+  block_t *V;
+  uint64_t i;
+#endif
   if (r == 0 || p == 0 || p > SCRYPT_PR_MAX / r ||
       // |N| must be a power of two.
       N < 2 || (N & (N - 1)) ||
@@ -161,7 +214,11 @@ int EVP_PBE_scrypt(const char *password, size_t password_len,
     max_mem = SCRYPT_MAX_MEM;
   }
 
+#if 1 // hezhiwen
+  max_scrypt_blocks = max_mem / (2 * r * sizeof(block_t));
+#else
   size_t max_scrypt_blocks = max_mem / (2 * r * sizeof(block_t));
+#endif
   if (max_scrypt_blocks < p + 1 ||
       max_scrypt_blocks - p - 1 < N) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_MEMORY_LIMIT_EXCEEDED);
@@ -171,19 +228,32 @@ int EVP_PBE_scrypt(const char *password, size_t password_len,
   // Allocate and divide up the scratch space. |max_mem| fits in a size_t, which
   // is no bigger than uint64_t, so none of these operations may overflow.
   static_assert(UINT64_MAX >= ((size_t)-1), "size_t exceeds uint64_t");
+#if 1 // hezhiwen
+  B_blocks = p * 2 * r;
+  B_bytes = B_blocks * sizeof(block_t);
+  T_blocks = 2 * r;
+  V_blocks = N * 2 * r;
+  B = OPENSSL_malloc((B_blocks + T_blocks + V_blocks) * sizeof(block_t));
+#else
   size_t B_blocks = p * 2 * r;
   size_t B_bytes = B_blocks * sizeof(block_t);
   size_t T_blocks = 2 * r;
   size_t V_blocks = N * 2 * r;
   block_t *B = OPENSSL_malloc((B_blocks + T_blocks + V_blocks) * sizeof(block_t));
+#endif
   if (B == NULL) {
     OPENSSL_PUT_ERROR(EVP, ERR_R_MALLOC_FAILURE);
     return 0;
   }
 
+#if 1 // hezhiwen
+  T = B + B_blocks;
+  V = T + T_blocks;
+#else
   int ret = 0;
   block_t *T = B + B_blocks;
   block_t *V = T + T_blocks;
+#endif
 
   // NOTE: PKCS5_PBKDF2_HMAC can only fail due to allocation failure
   // or |iterations| of 0 (we pass 1 here). This is consistent with
@@ -193,7 +263,11 @@ int EVP_PBE_scrypt(const char *password, size_t password_len,
     goto err;
   }
 
+#if 1 // hezhiwen
+  for (i = 0; i < p; i++) {
+#else
   for (uint64_t i = 0; i < p; i++) {
+#endif
     scryptROMix(B + 2 * r * i, r, N, T, V);
   }
 

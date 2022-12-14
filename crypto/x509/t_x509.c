@@ -72,11 +72,18 @@
 int X509_print_ex_fp(FILE *fp, X509 *x, unsigned long nmflag,
                      unsigned long cflag) {
   BIO *b = BIO_new_fp(fp, BIO_NOCLOSE);
+#if 1 // hezhiwen
+  int ret;
+#endif
   if (b == NULL) {
     OPENSSL_PUT_ERROR(X509, ERR_R_BUF_LIB);
     return 0;
   }
+#if 1 // hezhiwen
+  ret = X509_print_ex(b, x, nmflag, cflag);
+#else
   int ret = X509_print_ex(b, x, nmflag, cflag);
+#endif
   BIO_free(b);
   return ret;
 }
@@ -126,12 +133,20 @@ int X509_print_ex(BIO *bp, X509 *x, unsigned long nmflags,
     }
   }
   if (!(cflag & X509_FLAG_NO_SERIAL)) {
+  #if 1 // hezhiwen
+    const ASN1_INTEGER *serial;
+    uint64_t serial_u64;
+  #endif
     if (BIO_write(bp, "        Serial Number:", 22) <= 0) {
       goto err;
     }
 
+  #if 1 // hezhiwen
+    serial = X509_get0_serialNumber(x);
+  #else
     const ASN1_INTEGER *serial = X509_get0_serialNumber(x);
     uint64_t serial_u64;
+  #endif
     if (ASN1_INTEGER_get_uint64(&serial_u64, serial)) {
       assert(serial->type != V_ASN1_NEG_INTEGER);
       if (BIO_printf(bp, " %" PRIu64 " (0x%" PRIx64 ")\n", serial_u64,
@@ -271,6 +286,9 @@ err:
 
 int X509_signature_print(BIO *bp, const X509_ALGOR *sigalg,
                          const ASN1_STRING *sig) {
+#if 1 // hezhiwen
+  int sig_nid;
+#endif
   if (BIO_puts(bp, "    Signature Algorithm: ") <= 0) {
     return 0;
   }
@@ -279,7 +297,11 @@ int X509_signature_print(BIO *bp, const X509_ALGOR *sigalg,
   }
 
   // RSA-PSS signatures have parameters to print.
+#if 1 // hezhiwen
+  sig_nid = OBJ_obj2nid(sigalg->algorithm);
+#else
   int sig_nid = OBJ_obj2nid(sigalg->algorithm);
+#endif
   if (sig_nid == NID_rsassaPss &&
       !x509_print_rsa_pss_params(bp, sigalg, 9, 0)) {
     return 0;

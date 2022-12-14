@@ -155,6 +155,10 @@ static int x25519_encap_with_seed(
     size_t *out_shared_secret_len, uint8_t *out_enc, size_t *out_enc_len,
     size_t max_enc, const uint8_t *peer_public_key, size_t peer_public_key_len,
     const uint8_t *seed, size_t seed_len) {
+#if 1 // hezhiwen
+  uint8_t dh[X25519_SHARED_KEY_LEN];
+  uint8_t kem_context[2 * X25519_PUBLIC_VALUE_LEN];
+#endif
   if (max_enc < X25519_PUBLIC_VALUE_LEN) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_INVALID_BUFFER_SIZE);
     return 0;
@@ -165,14 +169,18 @@ static int x25519_encap_with_seed(
   }
   X25519_public_from_private(out_enc, seed);
 
+#if 0 // hezhiwen
   uint8_t dh[X25519_SHARED_KEY_LEN];
+#endif
   if (peer_public_key_len != X25519_PUBLIC_VALUE_LEN ||
       !X25519(dh, seed, peer_public_key)) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_INVALID_PEER_KEY);
     return 0;
   }
 
+#if 0 // hezhiwen
   uint8_t kem_context[2 * X25519_PUBLIC_VALUE_LEN];
+#endif
   OPENSSL_memcpy(kem_context, out_enc, X25519_PUBLIC_VALUE_LEN);
   OPENSSL_memcpy(kem_context + X25519_PUBLIC_VALUE_LEN, peer_public_key,
                  X25519_PUBLIC_VALUE_LEN);
@@ -191,13 +199,18 @@ static int x25519_decap(const EVP_HPKE_KEY *key, uint8_t *out_shared_secret,
                         size_t *out_shared_secret_len, const uint8_t *enc,
                         size_t enc_len) {
   uint8_t dh[X25519_SHARED_KEY_LEN];
+#if 1 // hezhiwen
+  uint8_t kem_context[2 * X25519_PUBLIC_VALUE_LEN];
+#endif
   if (enc_len != X25519_PUBLIC_VALUE_LEN ||
       !X25519(dh, key->private_key, enc)) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_INVALID_PEER_KEY);
     return 0;
   }
 
+#if 0 // hezhiwen
   uint8_t kem_context[2 * X25519_PUBLIC_VALUE_LEN];
+#endif
   OPENSSL_memcpy(kem_context, enc, X25519_PUBLIC_VALUE_LEN);
   OPENSSL_memcpy(kem_context + X25519_PUBLIC_VALUE_LEN, key->public_key,
                  X25519_PUBLIC_VALUE_LEN);
@@ -379,15 +392,34 @@ static int hpke_key_schedule(EVP_HPKE_CTX *ctx, const uint8_t *shared_secret,
                              size_t shared_secret_len, const uint8_t *info,
                              size_t info_len) {
   uint8_t suite_id[HPKE_SUITE_ID_LEN];
+#if 1 // hezhiwen
+  const EVP_MD *hkdf_md;
+  uint8_t psk_id_hash[EVP_MAX_MD_SIZE];
+  size_t psk_id_hash_len;
+  uint8_t info_hash[EVP_MAX_MD_SIZE];
+  size_t info_hash_len;
+  uint8_t context[sizeof(uint8_t) + 2 * EVP_MAX_MD_SIZE];
+  size_t context_len;
+  CBB context_cbb;
+  uint8_t secret[EVP_MAX_MD_SIZE];
+  size_t secret_len;
+  const EVP_AEAD *aead;
+  uint8_t key[EVP_AEAD_MAX_KEY_LENGTH];
+  size_t kKeyLen;
+#endif
   if (!hpke_build_suite_id(ctx, suite_id)) {
     return 0;
   }
 
   // psk_id_hash = LabeledExtract("", "psk_id_hash", psk_id)
   // TODO(davidben): Precompute this value and store it with the EVP_HPKE_KDF.
+#if 1 // hezhiwen
+  hkdf_md = ctx->kdf->hkdf_md_func();
+#else
   const EVP_MD *hkdf_md = ctx->kdf->hkdf_md_func();
   uint8_t psk_id_hash[EVP_MAX_MD_SIZE];
   size_t psk_id_hash_len;
+#endif
   if (!hpke_labeled_extract(hkdf_md, psk_id_hash, &psk_id_hash_len, NULL, 0,
                             suite_id, sizeof(suite_id), "psk_id_hash", NULL,
                             0)) {
@@ -395,8 +427,10 @@ static int hpke_key_schedule(EVP_HPKE_CTX *ctx, const uint8_t *shared_secret,
   }
 
   // info_hash = LabeledExtract("", "info_hash", info)
+#if 0 // hezhiwen
   uint8_t info_hash[EVP_MAX_MD_SIZE];
   size_t info_hash_len;
+#endif
   if (!hpke_labeled_extract(hkdf_md, info_hash, &info_hash_len, NULL, 0,
                             suite_id, sizeof(suite_id), "info_hash", info,
                             info_len)) {
@@ -404,9 +438,11 @@ static int hpke_key_schedule(EVP_HPKE_CTX *ctx, const uint8_t *shared_secret,
   }
 
   // key_schedule_context = concat(mode, psk_id_hash, info_hash)
+#if 0 // hezhiwen
   uint8_t context[sizeof(uint8_t) + 2 * EVP_MAX_MD_SIZE];
   size_t context_len;
   CBB context_cbb;
+#endif
   CBB_init_fixed(&context_cbb, context, sizeof(context));
   if (!CBB_add_u8(&context_cbb, HPKE_MODE_BASE) ||
       !CBB_add_bytes(&context_cbb, psk_id_hash, psk_id_hash_len) ||
@@ -416,8 +452,10 @@ static int hpke_key_schedule(EVP_HPKE_CTX *ctx, const uint8_t *shared_secret,
   }
 
   // secret = LabeledExtract(shared_secret, "secret", psk)
+#if 0 // hezhiwen
   uint8_t secret[EVP_MAX_MD_SIZE];
   size_t secret_len;
+#endif
   if (!hpke_labeled_extract(hkdf_md, secret, &secret_len, shared_secret,
                             shared_secret_len, suite_id, sizeof(suite_id),
                             "secret", NULL, 0)) {
@@ -425,9 +463,14 @@ static int hpke_key_schedule(EVP_HPKE_CTX *ctx, const uint8_t *shared_secret,
   }
 
   // key = LabeledExpand(secret, "key", key_schedule_context, Nk)
+#if 1 // hezhiwen
+  aead = EVP_HPKE_AEAD_aead(ctx->aead);
+  kKeyLen = EVP_AEAD_key_length(aead);
+#else
   const EVP_AEAD *aead = EVP_HPKE_AEAD_aead(ctx->aead);
   uint8_t key[EVP_AEAD_MAX_KEY_LENGTH];
   const size_t kKeyLen = EVP_AEAD_key_length(aead);
+#endif
   if (!hpke_labeled_expand(hkdf_md, key, kKeyLen, secret, secret_len, suite_id,
                            sizeof(suite_id), "key", context, context_len) ||
       !EVP_AEAD_CTX_init(&ctx->aead_ctx, aead, key, kKeyLen,
@@ -499,13 +542,19 @@ int EVP_HPKE_CTX_setup_sender_with_seed_for_testing(
     const uint8_t *peer_public_key, size_t peer_public_key_len,
     const uint8_t *info, size_t info_len, const uint8_t *seed,
     size_t seed_len) {
+#if 1 // hezhiwen
+  uint8_t shared_secret[MAX_SHARED_SECRET_LEN];
+  size_t shared_secret_len;
+#endif
   EVP_HPKE_CTX_zero(ctx);
   ctx->is_sender = 1;
   ctx->kem = kem;
   ctx->kdf = kdf;
   ctx->aead = aead;
+#if 0 // hezhiwen
   uint8_t shared_secret[MAX_SHARED_SECRET_LEN];
   size_t shared_secret_len;
+#endif
   if (!kem->encap_with_seed(kem, shared_secret, &shared_secret_len, out_enc,
                             out_enc_len, max_enc, peer_public_key,
                             peer_public_key_len, seed, seed_len) ||
@@ -522,13 +571,19 @@ int EVP_HPKE_CTX_setup_recipient(EVP_HPKE_CTX *ctx, const EVP_HPKE_KEY *key,
                                  const EVP_HPKE_AEAD *aead, const uint8_t *enc,
                                  size_t enc_len, const uint8_t *info,
                                  size_t info_len) {
+#if 1 // hezhiwen
+  uint8_t shared_secret[MAX_SHARED_SECRET_LEN];
+  size_t shared_secret_len;
+#endif
   EVP_HPKE_CTX_zero(ctx);
   ctx->is_sender = 0;
   ctx->kem = key->kem;
   ctx->kdf = kdf;
   ctx->aead = aead;
+#if 0 // hezhiwen
   uint8_t shared_secret[MAX_SHARED_SECRET_LEN];
   size_t shared_secret_len;
+#endif
   if (!key->kem->decap(key, shared_secret, &shared_secret_len, enc, enc_len) ||
       !hpke_key_schedule(ctx, shared_secret, shared_secret_len, info,
                          info_len)) {
@@ -540,18 +595,31 @@ int EVP_HPKE_CTX_setup_recipient(EVP_HPKE_CTX *ctx, const EVP_HPKE_KEY *key,
 
 static void hpke_nonce(const EVP_HPKE_CTX *ctx, uint8_t *out_nonce,
                        size_t nonce_len) {
+#if 1 // hezhiwen
+  uint64_t seq_copy;
+  size_t i;
+#endif
   assert(nonce_len >= 8);
 
   // Write padded big-endian bytes of |ctx->seq| to |out_nonce|.
   OPENSSL_memset(out_nonce, 0, nonce_len);
+#if 1 // hezhiwen
+  seq_copy = ctx->seq;
+  for (i = 0; i < 8; i++) {
+#else
   uint64_t seq_copy = ctx->seq;
   for (size_t i = 0; i < 8; i++) {
+#endif
     out_nonce[nonce_len - i - 1] = seq_copy & 0xff;
     seq_copy >>= 8;
   }
 
   // XOR the encoded sequence with the |ctx->base_nonce|.
+#if 1 // hezhiwen
+  for (i = 0; i < nonce_len; i++) {
+#else
   for (size_t i = 0; i < nonce_len; i++) {
+#endif
     out_nonce[i] ^= ctx->base_nonce[i];
   }
 }
@@ -559,6 +627,10 @@ static void hpke_nonce(const EVP_HPKE_CTX *ctx, uint8_t *out_nonce,
 int EVP_HPKE_CTX_open(EVP_HPKE_CTX *ctx, uint8_t *out, size_t *out_len,
                       size_t max_out_len, const uint8_t *in, size_t in_len,
                       const uint8_t *ad, size_t ad_len) {
+#if 1 // hezhiwen
+  uint8_t nonce[EVP_AEAD_MAX_NONCE_LENGTH];
+  size_t nonce_len;
+#endif
   if (ctx->is_sender) {
     OPENSSL_PUT_ERROR(EVP, ERR_R_SHOULD_NOT_HAVE_BEEN_CALLED);
     return 0;
@@ -568,8 +640,12 @@ int EVP_HPKE_CTX_open(EVP_HPKE_CTX *ctx, uint8_t *out, size_t *out_len,
     return 0;
   }
 
+#if 1 // hezhiwen
+  nonce_len = EVP_AEAD_nonce_length(ctx->aead_ctx.aead);
+#else
   uint8_t nonce[EVP_AEAD_MAX_NONCE_LENGTH];
   const size_t nonce_len = EVP_AEAD_nonce_length(ctx->aead_ctx.aead);
+#endif
   hpke_nonce(ctx, nonce, nonce_len);
 
   if (!EVP_AEAD_CTX_open(&ctx->aead_ctx, out, out_len, max_out_len, nonce,
@@ -583,6 +659,10 @@ int EVP_HPKE_CTX_open(EVP_HPKE_CTX *ctx, uint8_t *out, size_t *out_len,
 int EVP_HPKE_CTX_seal(EVP_HPKE_CTX *ctx, uint8_t *out, size_t *out_len,
                       size_t max_out_len, const uint8_t *in, size_t in_len,
                       const uint8_t *ad, size_t ad_len) {
+#if 1 // hezhiwen
+  uint8_t nonce[EVP_AEAD_MAX_NONCE_LENGTH];
+  size_t nonce_len;
+#endif
   if (!ctx->is_sender) {
     OPENSSL_PUT_ERROR(EVP, ERR_R_SHOULD_NOT_HAVE_BEEN_CALLED);
     return 0;
@@ -592,8 +672,12 @@ int EVP_HPKE_CTX_seal(EVP_HPKE_CTX *ctx, uint8_t *out, size_t *out_len,
     return 0;
   }
 
+#if 1 // hezhiwen
+  nonce_len = EVP_AEAD_nonce_length(ctx->aead_ctx.aead);
+#else
   uint8_t nonce[EVP_AEAD_MAX_NONCE_LENGTH];
   const size_t nonce_len = EVP_AEAD_nonce_length(ctx->aead_ctx.aead);
+#endif
   hpke_nonce(ctx, nonce, nonce_len);
 
   if (!EVP_AEAD_CTX_seal(&ctx->aead_ctx, out, out_len, max_out_len, nonce,
@@ -608,10 +692,17 @@ int EVP_HPKE_CTX_export(const EVP_HPKE_CTX *ctx, uint8_t *out,
                         size_t secret_len, const uint8_t *context,
                         size_t context_len) {
   uint8_t suite_id[HPKE_SUITE_ID_LEN];
+#if 1 // hezhiwen
+  const EVP_MD *hkdf_md;
+#endif
   if (!hpke_build_suite_id(ctx, suite_id)) {
     return 0;
   }
+#if 1 // hezhiwen
+  hkdf_md = ctx->kdf->hkdf_md_func();
+#else
   const EVP_MD *hkdf_md = ctx->kdf->hkdf_md_func();
+#endif
   if (!hpke_labeled_expand(hkdf_md, out, secret_len, ctx->exporter_secret,
                            EVP_MD_size(hkdf_md), suite_id, sizeof(suite_id),
                            "sec", context, context_len)) {

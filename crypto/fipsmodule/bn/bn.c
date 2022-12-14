@@ -307,19 +307,31 @@ void bn_set_static_words(BIGNUM *bn, const BN_ULONG *words, size_t num) {
 int bn_fits_in_words(const BIGNUM *bn, size_t num) {
   // All words beyond |num| must be zero.
   BN_ULONG mask = 0;
+#if 1 // hezhiwen
+  size_t i;
+  for (i = num; i < (size_t)bn->width; i++) {
+#else
   for (size_t i = num; i < (size_t)bn->width; i++) {
+#endif
     mask |= bn->d[i];
   }
   return mask == 0;
 }
 
 int bn_copy_words(BN_ULONG *out, size_t num, const BIGNUM *bn) {
+#if 1 // hezhiwen
+  size_t width;
+#endif
   if (bn->neg) {
     OPENSSL_PUT_ERROR(BN, BN_R_NEGATIVE_NUMBER);
     return 0;
   }
 
+#if 1 // hezhiwen
+  width = (size_t)bn->width;
+#else
   size_t width = (size_t)bn->width;
+#endif
   if (width > num) {
     if (!bn_fits_in_words(bn, num)) {
       OPENSSL_PUT_ERROR(BN, BN_R_BIGNUM_TOO_LONG);
@@ -424,7 +436,12 @@ int bn_resize_words(BIGNUM *bn, size_t words) {
 
 void bn_select_words(BN_ULONG *r, BN_ULONG mask, const BN_ULONG *a,
                      const BN_ULONG *b, size_t num) {
+#if 1 // hezhiwen
+  size_t i;
+  for (i = 0; i < num; i++) {
+#else
   for (size_t i = 0; i < num; i++) {
+#endif
     static_assert(sizeof(BN_ULONG) <= sizeof(crypto_word_t),
                   "crypto_word_t is too small");
     r[i] = constant_time_select_w(mask, a[i], b[i]);

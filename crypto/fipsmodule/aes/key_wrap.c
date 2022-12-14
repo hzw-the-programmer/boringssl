@@ -69,7 +69,12 @@ int AES_wrap_key(const AES_KEY *key, const uint8_t *iv, uint8_t *out,
                  const uint8_t *in, size_t in_len) {
   // See RFC 3394, section 2.2.1. Additionally, note that section 2 requires the
   // plaintext be at least two 8-byte blocks.
-
+#if 1 // hezhiwen
+  uint8_t A[AES_BLOCK_SIZE];
+  unsigned j;
+  size_t i;
+  size_t n;
+#endif
   if (in_len > INT_MAX - 8 || in_len < 16 || in_len % 8 != 0) {
     return -1;
   }
@@ -79,17 +84,33 @@ int AES_wrap_key(const AES_KEY *key, const uint8_t *iv, uint8_t *out,
   }
 
   OPENSSL_memmove(out + 8, in, in_len);
+#if 0 // hezhiwen
   uint8_t A[AES_BLOCK_SIZE];
+#endif
   OPENSSL_memcpy(A, iv, 8);
 
+#if 1 // hezhiwen
+  n = in_len / 8;
+#else
   size_t n = in_len / 8;
+#endif
 
+#if 1 // hezhiwen
+  for (j = 0; j < kBound; j++) {
+    for (i = 1; i <= n; i++) {
+      uint32_t t;
+#else
   for (unsigned j = 0; j < kBound; j++) {
     for (size_t i = 1; i <= n; i++) {
+#endif
       OPENSSL_memcpy(A + 8, out + 8 * i, 8);
       AES_encrypt(A, A, key);
 
+    #if 1 // hezhiwen
+      t = (uint32_t)(n * j + i);
+    #else
       uint32_t t = (uint32_t)(n * j + i);
+    #endif
       A[7] ^= t & 0xff;
       A[6] ^= (t >> 8) & 0xff;
       A[5] ^= (t >> 16) & 0xff;
@@ -111,19 +132,35 @@ static int aes_unwrap_key_inner(const AES_KEY *key, uint8_t *out,
   // See RFC 3394, section 2.2.2. Additionally, note that section 2 requires the
   // plaintext be at least two 8-byte blocks, so the ciphertext must be at least
   // three blocks.
-
+#if 1 // hezhiwen
+  uint8_t A[AES_BLOCK_SIZE];
+  size_t n;
+  unsigned j;
+  size_t i;
+#endif
   if (in_len > INT_MAX || in_len < 24 || in_len % 8 != 0) {
     return 0;
   }
 
+#if 0 // hezhiwen
   uint8_t A[AES_BLOCK_SIZE];
+#endif
   OPENSSL_memcpy(A, in, 8);
   OPENSSL_memmove(out, in + 8, in_len - 8);
 
+#if 1 // hezhiwen
+  n = (in_len / 8) - 1;
+#else
   size_t n = (in_len / 8) - 1;
+#endif
 
+#if 1 // hezhiwen
+  for (j = kBound - 1; j < kBound; j--) {
+    for (i = n; i > 0; i--) {
+#else
   for (unsigned j = kBound - 1; j < kBound; j--) {
     for (size_t i = n; i > 0; i--) {
+#endif
       uint32_t t = (uint32_t)(n * j + i);
       A[7] ^= t & 0xff;
       A[6] ^= (t >> 8) & 0xff;
@@ -166,13 +203,20 @@ int AES_wrap_key_padded(const AES_KEY *key, uint8_t *out, size_t *out_len,
   // See https://tools.ietf.org/html/rfc5649#section-4.1
   const uint64_t in_len64 = in_len;
   const size_t padded_len = (in_len + 7) & ~7;
+#if 1 // hezhiwen
+  uint8_t block[AES_BLOCK_SIZE];
+  uint8_t *padded_in;
+  int ret;
+#endif
   *out_len = 0;
   if (in_len == 0 || in_len64 > 0xffffffffu || in_len + 7 < in_len ||
       padded_len + 8 < padded_len || max_out < padded_len + 8) {
     return 0;
   }
 
+#if 0 // hezhiwen
   uint8_t block[AES_BLOCK_SIZE];
+#endif
   memcpy(block, kPaddingConstant, sizeof(kPaddingConstant));
   CRYPTO_store_u32_be(block + 4, (uint32_t)in_len);
 
@@ -184,7 +228,11 @@ int AES_wrap_key_padded(const AES_KEY *key, uint8_t *out, size_t *out_len,
     return 1;
   }
 
+#if 1 // hezhiwen
+  padded_in = OPENSSL_malloc(padded_len);
+#else
   uint8_t *padded_in = OPENSSL_malloc(padded_len);
+#endif
   if (padded_in == NULL) {
     return 0;
   }
@@ -192,7 +240,11 @@ int AES_wrap_key_padded(const AES_KEY *key, uint8_t *out, size_t *out_len,
   memset(padded_in + padded_len - 8, 0, 8);
   memcpy(padded_in, in, in_len);
   FIPS_service_indicator_lock_state();
+#if 1 // hezhiwen
+  ret = AES_wrap_key(key, block, out, padded_in, padded_len);
+#else
   const int ret = AES_wrap_key(key, block, out, padded_in, padded_len);
+#endif
   FIPS_service_indicator_unlock_state();
   OPENSSL_free(padded_in);
   if (ret < 0) {
@@ -205,12 +257,21 @@ int AES_wrap_key_padded(const AES_KEY *key, uint8_t *out, size_t *out_len,
 
 int AES_unwrap_key_padded(const AES_KEY *key, uint8_t *out, size_t *out_len,
                           size_t max_out, const uint8_t *in, size_t in_len) {
+#if 1 // hezhiwen
+  uint8_t iv[8];
+  crypto_word_t ok;
+  size_t claimed_len;
+  size_t i;
+  int ret;
+#endif
   *out_len = 0;
   if (in_len < AES_BLOCK_SIZE || max_out < in_len - 8) {
     return 0;
   }
 
+#if 0 // hezhiwen
   uint8_t iv[8];
+#endif
   if (in_len == AES_BLOCK_SIZE) {
     uint8_t block[AES_BLOCK_SIZE];
     AES_decrypt(in, block, key);
@@ -221,20 +282,34 @@ int AES_unwrap_key_padded(const AES_KEY *key, uint8_t *out, size_t *out_len,
   }
   assert(in_len % 8 == 0);
 
+#if 1 // hezhiwen
+  ok = constant_time_eq_int(
+       CRYPTO_memcmp(iv, kPaddingConstant, sizeof(kPaddingConstant)), 0);
+  claimed_len = CRYPTO_load_u32_be(iv + 4);
+#else
   crypto_word_t ok = constant_time_eq_int(
       CRYPTO_memcmp(iv, kPaddingConstant, sizeof(kPaddingConstant)), 0);
 
   const size_t claimed_len = CRYPTO_load_u32_be(iv + 4);
+#endif
   ok &= ~constant_time_is_zero_w(claimed_len);
   ok &= constant_time_eq_w((claimed_len - 1) >> 3, (in_len - 9) >> 3);
 
   // Check that padding bytes are all zero.
+#if 1 // hezhiwen
+  for (i = in_len - 15; i < in_len - 8; i++) {
+#else
   for (size_t i = in_len - 15; i < in_len - 8; i++) {
+#endif
     ok &= constant_time_is_zero_w(constant_time_ge_8(i, claimed_len) & out[i]);
   }
 
   *out_len = constant_time_select_w(ok, claimed_len, 0);
+#if 1 // hezhiwen
+  ret = ok & 1;
+#else
   const int ret = ok & 1;
+#endif
   if (ret) {
     FIPS_service_indicator_update_state();
   }

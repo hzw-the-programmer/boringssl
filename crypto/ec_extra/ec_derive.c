@@ -29,6 +29,18 @@ EC_KEY *EC_KEY_derive_from_secret(const EC_GROUP *group, const uint8_t *secret,
                                   size_t secret_len) {
 #define EC_KEY_DERIVE_MAX_NAME_LEN 16
   const char *name = EC_curve_nid2nist(EC_GROUP_get_curve_name(group));
+#if 1 // hezhiwen
+#define EC_KEY_DERIVE_EXTRA_BITS 128
+#define EC_KEY_DERIVE_EXTRA_BYTES (EC_KEY_DERIVE_EXTRA_BITS / 8)
+  static const char kLabel[] = "derive EC key ";
+  char info[sizeof(kLabel) + EC_KEY_DERIVE_MAX_NAME_LEN];
+  uint8_t derived[EC_KEY_DERIVE_EXTRA_BYTES + EC_MAX_BYTES];
+  size_t derived_len = BN_num_bytes(&group->order) + EC_KEY_DERIVE_EXTRA_BYTES;
+  EC_KEY *key;
+  BN_CTX *ctx;
+  BIGNUM *priv;
+  EC_POINT *pub;
+#endif
   if (name == NULL || strlen(name) > EC_KEY_DERIVE_MAX_NAME_LEN) {
     OPENSSL_PUT_ERROR(EC, EC_R_UNKNOWN_GROUP);
     return NULL;
@@ -37,14 +49,18 @@ EC_KEY *EC_KEY_derive_from_secret(const EC_GROUP *group, const uint8_t *secret,
   // Assemble a label string to provide some key separation in case |secret| is
   // misused, but ultimately it's on the caller to ensure |secret| is suitably
   // separated.
+#if 0 // hezhiwen
   static const char kLabel[] = "derive EC key ";
   char info[sizeof(kLabel) + EC_KEY_DERIVE_MAX_NAME_LEN];
+#endif
   OPENSSL_strlcpy(info, kLabel, sizeof(info));
   OPENSSL_strlcat(info, name, sizeof(info));
 
   // Generate 128 bits beyond the group order so the bias is at most 2^-128.
+#if 0 // hezhiwen
 #define EC_KEY_DERIVE_EXTRA_BITS 128
 #define EC_KEY_DERIVE_EXTRA_BYTES (EC_KEY_DERIVE_EXTRA_BITS / 8)
+#endif
 
   if (EC_GROUP_order_bits(group) <= EC_KEY_DERIVE_EXTRA_BITS + 8) {
     // The reduction strategy below requires the group order be large enough.
@@ -54,8 +70,10 @@ EC_KEY *EC_KEY_derive_from_secret(const EC_GROUP *group, const uint8_t *secret,
     return NULL;
   }
 
+#if 0 // hezhiwen
   uint8_t derived[EC_KEY_DERIVE_EXTRA_BYTES + EC_MAX_BYTES];
   size_t derived_len = BN_num_bytes(&group->order) + EC_KEY_DERIVE_EXTRA_BYTES;
+#endif
   assert(derived_len <= sizeof(derived));
   if (!HKDF(derived, derived_len, EVP_sha256(), secret, secret_len,
             /*salt=*/NULL, /*salt_len=*/0, (const uint8_t *)info,
@@ -63,10 +81,17 @@ EC_KEY *EC_KEY_derive_from_secret(const EC_GROUP *group, const uint8_t *secret,
     return NULL;
   }
 
+#if 1 // hezhiwen
+  key = EC_KEY_new();
+  ctx = BN_CTX_new();
+  priv = BN_bin2bn(derived, derived_len, NULL);
+  pub = EC_POINT_new(group);
+#else
   EC_KEY *key = EC_KEY_new();
   BN_CTX *ctx = BN_CTX_new();
   BIGNUM *priv = BN_bin2bn(derived, derived_len, NULL);
   EC_POINT *pub = EC_POINT_new(group);
+#endif
   if (key == NULL || ctx == NULL || priv == NULL || pub == NULL ||
       // Reduce |priv| with Montgomery reduction. First, convert "from"
       // Montgomery form to compute |priv| * R^-1 mod |order|. This requires

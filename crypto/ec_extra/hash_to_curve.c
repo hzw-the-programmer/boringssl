@@ -57,11 +57,22 @@ static int expand_message_xmd(const EVP_MD *md, uint8_t *out, size_t out_len,
   const size_t block_size = EVP_MD_block_size(md);
   const size_t md_size = EVP_MD_size(md);
   EVP_MD_CTX ctx;
+#if 1 // hezhiwen
+  uint8_t dst_buf[EVP_MAX_MD_SIZE];
+  uint8_t dst_len_u8;
+  static const uint8_t kZeros[EVP_MAX_MD_BLOCK_SIZE] = {0};
+  uint8_t l_i_b_str_zero[3];
+  uint8_t b_0[EVP_MAX_MD_SIZE];
+  uint8_t b_i[EVP_MAX_MD_SIZE];
+  uint8_t i = 1;
+#endif
   EVP_MD_CTX_init(&ctx);
 
   // Long DSTs are hashed down to size. See section 5.3.3.
   static_assert(EVP_MAX_MD_SIZE < 256, "hashed DST still too large");
+#if 0 // hezhiwen
   uint8_t dst_buf[EVP_MAX_MD_SIZE];
+#endif
   if (dst_len >= 256) {
     static const char kPrefix[] = "H2C-OVERSIZE-DST-";
     if (!EVP_DigestInit_ex(&ctx, md, NULL) ||
@@ -73,6 +84,12 @@ static int expand_message_xmd(const EVP_MD *md, uint8_t *out, size_t out_len,
     dst = dst_buf;
     dst_len = md_size;
   }
+#if 1 // hezhiwen
+  dst_len_u8 = (uint8_t)dst_len;
+  l_i_b_str_zero[0] = out_len >> 8;
+  l_i_b_str_zero[1] = out_len;
+  l_i_b_str_zero[2] = 0;  
+#else
   uint8_t dst_len_u8 = (uint8_t)dst_len;
 
   // Compute b_0.
@@ -81,6 +98,7 @@ static int expand_message_xmd(const EVP_MD *md, uint8_t *out, size_t out_len,
   // be returned. This depends on the static assert above.
   uint8_t l_i_b_str_zero[3] = {out_len >> 8, out_len, 0};
   uint8_t b_0[EVP_MAX_MD_SIZE];
+#endif
   if (!EVP_DigestInit_ex(&ctx, md, NULL) ||
       !EVP_DigestUpdate(&ctx, kZeros, block_size) ||
       !EVP_DigestUpdate(&ctx, msg, msg_len) ||
@@ -91,16 +109,26 @@ static int expand_message_xmd(const EVP_MD *md, uint8_t *out, size_t out_len,
     goto err;
   }
 
+#if 0 // hezhiwen
   uint8_t b_i[EVP_MAX_MD_SIZE];
   uint8_t i = 1;
+#endif
   while (out_len > 0) {
+  #if 1 // hezhiwen
+    size_t todo;
+  #endif
     if (i == 0) {
       // Input was too large.
       OPENSSL_PUT_ERROR(EC, ERR_R_INTERNAL_ERROR);
       goto err;
     }
     if (i > 1) {
+    #if 1 // hezhiwen
+      size_t j;
+      for (j = 0; j < md_size; j++) {
+    #else
       for (size_t j = 0; j < md_size; j++) {
+    #endif
         b_i[j] ^= b_0[j];
       }
     } else {
@@ -116,7 +144,11 @@ static int expand_message_xmd(const EVP_MD *md, uint8_t *out, size_t out_len,
       goto err;
     }
 
+  #if 1 // hezhiwen
+    todo = out_len >= md_size ? md_size : out_len;
+  #else
     size_t todo = out_len >= md_size ? md_size : out_len;
+  #endif
     OPENSSL_memcpy(out, b_i, todo);
     out += todo;
     out_len -= todo;
@@ -155,11 +187,21 @@ static int num_bytes_to_derive(size_t *out, const BIGNUM *modulus, unsigned k) {
 // result to |out|. |num_words| must be large enough to contain the output.
 static void big_endian_to_words(BN_ULONG *out, size_t num_words,
                                 const uint8_t *in, size_t len) {
+#if 1 // hezhiwen
+  uint8_t *out_u8;
+  size_t i;
+
+  assert(len <= num_words * sizeof(BN_ULONG));
+  OPENSSL_memset(out, 0, num_words * sizeof(BN_ULONG));
+  out_u8 = (uint8_t *)out;
+  for (i = 0; i < len; i++) {
+#else
   assert(len <= num_words * sizeof(BN_ULONG));
   // Ensure any excess bytes are zeroed.
   OPENSSL_memset(out, 0, num_words * sizeof(BN_ULONG));
   uint8_t *out_u8 = (uint8_t *)out;
   for (size_t i = 0; i < len; i++) {
+#endif
     out_u8[len - 1 - i] = in[i];
   }
 }
@@ -173,12 +215,18 @@ static int hash_to_field2(const EC_GROUP *group, const EVP_MD *md,
                           size_t msg_len) {
   size_t L;
   uint8_t buf[4 * EC_MAX_BYTES];
+#if 1 // hezhiwen
+  BN_ULONG words[2 * EC_MAX_WORDS];
+  size_t num_words;
+#endif
   if (!num_bytes_to_derive(&L, &group->field, k) ||
       !expand_message_xmd(md, buf, 2 * L, msg, msg_len, dst, dst_len)) {
     return 0;
   }
+#if 0 // hezhiwen
   BN_ULONG words[2 * EC_MAX_WORDS];
   size_t num_words = 2 * group->field.width;
+#endif
   big_endian_to_words(words, num_words, buf, L);
   group->meth->felem_reduce(group, out1, words, num_words);
   big_endian_to_words(words, num_words, buf + L, L);
@@ -193,13 +241,19 @@ static int hash_to_scalar(const EC_GROUP *group, const EVP_MD *md,
                           unsigned k, const uint8_t *msg, size_t msg_len) {
   size_t L;
   uint8_t buf[EC_MAX_BYTES * 2];
+#if 1 // hezhiwen
+  BN_ULONG words[2 * EC_MAX_WORDS];
+  size_t num_words = 2 * group->order.width;
+#endif
   if (!num_bytes_to_derive(&L, &group->order, k) ||
       !expand_message_xmd(md, buf, L, msg, msg_len, dst, dst_len)) {
     return 0;
   }
 
+#if 0 // hezhiwen
   BN_ULONG words[2 * EC_MAX_WORDS];
   size_t num_words = 2 * group->order.width;
+#endif
   big_endian_to_words(words, num_words, buf, L);
   ec_scalar_reduce(group, out, words, num_words);
   return 1;
@@ -207,8 +261,13 @@ static int hash_to_scalar(const EC_GROUP *group, const EVP_MD *md,
 
 static inline void mul_A(const EC_GROUP *group, EC_FELEM *out,
                          const EC_FELEM *in) {
+#if 1 // hezhiwen
+  EC_FELEM tmp;
+  assert(group->a_is_minus3);
+#else
   assert(group->a_is_minus3);
   EC_FELEM tmp;
+#endif
   ec_felem_add(group, &tmp, in, in);      // tmp = 2*in
   ec_felem_add(group, &tmp, &tmp, &tmp);  // tmp = 4*in
   ec_felem_sub(group, out, in, &tmp);     // out = -3*in
@@ -216,8 +275,13 @@ static inline void mul_A(const EC_GROUP *group, EC_FELEM *out,
 
 static inline void mul_minus_A(const EC_GROUP *group, EC_FELEM *out,
                                const EC_FELEM *in) {
+#if 1 // hezhiwen
+  EC_FELEM tmp;
+  assert(group->a_is_minus3);
+#else
   assert(group->a_is_minus3);
   EC_FELEM tmp;
+#endif
   ec_felem_add(group, &tmp, in, in);   // tmp = 2*in
   ec_felem_add(group, out, &tmp, in);  // out = 3*in
 }
@@ -242,6 +306,14 @@ static int map_to_curve_simple_swu(const EC_GROUP *group, const EC_FELEM *Z,
                           const EC_FELEM *b) = group->meth->felem_mul;
   void (*const felem_sqr)(const EC_GROUP *, EC_FELEM *r, const EC_FELEM *a) =
       group->meth->felem_sqr;
+#if 1 // hezhiwen
+  EC_FELEM tv1, tv2, tv3, tv4, xd, x1n, x2n, tmp, gxd, gx1, y1, y2;
+  BN_ULONG e1;
+  BN_ULONG e2;
+  BN_ULONG sgn0_u;
+  BN_ULONG sgn0_y;
+  BN_ULONG e3;
+#endif
 
   // This function requires the prime be 3 mod 4, and that A = -3.
   if (group->field.width == 0 || (group->field.d[0] & 3) != 3 ||
@@ -250,7 +322,9 @@ static int map_to_curve_simple_swu(const EC_GROUP *group, const EC_FELEM *Z,
     return 0;
   }
 
+#if 0 // hezhiwen
   EC_FELEM tv1, tv2, tv3, tv4, xd, x1n, x2n, tmp, gxd, gx1, y1, y2;
+#endif
   felem_sqr(group, &tv1, u);                         // tv1 = u^2
   felem_mul(group, &tv3, Z, &tv1);                   // tv3 = Z * tv1
   felem_sqr(group, &tv2, &tv3);                      // tv2 = tv3^2
@@ -258,7 +332,11 @@ static int map_to_curve_simple_swu(const EC_GROUP *group, const EC_FELEM *Z,
   ec_felem_add(group, &x1n, &xd, &group->one);       // x1n = xd + 1
   felem_mul(group, &x1n, &x1n, &group->b);           // x1n = x1n * B
   mul_minus_A(group, &xd, &xd);                      // xd = -A * xd
+#if 1 // hezhiwen
+  e1 = ec_felem_non_zero_mask(group, &xd);  // e1 = xd == 0 [flipped]
+#else
   BN_ULONG e1 = ec_felem_non_zero_mask(group, &xd);  // e1 = xd == 0 [flipped]
+#endif
   mul_A(group, &tmp, Z);
   ec_felem_select(group, &xd, e1, &xd, &tmp);  // xd = CMOV(xd, Z * A, e1)
   felem_sqr(group, &tv2, &xd);                 // tv2 = xd^2
@@ -281,13 +359,24 @@ static int map_to_curve_simple_swu(const EC_GROUP *group, const EC_FELEM *Z,
   felem_sqr(group, &tv2, &y1);                           // tv2 = y1^2
   felem_mul(group, &tv2, &tv2, &gxd);                    // tv2 = tv2 * gxd
   ec_felem_sub(group, &tv3, &tv2, &gx1);
+#if 1 // hezhiwen
+  e2 =
+      ec_felem_non_zero_mask(group, &tv3);       // e2 = tv2 == gx1 [flipped]
+#else
   BN_ULONG e2 =
       ec_felem_non_zero_mask(group, &tv3);       // e2 = tv2 == gx1 [flipped]
+#endif
   ec_felem_select(group, &x1n, e2, &x2n, &x1n);  // xn = CMOV(x2n, x1n, e2)
   ec_felem_select(group, &y1, e2, &y2, &y1);     // y = CMOV(y2, y1, e2)
+#if 1 // hezhiwen
+  sgn0_u = sgn0_le(group, u);
+  sgn0_y = sgn0_le(group, &y1);
+  e3 = sgn0_u ^ sgn0_y;
+#else
   BN_ULONG sgn0_u = sgn0_le(group, u);
   BN_ULONG sgn0_y = sgn0_le(group, &y1);
   BN_ULONG e3 = sgn0_u ^ sgn0_y;
+#endif
   e3 = ((BN_ULONG)0) - e3;  // e3 = sgn0(u) == sgn0(y) [flipped]
   ec_felem_neg(group, &y2, &y1);
   ec_felem_select(group, &y1, e3, &y2, &y1);  // y = CMOV(-y, y, e3)
@@ -305,19 +394,30 @@ static int hash_to_curve(const EC_GROUP *group, const EVP_MD *md,
                          EC_RAW_POINT *out, const uint8_t *dst, size_t dst_len,
                          const uint8_t *msg, size_t msg_len) {
   EC_FELEM u0, u1;
+#if 1 // hezhiwen
+  BN_ULONG c1[EC_MAX_WORDS];
+  size_t num_c1;
+  EC_RAW_POINT Q0, Q1;
+#endif
   if (!hash_to_field2(group, md, &u0, &u1, dst, dst_len, k, msg, msg_len)) {
     return 0;
   }
 
   // Compute |c1| = (p - 3) / 4.
+#if 1 // hezhiwen
+  num_c1 = group->field.width;
+#else
   BN_ULONG c1[EC_MAX_WORDS];
   size_t num_c1 = group->field.width;
+#endif
   if (!bn_copy_words(c1, num_c1, &group->field)) {
     return 0;
   }
   bn_rshift_words(c1, c1, /*shift=*/2, /*num=*/num_c1);
 
+#if 0 // hezhiwen
   EC_RAW_POINT Q0, Q1;
+#endif
   if (!map_to_curve_simple_swu(group, Z, c1, num_c1, c2, &Q0, &u0) ||
       !map_to_curve_simple_swu(group, Z, c1, num_c1, c2, &Q1, &u1)) {
     return 0;
@@ -339,6 +439,15 @@ int ec_hash_to_curve_p384_xmd_sha512_sswu_draft07(
     const EC_GROUP *group, EC_RAW_POINT *out, const uint8_t *dst,
     size_t dst_len, const uint8_t *msg, size_t msg_len) {
   // See section 8.3 of draft-irtf-cfrg-hash-to-curve-07.
+#if 1 // hezhiwen
+  EC_FELEM Z, c2;
+  static const uint8_t kSqrt1728[] = {
+      0x01, 0x98, 0x77, 0xcc, 0x10, 0x41, 0xb7, 0x55, 0x57, 0x43, 0xc0, 0xae,
+      0x2e, 0x3a, 0x3e, 0x61, 0xfb, 0x2a, 0xaa, 0x2e, 0x0e, 0x87, 0xea, 0x55,
+      0x7a, 0x56, 0x3d, 0x8b, 0x59, 0x8a, 0x09, 0x40, 0xd0, 0xa6, 0x97, 0xa9,
+      0xe0, 0xb9, 0xe9, 0x2c, 0xfa, 0xa3, 0x14, 0xf5, 0x83, 0xc9, 0xd0, 0x66
+  };
+#endif
   if (EC_GROUP_get_curve_name(group) != NID_secp384r1) {
     OPENSSL_PUT_ERROR(EC, EC_R_GROUP_MISMATCH);
     return 0;
@@ -352,15 +461,19 @@ int ec_hash_to_curve_p384_xmd_sha512_sswu_draft07(
   // assert z3 == pow(c2, 2, p)
   // ", ".join("0x%02x" % b for b in c2.to_bytes(384//8, 'big')
 
+#if 0 // hezhiwen
   static const uint8_t kSqrt1728[] = {
       0x01, 0x98, 0x77, 0xcc, 0x10, 0x41, 0xb7, 0x55, 0x57, 0x43, 0xc0, 0xae,
       0x2e, 0x3a, 0x3e, 0x61, 0xfb, 0x2a, 0xaa, 0x2e, 0x0e, 0x87, 0xea, 0x55,
       0x7a, 0x56, 0x3d, 0x8b, 0x59, 0x8a, 0x09, 0x40, 0xd0, 0xa6, 0x97, 0xa9,
       0xe0, 0xb9, 0xe9, 0x2c, 0xfa, 0xa3, 0x14, 0xf5, 0x83, 0xc9, 0xd0, 0x66
   };
+#endif
 
   // Z = -12, c2 = sqrt(1728)
+#if 0 // hezhiwen
   EC_FELEM Z, c2;
+#endif
   if (!felem_from_u8(group, &Z, 12) ||
       !ec_felem_from_bytes(group, &c2, kSqrt1728, sizeof(kSqrt1728))) {
     return 0;

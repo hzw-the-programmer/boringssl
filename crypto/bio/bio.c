@@ -122,6 +122,9 @@ void BIO_free_all(BIO *bio) {
 }
 
 int BIO_read(BIO *bio, void *buf, int len) {
+#if 1 // hezhiwen
+  int ret;
+#endif
   if (bio == NULL || bio->method == NULL || bio->method->bread == NULL) {
     OPENSSL_PUT_ERROR(BIO, BIO_R_UNSUPPORTED_METHOD);
     return -2;
@@ -133,7 +136,11 @@ int BIO_read(BIO *bio, void *buf, int len) {
   if (len <= 0) {
     return 0;
   }
+#if 1 // hezhiwen
+  ret = bio->method->bread(bio, buf, len);
+#else
   int ret = bio->method->bread(bio, buf, len);
+#endif
   if (ret > 0) {
     bio->num_read += ret;
   }
@@ -141,6 +148,9 @@ int BIO_read(BIO *bio, void *buf, int len) {
 }
 
 int BIO_gets(BIO *bio, char *buf, int len) {
+#if 1 // hezhiwen
+  int ret;
+#endif
   if (bio == NULL || bio->method == NULL || bio->method->bgets == NULL) {
     OPENSSL_PUT_ERROR(BIO, BIO_R_UNSUPPORTED_METHOD);
     return -2;
@@ -152,7 +162,11 @@ int BIO_gets(BIO *bio, char *buf, int len) {
   if (len <= 0) {
     return 0;
   }
+#if 1 // hezhiwen
+  ret = bio->method->bgets(bio, buf, len);
+#else
   int ret = bio->method->bgets(bio, buf, len);
+#endif
   if (ret > 0) {
     bio->num_read += ret;
   }
@@ -160,6 +174,9 @@ int BIO_gets(BIO *bio, char *buf, int len) {
 }
 
 int BIO_write(BIO *bio, const void *in, int inl) {
+#if 1 // hezhiwen
+  int ret;
+#endif
   if (bio == NULL || bio->method == NULL || bio->method->bwrite == NULL) {
     OPENSSL_PUT_ERROR(BIO, BIO_R_UNSUPPORTED_METHOD);
     return -2;
@@ -171,7 +188,11 @@ int BIO_write(BIO *bio, const void *in, int inl) {
   if (inl <= 0) {
     return 0;
   }
+#if 1 // hezhiwen
+  ret = bio->method->bwrite(bio, in, inl);
+#else
   int ret = bio->method->bwrite(bio, in, inl);
+#endif
   if (ret > 0) {
     bio->num_write += ret;
   }
@@ -443,7 +464,9 @@ static int bio_read_all(BIO *bio, uint8_t **out, size_t *out_len,
                         const uint8_t *prefix, size_t prefix_len,
                         size_t max_len) {
   static const size_t kChunkSize = 4096;
-
+#if 1 // hezhiwen
+  size_t done;
+#endif
   size_t len = prefix_len + kChunkSize;
   if (len > max_len) {
     len = max_len;
@@ -456,16 +479,30 @@ static int bio_read_all(BIO *bio, uint8_t **out, size_t *out_len,
     return 0;
   }
   OPENSSL_memcpy(*out, prefix, prefix_len);
+#if 1 // hezhiwen
+  done = prefix_len;
+#else
   size_t done = prefix_len;
+#endif
 
   for (;;) {
+  #if 1 // hezhiwen
+    size_t todo;
+    int n;
+  #endif
     if (done == len) {
       OPENSSL_free(*out);
       return 0;
     }
+  #if 1 // hezhiwen
+    todo = len - done;
+    assert(todo < INT_MAX);
+    n = BIO_read(bio, *out + done, todo);
+  #else
     const size_t todo = len - done;
     assert(todo < INT_MAX);
     const int n = BIO_read(bio, *out + done, todo);
+  #endif
     if (n == 0) {
       *out_len = done;
       return 1;
@@ -476,11 +513,18 @@ static int bio_read_all(BIO *bio, uint8_t **out, size_t *out_len,
 
     done += n;
     if (len < max_len && len - done < kChunkSize / 2) {
+    #if 1 // hezhiwen
+      uint8_t *new_buf;
+    #endif
       len += kChunkSize;
       if (len < kChunkSize || len > max_len) {
         len = max_len;
       }
+    #if 1 // hezhiwen
+      new_buf = OPENSSL_realloc(*out, len);
+    #else
       uint8_t *new_buf = OPENSSL_realloc(*out, len);
+    #endif
       if (new_buf == NULL) {
         OPENSSL_free(*out);
         return 0;
@@ -524,6 +568,11 @@ OPENSSL_DECLARE_ERROR_REASON(ASN1, ASN1_R_TOO_LONG)
 
 int BIO_read_asn1(BIO *bio, uint8_t **out, size_t *out_len, size_t max_len) {
   uint8_t header[6];
+#if 1 // hezhiwen
+  uint8_t tag;
+  uint8_t length_byte;
+  size_t len, header_len;
+#endif
 
   static const size_t kInitialHeaderLen = 2;
   int eof_on_first_read;
@@ -539,8 +588,13 @@ int BIO_read_asn1(BIO *bio, uint8_t **out, size_t *out_len, size_t max_len) {
     return 0;
   }
 
+#if 1 // hezhiwen
+  tag = header[0];
+  length_byte = header[1];
+#else
   const uint8_t tag = header[0];
   const uint8_t length_byte = header[1];
+#endif
 
   if ((tag & 0x1f) == 0x1f) {
     // Long form tags are not supported.
@@ -548,13 +602,19 @@ int BIO_read_asn1(BIO *bio, uint8_t **out, size_t *out_len, size_t max_len) {
     return 0;
   }
 
+#if 0 // hezhiwen
   size_t len, header_len;
+#endif
   if ((length_byte & 0x80) == 0) {
     // Short form length.
     len = length_byte;
     header_len = kInitialHeaderLen;
   } else {
     const size_t num_bytes = length_byte & 0x7f;
+  #if 1 // hezhiwen
+    uint32_t len32 = 0;
+    unsigned i;
+  #endif
 
     if ((tag & 0x20 /* constructed */) != 0 && num_bytes == 0) {
       // indefinite length.
@@ -577,8 +637,12 @@ int BIO_read_asn1(BIO *bio, uint8_t **out, size_t *out_len, size_t max_len) {
     }
     header_len = kInitialHeaderLen + num_bytes;
 
+  #if 1 // hezhiwen
+    for (i = 0; i < num_bytes; i++) {
+  #else
     uint32_t len32 = 0;
     for (unsigned i = 0; i < num_bytes; i++) {
+  #endif
       len32 <<= 8;
       len32 |= header[kInitialHeaderLen + i];
     }
@@ -632,9 +696,16 @@ static struct CRYPTO_STATIC_MUTEX g_index_lock = CRYPTO_STATIC_MUTEX_INIT;
 static int g_index = BIO_TYPE_START;
 
 int BIO_get_new_index(void) {
+#if 1 // hezhiwen
+  int ret;
+#endif
   CRYPTO_STATIC_MUTEX_lock_write(&g_index_lock);
   // If |g_index| exceeds 255, it will collide with the flags bits.
+#if 1 // hezhiwen
+  ret = g_index > 255 ? -1 : g_index++;
+#else
   int ret = g_index > 255 ? -1 : g_index++;
+#endif
   CRYPTO_STATIC_MUTEX_unlock_write(&g_index_lock);
   return ret;
 }

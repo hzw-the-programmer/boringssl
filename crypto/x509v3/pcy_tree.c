@@ -688,6 +688,9 @@ static void exnode_free(X509_POLICY_NODE *node) {
 }
 
 void X509_policy_tree_free(X509_POLICY_TREE *tree) {
+#if 1 // hezhiwen
+  int i;
+#endif
   if (!tree) {
     return;
   }
@@ -695,7 +698,11 @@ void X509_policy_tree_free(X509_POLICY_TREE *tree) {
   sk_X509_POLICY_NODE_free(tree->auth_policies);
   sk_X509_POLICY_NODE_pop_free(tree->user_policies, exnode_free);
 
+#if 1 // hezhiwen
+  for (i = 0; i < tree->nlevel; i++) {
+#else
   for (int i = 0; i < tree->nlevel; i++) {
+#endif
     X509_POLICY_LEVEL *curr = &tree->levels[i];
     X509_free(curr->cert);
     sk_X509_POLICY_NODE_pop_free(curr->nodes, policy_node_free);

@@ -97,6 +97,9 @@ int RSA_padding_add_PKCS1_type_1(uint8_t *to, size_t to_len,
 int RSA_padding_check_PKCS1_type_1(uint8_t *out, size_t *out_len,
                                    size_t max_out, const uint8_t *from,
                                    size_t from_len) {
+#if 1 // hezhiwen
+  size_t pad;
+#endif
   // See RFC 8017, section 9.2. This is part of signature verification and thus
   // does not need to run in constant-time.
   if (from_len < 2) {
@@ -111,7 +114,7 @@ int RSA_padding_check_PKCS1_type_1(uint8_t *out, size_t *out_len,
   }
 
   // Scan over padded data, looking for the 00.
-  size_t pad;
+  // size_t pad; // hezhiwen
   for (pad = 2 /* header */; pad < from_len; pad++) {
     if (from[pad] == 0x00) {
       break;
@@ -147,10 +150,17 @@ int RSA_padding_check_PKCS1_type_1(uint8_t *out, size_t *out_len,
 }
 
 static void rand_nonzero(uint8_t *out, size_t len) {
+#if 1 // hezhiwen
+  size_t i;
+#endif
   FIPS_service_indicator_lock_state();
   RAND_bytes(out, len);
 
+#if 1 // hezhiwen
+  for (i = 0; i < len; i++) {
+#else
   for (size_t i = 0; i < len; i++) {
+#endif
     while (out[i] == 0) {
       RAND_bytes(out + i, 1);
     }
@@ -161,6 +171,9 @@ static void rand_nonzero(uint8_t *out, size_t len) {
 
 int RSA_padding_add_PKCS1_type_2(uint8_t *to, size_t to_len,
                                  const uint8_t *from, size_t from_len) {
+#if 1 // hezhiwen
+  size_t padding_len;
+#endif
   // See RFC 8017, section 7.2.1.
   if (to_len < RSA_PKCS1_PADDING_SIZE) {
     OPENSSL_PUT_ERROR(RSA, RSA_R_KEY_SIZE_TOO_SMALL);
@@ -175,7 +188,11 @@ int RSA_padding_add_PKCS1_type_2(uint8_t *to, size_t to_len,
   to[0] = 0;
   to[1] = 2;
 
+#if 1 // hezhiwen
+  padding_len = to_len - 3 - from_len;
+#else
   size_t padding_len = to_len - 3 - from_len;
+#endif
   rand_nonzero(to + 2, padding_len);
   to[2 + padding_len] = 0;
   OPENSSL_memcpy(to + to_len - from_len, from, from_len);
@@ -185,6 +202,14 @@ int RSA_padding_add_PKCS1_type_2(uint8_t *to, size_t to_len,
 int RSA_padding_check_PKCS1_type_2(uint8_t *out, size_t *out_len,
                                    size_t max_out, const uint8_t *from,
                                    size_t from_len) {
+#if 1 // hezhiwen
+  crypto_word_t first_byte_is_zero;
+  crypto_word_t second_byte_is_two;
+  crypto_word_t zero_index, looking_for_index;
+  size_t i;
+  crypto_word_t valid_index;
+  size_t msg_len;
+#endif
   if (from_len == 0) {
     OPENSSL_PUT_ERROR(RSA, RSA_R_EMPTY_PUBLIC_KEY);
     return 0;
@@ -199,11 +224,17 @@ int RSA_padding_check_PKCS1_type_2(uint8_t *out, size_t *out_len,
     return 0;
   }
 
+#if 1 // hezhiwen
+  zero_index = 0;
+  looking_for_index = CONSTTIME_TRUE_W;
+  for (i = 2; i < from_len; i++) {
+#else
   crypto_word_t first_byte_is_zero = constant_time_eq_w(from[0], 0);
   crypto_word_t second_byte_is_two = constant_time_eq_w(from[1], 2);
 
   crypto_word_t zero_index = 0, looking_for_index = CONSTTIME_TRUE_W;
   for (size_t i = 2; i < from_len; i++) {
+#endif
     crypto_word_t equals0 = constant_time_is_zero_w(from[i]);
     zero_index =
         constant_time_select_w(looking_for_index & equals0, i, zero_index);
@@ -211,7 +242,11 @@ int RSA_padding_check_PKCS1_type_2(uint8_t *out, size_t *out_len,
   }
 
   // The input must begin with 00 02.
+#if 1 // hezhiwen
+  valid_index = first_byte_is_zero;
+#else
   crypto_word_t valid_index = first_byte_is_zero;
+#endif
   valid_index &= second_byte_is_two;
 
   // We must have found the end of PS.
@@ -236,7 +271,11 @@ int RSA_padding_check_PKCS1_type_2(uint8_t *out, size_t *out_len,
     return 0;
   }
 
+#if 1 // hezhiwen
+  msg_len = from_len - zero_index;
+#else
   const size_t msg_len = from_len - zero_index;
+#endif
   if (msg_len > max_out) {
     // This shouldn't happen because this function is always called with
     // |max_out| as the key size and |from_len| is bounded by the key size.
@@ -269,12 +308,21 @@ static int PKCS1_MGF1(uint8_t *out, size_t len, const uint8_t *seed,
                       size_t seed_len, const EVP_MD *md) {
   int ret = 0;
   EVP_MD_CTX ctx;
+#if 1 // hezhiwen
+  size_t md_len;
+  uint32_t i;
+#endif
   EVP_MD_CTX_init(&ctx);
   FIPS_service_indicator_lock_state();
 
+#if 1 // hezhiwen
+  md_len = EVP_MD_size(md);
+  for (i = 0; len > 0; i++) {
+#else
   size_t md_len = EVP_MD_size(md);
 
   for (uint32_t i = 0; len > 0; i++) {
+#endif
     uint8_t counter[4];
     counter[0] = (uint8_t)(i >> 24);
     counter[1] = (uint8_t)(i >> 16);
@@ -314,6 +362,16 @@ int RSA_padding_add_PKCS1_OAEP_mgf1(uint8_t *to, size_t to_len,
                                     const uint8_t *from, size_t from_len,
                                     const uint8_t *param, size_t param_len,
                                     const EVP_MD *md, const EVP_MD *mgf1md) {
+#if 1 // hezhiwen
+  size_t mdlen;
+  size_t emlen;
+  uint8_t *seed;
+  uint8_t *db;
+  uint8_t *dbmask = NULL;
+  int ret = 0;
+  size_t i;
+  uint8_t seedmask[EVP_MAX_MD_SIZE];
+#endif
   if (md == NULL) {
     md = EVP_sha1();
   }
@@ -321,14 +379,22 @@ int RSA_padding_add_PKCS1_OAEP_mgf1(uint8_t *to, size_t to_len,
     mgf1md = md;
   }
 
+#if 1 // hezhiwen
+  mdlen = EVP_MD_size(md);
+#else
   size_t mdlen = EVP_MD_size(md);
+#endif
 
   if (to_len < 2 * mdlen + 2) {
     OPENSSL_PUT_ERROR(RSA, RSA_R_KEY_SIZE_TOO_SMALL);
     return 0;
   }
 
+#if 1 // hezhiwen
+  emlen = to_len - 1;
+#else
   size_t emlen = to_len - 1;
+#endif
   if (from_len > emlen - 2 * mdlen - 1) {
     OPENSSL_PUT_ERROR(RSA, RSA_R_DATA_TOO_LARGE_FOR_KEY_SIZE);
     return 0;
@@ -340,11 +406,16 @@ int RSA_padding_add_PKCS1_OAEP_mgf1(uint8_t *to, size_t to_len,
   }
 
   to[0] = 0;
+#if 1 // hezhiwen
+  seed = to + 1;
+  db = to + mdlen + 1;
+#else
   uint8_t *seed = to + 1;
   uint8_t *db = to + mdlen + 1;
 
   uint8_t *dbmask = NULL;
   int ret = 0;
+#endif
   FIPS_service_indicator_lock_state();
   if (!EVP_Digest(param, param_len, db, NULL, md, NULL)) {
     goto out;
@@ -365,15 +436,25 @@ int RSA_padding_add_PKCS1_OAEP_mgf1(uint8_t *to, size_t to_len,
   if (!PKCS1_MGF1(dbmask, emlen - mdlen, seed, mdlen, mgf1md)) {
     goto out;
   }
+#if 1 // hezhiwen
+  for (i = 0; i < emlen - mdlen; i++) {
+#else
   for (size_t i = 0; i < emlen - mdlen; i++) {
+#endif
     db[i] ^= dbmask[i];
   }
 
+#if 0 // hezhiwen
   uint8_t seedmask[EVP_MAX_MD_SIZE];
+#endif
   if (!PKCS1_MGF1(seedmask, mdlen, db, emlen - mdlen, mgf1md)) {
     goto out;
   }
+#if 1 // hezhiwen
+  for (i = 0; i < mdlen; i++) {
+#else
   for (size_t i = 0; i < mdlen; i++) {
+#endif
     seed[i] ^= seedmask[i];
   }
   ret = 1;
@@ -390,6 +471,19 @@ int RSA_padding_check_PKCS1_OAEP_mgf1(uint8_t *out, size_t *out_len,
                                       size_t param_len, const EVP_MD *md,
                                       const EVP_MD *mgf1md) {
   uint8_t *db = NULL;
+#if 1 // hezhiwen
+  size_t mdlen;
+  size_t dblen;
+  const uint8_t *maskedseed;
+  const uint8_t *maskeddb;
+  uint8_t seed[EVP_MAX_MD_SIZE];
+  uint8_t phash[EVP_MAX_MD_SIZE];
+  crypto_word_t bad;
+  crypto_word_t looking_for_one_byte = CONSTTIME_TRUE_W;
+  size_t one_index = 0;
+  size_t i;
+  size_t mlen;
+#endif
 
   if (md == NULL) {
     md = EVP_sha1();
@@ -398,7 +492,11 @@ int RSA_padding_check_PKCS1_OAEP_mgf1(uint8_t *out, size_t *out_len,
     mgf1md = md;
   }
 
+#if 1 // hezhiwen
+  mdlen = EVP_MD_size(md);
+#else
   size_t mdlen = EVP_MD_size(md);
+#endif
 
   // The encoded message is one byte smaller than the modulus to ensure that it
   // doesn't end up greater than the modulus. Thus there's an extra "+1" here
@@ -409,7 +507,11 @@ int RSA_padding_check_PKCS1_OAEP_mgf1(uint8_t *out, size_t *out_len,
     goto decoding_err;
   }
 
+#if 1 // hezhiwen
+  dblen = from_len - mdlen - 1;
+#else
   size_t dblen = from_len - mdlen - 1;
+#endif
   FIPS_service_indicator_lock_state();
   db = OPENSSL_malloc(dblen);
   if (db == NULL) {
@@ -417,35 +519,58 @@ int RSA_padding_check_PKCS1_OAEP_mgf1(uint8_t *out, size_t *out_len,
     goto err;
   }
 
+#if 1 // hezhiwen
+  maskedseed = from + 1;
+  maskeddb = from + 1 + mdlen;
+#else
   const uint8_t *maskedseed = from + 1;
   const uint8_t *maskeddb = from + 1 + mdlen;
 
   uint8_t seed[EVP_MAX_MD_SIZE];
+#endif
   if (!PKCS1_MGF1(seed, mdlen, maskeddb, dblen, mgf1md)) {
     goto err;
   }
+#if 1 // hezhiwen
+  for (i = 0; i < mdlen; i++) {
+#else
   for (size_t i = 0; i < mdlen; i++) {
+#endif
     seed[i] ^= maskedseed[i];
   }
 
   if (!PKCS1_MGF1(db, dblen, seed, mdlen, mgf1md)) {
     goto err;
   }
+#if 1 // hezhiwen
+  for (i = 0; i < dblen; i++) {
+#else
   for (size_t i = 0; i < dblen; i++) {
+#endif
     db[i] ^= maskeddb[i];
   }
 
+#if 0 // hezhiwen
   uint8_t phash[EVP_MAX_MD_SIZE];
+#endif
   if (!EVP_Digest(param, param_len, phash, NULL, md, NULL)) {
     goto err;
   }
 
+#if 1 // hezhiwen
+  bad = ~constant_time_is_zero_w(CRYPTO_memcmp(db, phash, mdlen));
+#else
   crypto_word_t bad = ~constant_time_is_zero_w(CRYPTO_memcmp(db, phash, mdlen));
+#endif
   bad |= ~constant_time_is_zero_w(from[0]);
 
+#if 1 // hezhiwen
+  for (i = mdlen; i < dblen; i++) {
+#else
   crypto_word_t looking_for_one_byte = CONSTTIME_TRUE_W;
   size_t one_index = 0;
   for (size_t i = mdlen; i < dblen; i++) {
+#endif
     crypto_word_t equals1 = constant_time_eq_w(db[i], 1);
     crypto_word_t equals0 = constant_time_eq_w(db[i], 0);
     one_index =
@@ -462,7 +587,11 @@ int RSA_padding_check_PKCS1_OAEP_mgf1(uint8_t *out, size_t *out_len,
   }
 
   one_index++;
+#if 1 // hezhiwen
+  mlen = dblen - one_index;
+#else
   size_t mlen = dblen - one_index;
+#endif
   if (max_out < mlen) {
     OPENSSL_PUT_ERROR(RSA, RSA_R_DATA_TOO_LARGE);
     goto err;
@@ -489,13 +618,28 @@ static const uint8_t kPSSZeroes[] = {0, 0, 0, 0, 0, 0, 0, 0};
 int RSA_verify_PKCS1_PSS_mgf1(const RSA *rsa, const uint8_t *mHash,
                               const EVP_MD *Hash, const EVP_MD *mgf1Hash,
                               const uint8_t *EM, int sLen) {
+#if 1 // hezhiwen
+  int ret = 0;
+  uint8_t *DB = NULL;
+  EVP_MD_CTX ctx;
+  size_t hLen;
+  unsigned MSBits;
+  size_t emLen;
+  size_t maskedDBLen;
+  const uint8_t *H;
+  size_t i;
+  size_t salt_start;
+  uint8_t H_[EVP_MAX_MD_SIZE];
+#endif
   if (mgf1Hash == NULL) {
     mgf1Hash = Hash;
   }
 
+#if 0 // hezhiwen
   int ret = 0;
   uint8_t *DB = NULL;
   EVP_MD_CTX ctx;
+#endif
   EVP_MD_CTX_init(&ctx);
   FIPS_service_indicator_lock_state();
 
@@ -503,7 +647,11 @@ int RSA_verify_PKCS1_PSS_mgf1(const RSA *rsa, const uint8_t *mHash,
   //	-1	sLen == hLen
   //	-2	salt length is autorecovered from signature
   //	-N	reserved
+#if 1 // hezhiwen
+  hLen = EVP_MD_size(Hash);
+#else
   size_t hLen = EVP_MD_size(Hash);
+#endif
   if (sLen == -1) {
     sLen = (int)hLen;
   } else if (sLen == -2) {
@@ -513,8 +661,13 @@ int RSA_verify_PKCS1_PSS_mgf1(const RSA *rsa, const uint8_t *mHash,
     goto err;
   }
 
+#if 1 // hezhiwen
+  MSBits = (BN_num_bits(rsa->n) - 1) & 0x7;
+  emLen = RSA_size(rsa);
+#else
   unsigned MSBits = (BN_num_bits(rsa->n) - 1) & 0x7;
   size_t emLen = RSA_size(rsa);
+#endif
   if (EM[0] & (0xFF << MSBits)) {
     OPENSSL_PUT_ERROR(RSA, RSA_R_FIRST_OCTET_INVALID);
     goto err;
@@ -533,8 +686,13 @@ int RSA_verify_PKCS1_PSS_mgf1(const RSA *rsa, const uint8_t *mHash,
     OPENSSL_PUT_ERROR(RSA, RSA_R_LAST_OCTET_INVALID);
     goto err;
   }
+#if 1 // hezhiwen
+  maskedDBLen = emLen - hLen - 1;
+  H = EM + maskedDBLen;
+#else
   size_t maskedDBLen = emLen - hLen - 1;
   const uint8_t *H = EM + maskedDBLen;
+#endif
   DB = OPENSSL_malloc(maskedDBLen);
   if (!DB) {
     OPENSSL_PUT_ERROR(RSA, ERR_R_MALLOC_FAILURE);
@@ -543,7 +701,11 @@ int RSA_verify_PKCS1_PSS_mgf1(const RSA *rsa, const uint8_t *mHash,
   if (!PKCS1_MGF1(DB, maskedDBLen, H, hLen, mgf1Hash)) {
     goto err;
   }
+#if 1 // hezhiwen
+  for (i = 0; i < maskedDBLen; i++) {
+#else
   for (size_t i = 0; i < maskedDBLen; i++) {
+#endif
     DB[i] ^= EM[i];
   }
   if (MSBits) {
@@ -552,7 +714,9 @@ int RSA_verify_PKCS1_PSS_mgf1(const RSA *rsa, const uint8_t *mHash,
   // This step differs slightly from EMSA-PSS-VERIFY (RFC 8017) step 10 because
   // it accepts a non-standard salt recovery flow. DB should be some number of
   // zeros, a one, then the salt.
+#if 0 // hezhiwen
   size_t salt_start;
+#endif
   for (salt_start = 0; DB[salt_start] == 0 && salt_start < maskedDBLen - 1;
        salt_start++) {
     ;
@@ -567,7 +731,9 @@ int RSA_verify_PKCS1_PSS_mgf1(const RSA *rsa, const uint8_t *mHash,
     OPENSSL_PUT_ERROR(RSA, RSA_R_SLEN_CHECK_FAILED);
     goto err;
   }
+#if 0 // hezhiwen
   uint8_t H_[EVP_MAX_MD_SIZE];
+#endif
   if (!EVP_DigestInit_ex(&ctx, Hash, NULL) ||
       !EVP_DigestUpdate(&ctx, kPSSZeroes, sizeof(kPSSZeroes)) ||
       !EVP_DigestUpdate(&ctx, mHash, hLen) ||
@@ -597,6 +763,11 @@ int RSA_padding_add_PKCS1_PSS_mgf1(const RSA *rsa, unsigned char *EM,
   size_t maskedDBLen, MSBits, emLen;
   size_t hLen;
   unsigned char *H, *salt = NULL, *p;
+#if 1 // hezhiwen
+  size_t sLen;
+  EVP_MD_CTX ctx;
+  int digest_ok;
+#endif
 
   if (mgf1Hash == NULL) {
     mgf1Hash = Hash;
@@ -627,7 +798,9 @@ int RSA_padding_add_PKCS1_PSS_mgf1(const RSA *rsa, unsigned char *EM,
   //   -1  sLen == hLen
   //   -2  salt length is maximized
   //   -N  reserved
+#if 0 // hezhiwen
   size_t sLen;
+#endif
   if (sLenRequested == -1) {
     sLen = hLen;
   } else if (sLenRequested == -2) {
@@ -657,6 +830,14 @@ int RSA_padding_add_PKCS1_PSS_mgf1(const RSA *rsa, unsigned char *EM,
   maskedDBLen = emLen - hLen - 1;
   H = EM + maskedDBLen;
 
+#if 1 // hezhiwen
+  EVP_MD_CTX_init(&ctx);
+  digest_ok = EVP_DigestInit_ex(&ctx, Hash, NULL) &&
+              EVP_DigestUpdate(&ctx, kPSSZeroes, sizeof(kPSSZeroes)) &&
+              EVP_DigestUpdate(&ctx, mHash, hLen) &&
+              EVP_DigestUpdate(&ctx, salt, sLen) &&
+              EVP_DigestFinal_ex(&ctx, H, NULL);
+#else
   EVP_MD_CTX ctx;
   EVP_MD_CTX_init(&ctx);
   int digest_ok = EVP_DigestInit_ex(&ctx, Hash, NULL) &&
@@ -664,6 +845,7 @@ int RSA_padding_add_PKCS1_PSS_mgf1(const RSA *rsa, unsigned char *EM,
                   EVP_DigestUpdate(&ctx, mHash, hLen) &&
                   EVP_DigestUpdate(&ctx, salt, sLen) &&
                   EVP_DigestFinal_ex(&ctx, H, NULL);
+#endif
   EVP_MD_CTX_cleanup(&ctx);
   if (!digest_ok) {
     goto err;
@@ -682,7 +864,12 @@ int RSA_padding_add_PKCS1_PSS_mgf1(const RSA *rsa, unsigned char *EM,
   p += emLen - sLen - hLen - 2;
   *p++ ^= 0x1;
   if (sLen > 0) {
+  #if 1 // hezhiwen
+    size_t i;
+    for (i = 0; i < sLen; i++) {
+  #else
     for (size_t i = 0; i < sLen; i++) {
+  #endif
       *p++ ^= salt[i];
     }
   }

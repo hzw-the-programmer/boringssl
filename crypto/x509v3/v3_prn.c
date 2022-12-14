@@ -73,6 +73,10 @@ static int unknown_ext_print(BIO *out, const X509_EXTENSION *ext,
 
 void X509V3_EXT_val_prn(BIO *out, const STACK_OF(CONF_VALUE) *val, int indent,
                         int ml) {
+#if 1 // hezhiwen
+    size_t i;
+    CONF_VALUE *nval;
+#endif
   if (!val) {
     return;
   }
@@ -82,13 +86,21 @@ void X509V3_EXT_val_prn(BIO *out, const STACK_OF(CONF_VALUE) *val, int indent,
       BIO_puts(out, "<EMPTY>\n");
     }
   }
+#if 1 // hezhiwen
+  for (i = 0; i < sk_CONF_VALUE_num(val); i++) {
+#else
   for (size_t i = 0; i < sk_CONF_VALUE_num(val); i++) {
+#endif
     if (ml) {
       BIO_printf(out, "%*s", indent, "");
     } else if (i > 0) {
       BIO_printf(out, ", ");
     }
+  #if 1 // hezhiwen
+    nval = sk_CONF_VALUE_value(val, i);
+  #else
     const CONF_VALUE *nval = sk_CONF_VALUE_value(val, i);
+  #endif
     if (!nval->name) {
       BIO_puts(out, nval->value);
     } else if (!nval->value) {
@@ -111,12 +123,21 @@ int X509V3_EXT_print(BIO *out, const X509_EXTENSION *ext, unsigned long flag,
   const X509V3_EXT_METHOD *method;
   STACK_OF(CONF_VALUE) *nval = NULL;
   int ok = 1;
+#if 1 // hezhiwen
+  ASN1_STRING *ext_data;
+  unsigned char *p;
+#endif
 
   if (!(method = X509V3_EXT_get(ext))) {
     return unknown_ext_print(out, ext, flag, indent, 0);
   }
+#if 1 // hezhiwen
+  ext_data = X509_EXTENSION_get_data(ext);
+  p = ASN1_STRING_get0_data(ext_data);
+#else
   const ASN1_STRING *ext_data = X509_EXTENSION_get_data(ext);
   const unsigned char *p = ASN1_STRING_get0_data(ext_data);
+#endif
   if (method->it) {
     ext_str = ASN1_item_d2i(NULL, &p, ASN1_STRING_length(ext_data),
                             ASN1_ITEM_ptr(method->it));
@@ -179,10 +200,15 @@ int X509V3_extensions_print(BIO *bp, const char *title,
 
   for (i = 0; i < sk_X509_EXTENSION_num(exts); i++) {
     const X509_EXTENSION *ex = sk_X509_EXTENSION_value(exts, i);
+#if 1 // hezhiwen
+    const ASN1_OBJECT *obj = X509_EXTENSION_get_object(ex);
+#endif
     if (indent && BIO_printf(bp, "%*s", indent, "") <= 0) {
       return 0;
     }
+#if 0 // hezhiwen
     const ASN1_OBJECT *obj = X509_EXTENSION_get_object(ex);
+#endif
     i2a_ASN1_OBJECT(bp, obj);
     j = X509_EXTENSION_get_critical(ex);
     if (BIO_printf(bp, ": %s\n", j ? "critical" : "") <= 0) {

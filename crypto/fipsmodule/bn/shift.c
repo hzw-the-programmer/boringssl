@@ -144,7 +144,12 @@ void bn_rshift_words(BN_ULONG *r, const BN_ULONG *a, unsigned shift,
   if (shift_bits == 0) {
     OPENSSL_memmove(r, a + shift_words, (num - shift_words) * sizeof(BN_ULONG));
   } else {
+  #if 1 // hezhiwen
+    size_t i;
+    for (i = shift_words; i < num - 1; i++) {
+  #else
     for (size_t i = shift_words; i < num - 1; i++) {
+  #endif
       r[i - shift_words] =
           (a[i] >> shift_bits) | (a[i + 1] << (BN_BITS2 - shift_bits));
     }
@@ -172,8 +177,17 @@ int BN_rshift(BIGNUM *r, const BIGNUM *a, int n) {
 int bn_rshift_secret_shift(BIGNUM *r, const BIGNUM *a, unsigned n,
                            BN_CTX *ctx) {
   int ret = 0;
+#if 1 // hezhiwen
+  BIGNUM *tmp;
+  unsigned max_bits;
+  unsigned i;
+
+  BN_CTX_start(ctx);
+  tmp = BN_CTX_get(ctx);
+#else
   BN_CTX_start(ctx);
   BIGNUM *tmp = BN_CTX_get(ctx);
+#endif
   if (tmp == NULL ||
       !BN_copy(r, a) ||
       !bn_wexpand(tmp, r->width)) {
@@ -181,8 +195,13 @@ int bn_rshift_secret_shift(BIGNUM *r, const BIGNUM *a, unsigned n,
   }
 
   // Shift conditionally by powers of two.
+#if 1 // hezhiwen
+  max_bits = BN_BITS2 * r->width;
+  for (i = 0; (max_bits >> i) != 0; i++) {
+#else
   unsigned max_bits = BN_BITS2 * r->width;
   for (unsigned i = 0; (max_bits >> i) != 0; i++) {
+#endif
     BN_ULONG mask = (n >> i) & 1;
     mask = 0 - mask;
     bn_rshift_words(tmp->d, r->d, 1u << i, r->width);
@@ -198,10 +217,17 @@ err:
 }
 
 void bn_rshift1_words(BN_ULONG *r, const BN_ULONG *a, size_t num) {
+#if 1 // hezhiwen
+  size_t i;
+#endif
   if (num == 0) {
     return;
   }
+#if 1 // hezhiwen
+  for (i = 0; i < num - 1; i++) {
+#else
   for (size_t i = 0; i < num - 1; i++) {
+#endif
     r[i] = (a[i] >> 1) | (a[i + 1] << (BN_BITS2 - 1));
   }
   r[num - 1] = a[num - 1] >> 1;
@@ -219,17 +245,29 @@ int BN_rshift1(BIGNUM *r, const BIGNUM *a) {
 }
 
 int BN_set_bit(BIGNUM *a, int n) {
+#if 1 // hezhiwen
+  int i, j, k;
+#endif
   if (n < 0) {
     return 0;
   }
 
+#if 1 // hezhiwen
+  i = n / BN_BITS2;
+  j = n % BN_BITS2;
+#else
   int i = n / BN_BITS2;
   int j = n % BN_BITS2;
+#endif
   if (a->width <= i) {
     if (!bn_wexpand(a, i + 1)) {
       return 0;
     }
+  #if 1 // hezhiwen
+    for (k = a->width; k < i + 1; k++) {
+  #else
     for (int k = a->width; k < i + 1; k++) {
+  #endif
       a->d[k] = 0;
     }
     a->width = i + 1;
@@ -275,12 +313,20 @@ int BN_is_bit_set(const BIGNUM *a, int n) {
 }
 
 int BN_mask_bits(BIGNUM *a, int n) {
+#if 1 // hezhiwen
+  int w, b;
+#endif
   if (n < 0) {
     return 0;
   }
 
+#if 1 // hezhiwen
+  w = n / BN_BITS2;
+  b = n % BN_BITS2;
+#else
   int w = n / BN_BITS2;
   int b = n % BN_BITS2;
+#endif
   if (w >= a->width) {
     return 1;
   }
@@ -296,6 +342,11 @@ int BN_mask_bits(BIGNUM *a, int n) {
 }
 
 static int bn_count_low_zero_bits_word(BN_ULONG l) {
+#if 1 // hezhiwen
+  crypto_word_t mask;
+  int bits = 0;
+#endif
+
   static_assert(sizeof(BN_ULONG) <= sizeof(crypto_word_t),
                 "crypto_word_t is too small");
   static_assert(sizeof(int) <= sizeof(crypto_word_t),
@@ -305,8 +356,10 @@ static int bn_count_low_zero_bits_word(BN_ULONG l) {
   static_assert(sizeof(BN_ULONG) >= sizeof(int),
                 "BN_ULONG gets promoted to int");
 
+#if 0 // hezhiwen
   crypto_word_t mask;
   int bits = 0;
+#endif
 
 #if BN_BITS2 > 32
   // Check if the lower half of |x| are all zero.
@@ -341,19 +394,35 @@ static int bn_count_low_zero_bits_word(BN_ULONG l) {
 }
 
 int BN_count_low_zero_bits(const BIGNUM *bn) {
+#if 1 // hezhiwen
+  int ret = 0;
+  crypto_word_t saw_nonzero = 0;
+  int i;
+#endif
   static_assert(sizeof(BN_ULONG) <= sizeof(crypto_word_t),
                 "crypto_word_t is too small");
   static_assert(sizeof(int) <= sizeof(crypto_word_t),
                 "crypto_word_t is too small");
 
+#if 1 // hezhiwen
+  for (i = 0; i < bn->width; i++) {
+#else
   int ret = 0;
   crypto_word_t saw_nonzero = 0;
   for (int i = 0; i < bn->width; i++) {
+#endif
     crypto_word_t nonzero = ~constant_time_is_zero_w(bn->d[i]);
     crypto_word_t first_nonzero = ~saw_nonzero & nonzero;
+  #if 1 // hezhiwen
+    int bits;
+  #endif
     saw_nonzero |= nonzero;
 
+  #if 1 // hezhiwen
+    bits = bn_count_low_zero_bits_word(bn->d[i]);
+  #else
     int bits = bn_count_low_zero_bits_word(bn->d[i]);
+  #endif
     ret |= first_nonzero & (i * BN_BITS2 + bits);
   }
 

@@ -38,9 +38,16 @@ static void cbb_init(CBB *cbb, uint8_t *buf, size_t cap, int can_resize) {
 }
 
 int CBB_init(CBB *cbb, size_t initial_capacity) {
+#if 1 // hezhiwen
+  uint8_t *buf;
+#endif
   CBB_zero(cbb);
 
+#if 1 // hezhiwen
+  buf = OPENSSL_malloc(initial_capacity);
+#else
   uint8_t *buf = OPENSSL_malloc(initial_capacity);
+#endif
   if (initial_capacity > 0 && buf == NULL) {
     return 0;
   }
@@ -70,26 +77,45 @@ void CBB_cleanup(CBB *cbb) {
 
 static int cbb_buffer_reserve(struct cbb_buffer_st *base, uint8_t **out,
                               size_t len) {
+#if 1 // hezhiwen
+  size_t newlen;
+#endif
   if (base == NULL) {
     return 0;
   }
 
+#if 1 // hezhiwen
+  newlen = base->len + len;
+#else
   size_t newlen = base->len + len;
+#endif
   if (newlen < base->len) {
     // Overflow
     goto err;
   }
 
   if (newlen > base->cap) {
+  #if 1 // hezhiwen
+    size_t newcap;
+    uint8_t *newbuf;
+  #endif
     if (!base->can_resize) {
       goto err;
     }
 
+  #if 1 // hezhiwen
+    newcap = base->cap * 2;
+  #else
     size_t newcap = base->cap * 2;
+  #endif
     if (newcap < base->cap || newcap < newlen) {
       newcap = newlen;
     }
+  #if 1 // hezhiwen
+    newbuf = OPENSSL_realloc(base->buf, newcap);
+  #else
     uint8_t *newbuf = OPENSSL_realloc(base->buf, newcap);
+  #endif
     if (newbuf == NULL) {
       goto err;
     }
@@ -159,6 +185,12 @@ int CBB_flush(CBB *cbb) {
   // fail all following calls. In particular, |cbb->child| may point to invalid
   // memory.
   struct cbb_buffer_st *base = cbb_get_base(cbb);
+#if 1 // hezhiwen
+  struct cbb_child_st *child;
+  size_t child_start;
+  size_t len;
+  size_t i;
+#endif
   if (base == NULL || base->error) {
     return 0;
   }
@@ -169,9 +201,17 @@ int CBB_flush(CBB *cbb) {
   }
 
   assert(cbb->child->is_child);
+#if 1 // hezhiwen
+  child = &cbb->child->u.child;
+#else
   struct cbb_child_st *child = &cbb->child->u.child;
+#endif
   assert(child->base == base);
+#if 1 // hezhiwen
+  child_start = child->offset + child->pending_len_len;
+#else
   size_t child_start = child->offset + child->pending_len_len;
+#endif
 
   if (!CBB_flush(cbb->child) ||
       child_start < child->offset ||
@@ -179,7 +219,11 @@ int CBB_flush(CBB *cbb) {
     goto err;
   }
 
+#if 1 // hezhiwen
+  len = base->len - child_start;
+#else
   size_t len = base->len - child_start;
+#endif
 
   if (child->pending_is_asn1) {
     // For ASN.1 we assume that we'll only need a single byte for the length.
@@ -224,7 +268,11 @@ int CBB_flush(CBB *cbb) {
     child->pending_len_len = len_len - 1;
   }
 
+#if 1 // hezhiwen
+  for (i = child->pending_len_len - 1; i < child->pending_len_len; i--) {
+#else
   for (size_t i = child->pending_len_len - 1; i < child->pending_len_len; i--) {
+#endif
     base->buf[child->offset + i] = (uint8_t)len;
     len >>= 8;
   }
@@ -264,6 +312,16 @@ size_t CBB_len(const CBB *cbb) {
 
 static int cbb_add_child(CBB *cbb, CBB *out_child, uint8_t len_len,
                          int is_asn1) {
+#if 1 // hezhiwen
+  struct cbb_buffer_st *base;
+  size_t offset;
+  uint8_t *prefix_bytes;
+
+  assert(cbb->child == NULL);
+  assert(!is_asn1 || len_len == 1);
+  base = cbb_get_base(cbb);
+  offset = base->len;
+#else
   assert(cbb->child == NULL);
   assert(!is_asn1 || len_len == 1);
   struct cbb_buffer_st *base = cbb_get_base(cbb);
@@ -271,6 +329,7 @@ static int cbb_add_child(CBB *cbb, CBB *out_child, uint8_t len_len,
 
   // Reserve space for the length prefix.
   uint8_t *prefix_bytes;
+#endif
   if (!cbb_buffer_add(base, &prefix_bytes, len_len)) {
     return 0;
   }
@@ -313,6 +372,9 @@ int CBB_add_u24_length_prefixed(CBB *cbb, CBB *out_contents) {
 static int add_base128_integer(CBB *cbb, uint64_t v) {
   unsigned len_len = 0;
   uint64_t copy = v;
+#if 1 // hezhiwen
+  unsigned i;
+#endif
   while (copy > 0) {
     len_len++;
     copy >>= 7;
@@ -320,7 +382,11 @@ static int add_base128_integer(CBB *cbb, uint64_t v) {
   if (len_len == 0) {
     len_len = 1;  // Zero is encoded with one byte.
   }
+#if 1 // hezhiwen
+  for (i = len_len - 1; i < len_len; i--) {
+#else
   for (unsigned i = len_len - 1; i < len_len; i--) {
+#endif
     uint8_t byte = (v >> (7 * i)) & 0x7f;
     if (i != 0) {
       // The high bit denotes whether there is more data.
@@ -334,13 +400,22 @@ static int add_base128_integer(CBB *cbb, uint64_t v) {
 }
 
 int CBB_add_asn1(CBB *cbb, CBB *out_contents, CBS_ASN1_TAG tag) {
+#if 1 // hezhiwen
+  uint8_t tag_bits;
+  CBS_ASN1_TAG tag_number;
+#endif
   if (!CBB_flush(cbb)) {
     return 0;
   }
 
   // Split the tag into leading bits and tag number.
+#if 1 // hezhiwen
+  tag_bits = (tag >> CBS_ASN1_TAG_SHIFT) & 0xe0;
+  tag_number = tag & CBS_ASN1_TAG_NUMBER_MASK;
+#else
   uint8_t tag_bits = (tag >> CBS_ASN1_TAG_SHIFT) & 0xe0;
   CBS_ASN1_TAG tag_number = tag & CBS_ASN1_TAG_NUMBER_MASK;
+#endif
   if (tag_number >= 0x1f) {
     // Set all the bits in the tag number to signal high tag number form.
     if (!CBB_add_u8(cbb, tag_bits | 0x1f) ||
@@ -403,11 +478,18 @@ int CBB_did_write(CBB *cbb, size_t len) {
 
 static int cbb_add_u(CBB *cbb, uint64_t v, size_t len_len) {
   uint8_t *buf;
+#if 1 // hezhiwen
+  size_t i;
+#endif
   if (!CBB_add_space(cbb, &buf, len_len)) {
     return 0;
   }
 
+#if 1 // hezhiwen
+  for (i = len_len - 1; i < len_len; i--) {
+#else
   for (size_t i = len_len - 1; i < len_len; i--) {
+#endif
     buf[i] = v;
     v >>= 8;
   }
@@ -454,11 +536,18 @@ int CBB_add_u64le(CBB *cbb, uint64_t value) {
 }
 
 void CBB_discard_child(CBB *cbb) {
+#if 1 // hezhiwen
+  struct cbb_buffer_st *base;
+#endif
   if (cbb->child == NULL) {
     return;
   }
 
+#if 1 // hezhiwen
+  base = cbb_get_base(cbb);
+#else
   struct cbb_buffer_st *base = cbb_get_base(cbb);
+#endif
   assert(cbb->child->is_child);
   base->len = cbb->child->u.child.offset;
 
@@ -472,12 +561,20 @@ int CBB_add_asn1_uint64(CBB *cbb, uint64_t value) {
 
 int CBB_add_asn1_uint64_with_tag(CBB *cbb, uint64_t value, CBS_ASN1_TAG tag) {
   CBB child;
+#if 1 // hezhiwen
+  int started = 0;
+  size_t i;
+#endif
   if (!CBB_add_asn1(cbb, &child, tag)) {
     return 0;
   }
 
+#if 1 // hezhiwen
+  for (i = 0; i < 8; i++) {
+#else
   int started = 0;
   for (size_t i = 0; i < 8; i++) {
+#endif
     uint8_t byte = (value >> 8*(7-i)) & 0xff;
     if (!started) {
       if (byte == 0) {
@@ -509,23 +606,39 @@ int CBB_add_asn1_int64(CBB *cbb, int64_t value) {
 }
 
 int CBB_add_asn1_int64_with_tag(CBB *cbb, int64_t value, CBS_ASN1_TAG tag) {
+#if 1 // hezhiwen
+  uint8_t bytes[sizeof(int64_t)];
+  int start = 7;
+  CBB child;
+  int i;
+#endif
   if (value >= 0) {
     return CBB_add_asn1_uint64_with_tag(cbb, (uint64_t)value, tag);
   }
 
+#if 0 // hezhiwen
   uint8_t bytes[sizeof(int64_t)];
+#endif
   memcpy(bytes, &value, sizeof(value));
+#if 0 // hezhiwen
   int start = 7;
+#endif
   // Skip leading sign-extension bytes unless they are necessary.
   while (start > 0 && (bytes[start] == 0xff && (bytes[start - 1] & 0x80))) {
     start--;
   }
 
+#if 0 // hezhiwen
   CBB child;
+#endif
   if (!CBB_add_asn1(cbb, &child, tag)) {
     return 0;
   }
+#if 1 // hezhiwen
+  for (i = start; i >= 0; i--) {
+#else
   for (int i = start; i >= 0; i--) {
+#endif
     if (!CBB_add_u8(&child, bytes[i])) {
       return 0;
     }
@@ -560,8 +673,13 @@ int CBB_add_asn1_bool(CBB *cbb, int value) {
 // component and the dot, so |cbs| may be passed into the function again for the
 // next value.
 static int parse_dotted_decimal(CBS *cbs, uint64_t *out) {
+#if 1 // hezhiwen
+  int seen_digit = 0;
+  *out = 0;
+#else
   *out = 0;
   int seen_digit = 0;
+#endif
   for (;;) {
     // Valid terminators for a component are the end of the string or a
     // non-terminal dot. If the string ends with a dot, this is not a valid OID
@@ -587,15 +705,23 @@ static int parse_dotted_decimal(CBS *cbs, uint64_t *out) {
 }
 
 int CBB_add_asn1_oid_from_text(CBB *cbb, const char *text, size_t len) {
+#if 1 // hezhiwen
+  CBS cbs;
+  uint64_t a, b;
+#endif
   if (!CBB_flush(cbb)) {
     return 0;
   }
 
+#if 0 // hezhiwen
   CBS cbs;
+#endif
   CBS_init(&cbs, (const uint8_t *)text, len);
 
   // OIDs must have at least two components.
+#if 0 // hezhiwen
   uint64_t a, b;
+#endif
   if (!parse_dotted_decimal(&cbs, &a) ||
       !parse_dotted_decimal(&cbs, &b)) {
     return 0;
@@ -640,12 +766,25 @@ static int compare_set_of_element(const void *a_ptr, const void *b_ptr) {
 }
 
 int CBB_flush_asn1_set_of(CBB *cbb) {
+#if 1 // hezhiwen
+  CBS cbs;
+  size_t num_children = 0;
+  int ret = 0;
+  size_t buf_len;
+  uint8_t *buf;
+  CBS *children;
+  size_t i;
+  uint8_t *out;
+  size_t offset = 0;
+#endif
   if (!CBB_flush(cbb)) {
     return 0;
   }
 
+#if 0 // hezhiwen
   CBS cbs;
   size_t num_children = 0;
+#endif
   CBS_init(&cbs, CBB_data(cbb), CBB_len(cbb));
   while (CBS_len(&cbs) != 0) {
     if (!CBS_get_any_asn1_element(&cbs, NULL, NULL, NULL)) {
@@ -663,15 +802,25 @@ int CBB_flush_asn1_set_of(CBB *cbb) {
 
   // Parse out the children and sort. We alias them into a copy of so they
   // remain valid as we rewrite |cbb|.
+#if 1 // hezhiwen
+  buf_len = CBB_len(cbb);
+  buf = OPENSSL_memdup(CBB_data(cbb), buf_len);
+  children = OPENSSL_malloc(num_children * sizeof(CBS));
+#else
   int ret = 0;
   size_t buf_len = CBB_len(cbb);
   uint8_t *buf = OPENSSL_memdup(CBB_data(cbb), buf_len);
   CBS *children = OPENSSL_malloc(num_children * sizeof(CBS));
+#endif
   if (buf == NULL || children == NULL) {
     goto err;
   }
   CBS_init(&cbs, buf, buf_len);
+#if 1 // hezhiwen
+  for (i = 0; i < num_children; i++) {
+#else
   for (size_t i = 0; i < num_children; i++) {
+#endif
     if (!CBS_get_any_asn1_element(&cbs, &children[i], NULL, NULL)) {
       goto err;
     }
@@ -679,9 +828,14 @@ int CBB_flush_asn1_set_of(CBB *cbb) {
   qsort(children, num_children, sizeof(CBS), compare_set_of_element);
 
   // Write the contents back in the new order.
+#if 1 // hezhiwen
+  out = (uint8_t *)CBB_data(cbb);
+  for (i = 0; i < num_children; i++) {
+#else
   uint8_t *out = (uint8_t *)CBB_data(cbb);
   size_t offset = 0;
   for (size_t i = 0; i < num_children; i++) {
+#endif
     OPENSSL_memcpy(out + offset, CBS_data(&children[i]), CBS_len(&children[i]));
     offset += CBS_len(&children[i]);
   }

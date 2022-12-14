@@ -435,7 +435,11 @@ static int crl_lookup(X509_CRL *crl, X509_REVOKED **ret, ASN1_INTEGER *serial,
                       X509_NAME *issuer) {
   // Use an assert, rather than a runtime error, because returning nothing for a
   // CRL is arguably failing open, rather than closed.
+#if 1 // hezhiwen
+  int is_sorted;
+#else
   assert(serial->type == V_ASN1_INTEGER || serial->type == V_ASN1_NEG_INTEGER);
+#endif
   X509_REVOKED rtmp, *rev;
   size_t idx;
   rtmp.serialNumber = serial;
@@ -443,7 +447,11 @@ static int crl_lookup(X509_CRL *crl, X509_REVOKED **ret, ASN1_INTEGER *serial,
   // under a lock to avoid race condition.
 
   CRYPTO_STATIC_MUTEX_lock_read(&g_crl_sort_lock);
+#if 1 // hezhiwen
+  is_sorted = sk_X509_REVOKED_is_sorted(crl->crl->revoked);
+#else
   const int is_sorted = sk_X509_REVOKED_is_sorted(crl->crl->revoked);
+#endif
   CRYPTO_STATIC_MUTEX_unlock_read(&g_crl_sort_lock);
 
   if (!is_sorted) {

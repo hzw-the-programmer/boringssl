@@ -86,7 +86,12 @@ static char *i2s_ASN1_ENUMERATED_TABLE(const X509V3_EXT_METHOD *method,
                                        void *ext) {
   const ASN1_ENUMERATED *e = ext;
   long strval = ASN1_ENUMERATED_get(e);
+#if 1 // hezhiwen
+  const ENUMERATED_NAMES *enam;
+  for (enam = method->usr_data; enam->lname; enam++) {
+#else
   for (const ENUMERATED_NAMES *enam = method->usr_data; enam->lname; enam++) {
+#endif
     if (strval == enam->bitnum) {
       return OPENSSL_strdup(enam->lname);
     }

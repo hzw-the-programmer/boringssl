@@ -218,6 +218,12 @@ static const uint8_t kP521Params[6 * 66] = {
 DEFINE_METHOD_FUNCTION(struct built_in_curves, OPENSSL_built_in_curves) {
   // 1.3.132.0.35
   static const uint8_t kOIDP521[] = {0x2b, 0x81, 0x04, 0x00, 0x23};
+#if 1 // hezhiwen
+  static const uint8_t kOIDP384[] = {0x2b, 0x81, 0x04, 0x00, 0x22};
+  static const uint8_t kOIDP256[] = {0x2a, 0x86, 0x48, 0xce,
+                                     0x3d, 0x03, 0x01, 0x07};
+  static const uint8_t kOIDP224[] = {0x2b, 0x81, 0x04, 0x00, 0x21};
+#endif
   out->curves[0].nid = NID_secp521r1;
   out->curves[0].oid = kOIDP521;
   out->curves[0].oid_len = sizeof(kOIDP521);
@@ -227,7 +233,9 @@ DEFINE_METHOD_FUNCTION(struct built_in_curves, OPENSSL_built_in_curves) {
   out->curves[0].method = EC_GFp_mont_method();
 
   // 1.3.132.0.34
+#if 0 // hezhiwen
   static const uint8_t kOIDP384[] = {0x2b, 0x81, 0x04, 0x00, 0x22};
+#endif
   out->curves[1].nid = NID_secp384r1;
   out->curves[1].oid = kOIDP384;
   out->curves[1].oid_len = sizeof(kOIDP384);
@@ -237,8 +245,10 @@ DEFINE_METHOD_FUNCTION(struct built_in_curves, OPENSSL_built_in_curves) {
   out->curves[1].method = EC_GFp_mont_method();
 
   // 1.2.840.10045.3.1.7
+#if 0 // hezhiwen
   static const uint8_t kOIDP256[] = {0x2a, 0x86, 0x48, 0xce,
                                      0x3d, 0x03, 0x01, 0x07};
+#endif
   out->curves[2].nid = NID_X9_62_prime256v1;
   out->curves[2].oid = kOIDP256;
   out->curves[2].oid_len = sizeof(kOIDP256);
@@ -255,7 +265,9 @@ DEFINE_METHOD_FUNCTION(struct built_in_curves, OPENSSL_built_in_curves) {
 #endif
 
   // 1.3.132.0.33
+#if 0 // hezhiwen
   static const uint8_t kOIDP224[] = {0x2b, 0x81, 0x04, 0x00, 0x21};
+#endif
   out->curves[3].nid = NID_secp224r1;
   out->curves[3].oid = kOIDP224;
   out->curves[3].oid_len = sizeof(kOIDP224);
@@ -304,6 +316,9 @@ EC_GROUP *ec_group_new(const EC_METHOD *meth) {
 
 static int ec_group_set_generator(EC_GROUP *group, const EC_AFFINE *generator,
                                   const BIGNUM *order) {
+#if 1 // hezhiwen
+  int is_zero;
+#endif
   assert(group->generator == NULL);
 
   if (!BN_copy(&group->order, order)) {
@@ -321,10 +336,19 @@ static int ec_group_set_generator(EC_GROUP *group, const EC_AFFINE *generator,
   group->field_greater_than_order = BN_cmp(&group->field, order) > 0;
   if (group->field_greater_than_order) {
     BIGNUM tmp;
+  #if 1 // hezhiwen
+    int ok;
+  #endif
     BN_init(&tmp);
+  #if 1 // hezhiwen
+    ok =
+        BN_sub(&tmp, &group->field, order) &&
+        bn_copy_words(group->field_minus_order.words, group->field.width, &tmp);
+  #else
     int ok =
         BN_sub(&tmp, &group->field, order) &&
         bn_copy_words(group->field_minus_order.words, group->field.width, &tmp);
+  #endif
     BN_free(&tmp);
     if (!ok) {
       return 0;
@@ -340,7 +364,11 @@ static int ec_group_set_generator(EC_GROUP *group, const EC_AFFINE *generator,
 
   // Avoid a reference cycle. |group->generator| does not maintain an owning
   // pointer to |group|.
+#if 1 // hezhiwen
+  is_zero = CRYPTO_refcount_dec_and_test_zero(&group->references);
+#else
   int is_zero = CRYPTO_refcount_dec_and_test_zero(&group->references);
+#endif
 
   assert(!is_zero);
   (void)is_zero;
@@ -349,12 +377,20 @@ static int ec_group_set_generator(EC_GROUP *group, const EC_AFFINE *generator,
 
 EC_GROUP *EC_GROUP_new_curve_GFp(const BIGNUM *p, const BIGNUM *a,
                                  const BIGNUM *b, BN_CTX *ctx) {
+#if 1 // hezhiwen
+  BN_CTX *new_ctx = NULL;
+  EC_GROUP *ret = NULL;
+  BIGNUM *a_reduced;
+  BIGNUM *b_reduced;
+#endif
   if (BN_num_bytes(p) > EC_MAX_BYTES) {
     OPENSSL_PUT_ERROR(EC, EC_R_INVALID_FIELD);
     return NULL;
   }
 
+#if 0 // hezhiwen
   BN_CTX *new_ctx = NULL;
+#endif
   if (ctx == NULL) {
     ctx = new_ctx = BN_CTX_new();
     if (ctx == NULL) {
@@ -364,10 +400,16 @@ EC_GROUP *EC_GROUP_new_curve_GFp(const BIGNUM *p, const BIGNUM *a,
 
   // Historically, |a| and |b| were not required to be fully reduced.
   // TODO(davidben): Can this be removed?
+#if 1 // hezhiwen
+  BN_CTX_start(ctx);
+  a_reduced = BN_CTX_get(ctx);
+  b_reduced = BN_CTX_get(ctx);
+#else
   EC_GROUP *ret = NULL;
   BN_CTX_start(ctx);
   BIGNUM *a_reduced = BN_CTX_get(ctx);
   BIGNUM *b_reduced = BN_CTX_get(ctx);
+#endif
   if (a_reduced == NULL || b_reduced == NULL ||
       !BN_nnmod(a_reduced, a, p, ctx) ||
       !BN_nnmod(b_reduced, b, p, ctx)) {
@@ -390,6 +432,11 @@ err:
 
 int EC_GROUP_set_generator(EC_GROUP *group, const EC_POINT *generator,
                            const BIGNUM *order, const BIGNUM *cofactor) {
+#if 1 // hezhiwen
+  int ret = 0;
+  BIGNUM *tmp;
+  EC_AFFINE affine;
+#endif
   if (group->curve_name != NID_undef || group->generator != NULL ||
       generator->group != group) {
     // |EC_GROUP_set_generator| may only be used with |EC_GROUP|s returned by
@@ -416,8 +463,12 @@ int EC_GROUP_set_generator(EC_GROUP *group, const EC_POINT *generator,
   // Note any curve which did not satisfy this must have been invalid or use a
   // tiny prime (less than 17). See the proof in |field_element_to_scalar| in
   // the ECDSA implementation.
+#if 1 // hezhiwen
+  tmp = BN_new();
+#else
   int ret = 0;
   BIGNUM *tmp = BN_new();
+#endif
   if (tmp == NULL ||
       !BN_lshift1(tmp, order)) {
     goto err;
@@ -427,7 +478,9 @@ int EC_GROUP_set_generator(EC_GROUP *group, const EC_POINT *generator,
     goto err;
   }
 
+#if 0 // hezhiwen
   EC_AFFINE affine;
+#endif
   if (!ec_jacobian_to_affine(group, &affine, &generator->raw) ||
       !ec_group_set_generator(group, &affine, order)) {
     goto err;
@@ -444,6 +497,12 @@ static EC_GROUP *ec_group_new_from_data(const struct built_in_curve *curve) {
   EC_GROUP *group = NULL;
   BIGNUM *p = NULL, *a = NULL, *b = NULL, *order = NULL;
   int ok = 0;
+#if 1 // hezhiwen
+  unsigned param_len;
+  const uint8_t *params;
+  EC_AFFINE G;
+  EC_FELEM x, y;
+#endif
 
   BN_CTX *ctx = BN_CTX_new();
   if (ctx == NULL) {
@@ -451,8 +510,13 @@ static EC_GROUP *ec_group_new_from_data(const struct built_in_curve *curve) {
     goto err;
   }
 
+#if 1 // hezhiwen
+  param_len = curve->param_len;
+  params = curve->params;
+#else
   const unsigned param_len = curve->param_len;
   const uint8_t *params = curve->params;
+#endif
 
   if (!(p = BN_bin2bn(params + 0 * param_len, param_len, NULL)) ||
       !(a = BN_bin2bn(params + 1 * param_len, param_len, NULL)) ||
@@ -469,8 +533,10 @@ static EC_GROUP *ec_group_new_from_data(const struct built_in_curve *curve) {
     goto err;
   }
 
+#if 0 // hezhiwen
   EC_AFFINE G;
   EC_FELEM x, y;
+#endif
   if (!ec_felem_from_bytes(group, &x, params + 3 * param_len, param_len) ||
       !ec_felem_from_bytes(group, &y, params + 4 * param_len, param_len) ||
       !ec_point_set_affine_coordinates(group, &G, &x, &y)) {
@@ -509,7 +575,14 @@ EC_GROUP *EC_GROUP_new_by_curve_name(int nid) {
   EC_GROUP **group_ptr = NULL;
   const struct built_in_curves *const curves = OPENSSL_built_in_curves();
   const struct built_in_curve *curve = NULL;
+#if 1 // hezhiwen
+  EC_GROUP *to_free = NULL;
+  EC_GROUP *ret;
+  size_t i;
+  for (i = 0; i < OPENSSL_NUM_BUILT_IN_CURVES; i++) {
+#else
   for (size_t i = 0; i < OPENSSL_NUM_BUILT_IN_CURVES; i++) {
+#endif
     if (curves->curves[i].nid == nid) {
       curve = &curves->curves[i];
       group_ptr = &groups->groups[i];
@@ -523,7 +596,11 @@ EC_GROUP *EC_GROUP_new_by_curve_name(int nid) {
   }
 
   CRYPTO_STATIC_MUTEX_lock_read(built_in_groups_lock_bss_get());
+#if 1 // hezhiwen
+  ret = *group_ptr;
+#else
   EC_GROUP *ret = *group_ptr;
+#endif
   CRYPTO_STATIC_MUTEX_unlock_read(built_in_groups_lock_bss_get());
   if (ret != NULL) {
     return ret;
@@ -534,7 +611,9 @@ EC_GROUP *EC_GROUP_new_by_curve_name(int nid) {
     return NULL;
   }
 
+#if 0 // hezhiwen
   EC_GROUP *to_free = NULL;
+#endif
   CRYPTO_STATIC_MUTEX_lock_write(built_in_groups_lock_bss_get());
   if (*group_ptr == NULL) {
     *group_ptr = ret;
@@ -571,6 +650,9 @@ void EC_GROUP_free(EC_GROUP *group) {
 }
 
 EC_GROUP *EC_GROUP_dup(const EC_GROUP *a) {
+#if 1 // hezhiwen
+  EC_GROUP *group;
+#endif
   if (a == NULL ||
       // Built-in curves are static.
       a->curve_name != NID_undef) {
@@ -579,7 +661,11 @@ EC_GROUP *EC_GROUP_dup(const EC_GROUP *a) {
 
   // Groups are logically immutable (but for |EC_GROUP_set_generator| which must
   // be called early on), so we simply take a reference.
+#if 1 // hezhiwen
+  group = (EC_GROUP *)a;
+#else
   EC_GROUP *group = (EC_GROUP *)a;
+#endif
   CRYPTO_refcount_inc(&group->references);
   return group;
 }
@@ -679,12 +765,19 @@ int EC_curve_nist2nid(const char *name) {
 }
 
 EC_POINT *EC_POINT_new(const EC_GROUP *group) {
+#if 1 // hezhiwen
+  EC_POINT *ret;
+#endif
   if (group == NULL) {
     OPENSSL_PUT_ERROR(EC, ERR_R_PASSED_NULL_PARAMETER);
     return NULL;
   }
 
+#if 1 // hezhiwen
+  ret = OPENSSL_malloc(sizeof *ret);
+#else
   EC_POINT *ret = OPENSSL_malloc(sizeof *ret);
+#endif
   if (ret == NULL) {
     OPENSSL_PUT_ERROR(EC, ERR_R_MALLOC_FAILURE);
     return NULL;
@@ -724,11 +817,18 @@ int EC_POINT_copy(EC_POINT *dest, const EC_POINT *src) {
 }
 
 EC_POINT *EC_POINT_dup(const EC_POINT *a, const EC_GROUP *group) {
+#if 1 // hezhiwen
+  EC_POINT *ret;
+#endif
   if (a == NULL) {
     return NULL;
   }
 
+#if 1 // hezhiwen
+  ret = EC_POINT_new(group);
+#else
   EC_POINT *ret = EC_POINT_new(group);
+#endif
   if (ret == NULL ||
       !EC_POINT_copy(ret, a)) {
     EC_POINT_free(ret);
@@ -779,6 +879,9 @@ int EC_POINT_cmp(const EC_GROUP *group, const EC_POINT *a, const EC_POINT *b,
 int EC_POINT_get_affine_coordinates_GFp(const EC_GROUP *group,
                                         const EC_POINT *point, BIGNUM *x,
                                         BIGNUM *y, BN_CTX *ctx) {
+#if 1 // hezhiwen
+  EC_FELEM x_felem, y_felem;
+#endif
   if (group->meth->point_get_affine_coordinates == 0) {
     OPENSSL_PUT_ERROR(EC, ERR_R_SHOULD_NOT_HAVE_BEEN_CALLED);
     return 0;
@@ -787,7 +890,9 @@ int EC_POINT_get_affine_coordinates_GFp(const EC_GROUP *group,
     OPENSSL_PUT_ERROR(EC, EC_R_INCOMPATIBLE_OBJECTS);
     return 0;
   }
+#if 0 // hezhiwen
   EC_FELEM x_felem, y_felem;
+#endif
   if (!group->meth->point_get_affine_coordinates(group, &point->raw,
                                                  x == NULL ? NULL : &x_felem,
                                                  y == NULL ? NULL : &y_felem) ||
@@ -831,9 +936,14 @@ int ec_point_set_affine_coordinates(const EC_GROUP *group, EC_AFFINE *out,
                           const EC_FELEM *b) = group->meth->felem_mul;
   void (*const felem_sqr)(const EC_GROUP *, EC_FELEM *r, const EC_FELEM *a) =
       group->meth->felem_sqr;
+#if 1 // hezhiwen
+  EC_FELEM lhs, rhs;
+#endif
 
   // Check if the point is on the curve.
+#if 0 // hezhiwen
   EC_FELEM lhs, rhs;
+#endif
   felem_sqr(group, &lhs, y);                   // lhs = y^2
   felem_sqr(group, &rhs, x);                   // rhs = x^2
   ec_felem_add(group, &rhs, &rhs, &group->a);  // rhs = x^2 + a
@@ -861,6 +971,10 @@ int ec_point_set_affine_coordinates(const EC_GROUP *group, EC_AFFINE *out,
 int EC_POINT_set_affine_coordinates_GFp(const EC_GROUP *group, EC_POINT *point,
                                         const BIGNUM *x, const BIGNUM *y,
                                         BN_CTX *ctx) {
+#if 1 // hezhiwen
+  EC_FELEM x_felem, y_felem;
+  EC_AFFINE affine;
+#endif
   if (EC_GROUP_cmp(group, point->group, NULL) != 0) {
     OPENSSL_PUT_ERROR(EC, EC_R_INCOMPATIBLE_OBJECTS);
     return 0;
@@ -871,8 +985,10 @@ int EC_POINT_set_affine_coordinates_GFp(const EC_GROUP *group, EC_POINT *point,
     return 0;
   }
 
+#if 0 // hezhiwen
   EC_FELEM x_felem, y_felem;
   EC_AFFINE affine;
+#endif
   if (!ec_bignum_to_felem(group, &x_felem, x) ||
       !ec_bignum_to_felem(group, &y_felem, y) ||
       !ec_point_set_affine_coordinates(group, &affine, &x_felem, &y_felem)) {
@@ -927,6 +1043,11 @@ int EC_POINT_invert(const EC_GROUP *group, EC_POINT *a, BN_CTX *ctx) {
 
 static int arbitrary_bignum_to_scalar(const EC_GROUP *group, EC_SCALAR *out,
                                       const BIGNUM *in, BN_CTX *ctx) {
+#if 1 // hezhiwen
+  const BIGNUM *order;
+  BIGNUM *tmp;
+  int ok;
+#endif
   if (ec_bignum_to_scalar(group, out, in)) {
     return 1;
   }
@@ -934,12 +1055,21 @@ static int arbitrary_bignum_to_scalar(const EC_GROUP *group, EC_SCALAR *out,
   ERR_clear_error();
 
   // This is an unusual input, so we do not guarantee constant-time processing.
+#if 1 // hezhiwen
+  order = &group->order;
+  BN_CTX_start(ctx);
+  tmp = BN_CTX_get(ctx);
+  ok = tmp != NULL &&
+       BN_nnmod(tmp, in, order, ctx) &&
+       ec_bignum_to_scalar(group, out, tmp);
+#else
   const BIGNUM *order = &group->order;
   BN_CTX_start(ctx);
   BIGNUM *tmp = BN_CTX_get(ctx);
   int ok = tmp != NULL &&
            BN_nnmod(tmp, in, order, ctx) &&
            ec_bignum_to_scalar(group, out, tmp);
+#endif
   BN_CTX_end(ctx);
   return ok;
 }
@@ -947,6 +1077,10 @@ static int arbitrary_bignum_to_scalar(const EC_GROUP *group, EC_SCALAR *out,
 int ec_point_mul_no_self_test(const EC_GROUP *group, EC_POINT *r,
                               const BIGNUM *g_scalar, const EC_POINT *p,
                               const BIGNUM *p_scalar, BN_CTX *ctx) {
+#if 1 // hezhiwen
+  int ret = 0;
+  BN_CTX *new_ctx = NULL;
+#endif
   // Previously, this function set |r| to the point at infinity if there was
   // nothing to multiply. But, nobody should be calling this function with
   // nothing to multiply in the first place.
@@ -962,8 +1096,10 @@ int ec_point_mul_no_self_test(const EC_GROUP *group, EC_POINT *r,
     return 0;
   }
 
+#if 0 // hezhiwen
   int ret = 0;
   BN_CTX *new_ctx = NULL;
+#endif
   if (ctx == NULL) {
     new_ctx = BN_CTX_new();
     if (new_ctx == NULL) {
@@ -1155,9 +1291,16 @@ void ec_affine_select(const EC_GROUP *group, EC_AFFINE *out, BN_ULONG mask,
 
 void ec_precomp_select(const EC_GROUP *group, EC_PRECOMP *out, BN_ULONG mask,
                        const EC_PRECOMP *a, const EC_PRECOMP *b) {
+#if 1 // hezhiwen
+  size_t i;
+#endif
   static_assert(sizeof(out->comb) == sizeof(*out),
                 "out->comb does not span the entire structure");
+#if 1 // hezhiwen
+  for (i = 0; i < OPENSSL_ARRAY_SIZE(out->comb); i++) {
+#else
   for (size_t i = 0; i < OPENSSL_ARRAY_SIZE(out->comb); i++) {
+#endif
     ec_affine_select(group, &out->comb[i], mask, &a->comb[i], &b->comb[i]);
   }
 }
@@ -1171,6 +1314,10 @@ int ec_get_x_coordinate_as_scalar(const EC_GROUP *group, EC_SCALAR *out,
                                   const EC_RAW_POINT *p) {
   uint8_t bytes[EC_MAX_BYTES];
   size_t len;
+#if 1 // hezhiwen
+  const BIGNUM *order;
+  BN_ULONG words[EC_MAX_WORDS + 1];
+#endif
   if (!ec_get_x_coordinate_as_bytes(group, bytes, &len, sizeof(bytes), p)) {
     return 0;
   }
@@ -1194,8 +1341,12 @@ int ec_get_x_coordinate_as_scalar(const EC_GROUP *group, EC_SCALAR *out,
   //
   // Additionally, one can manually check this property for built-in curves. It
   // is enforced for legacy custom curves in |EC_GROUP_set_generator|.
+#if 1 // hezhiwen
+  order = &group->order;
+#else
   const BIGNUM *order = &group->order;
   BN_ULONG words[EC_MAX_WORDS + 1];
+#endif
   bn_big_endian_to_words(words, order->width + 1, bytes, len);
   bn_reduce_once(out->words, words, /*carry=*/words[order->width], order->d,
                  order->width);
@@ -1206,13 +1357,18 @@ int ec_get_x_coordinate_as_bytes(const EC_GROUP *group, uint8_t *out,
                                  size_t *out_len, size_t max_out,
                                  const EC_RAW_POINT *p) {
   size_t len = BN_num_bytes(&group->field);
+#if 1 // hezhiwen
+  EC_FELEM x;
+#endif
   assert(len <= EC_MAX_BYTES);
   if (max_out < len) {
     OPENSSL_PUT_ERROR(EC, EC_R_BUFFER_TOO_SMALL);
     return 0;
   }
 
+#if 0 // hezhiwen
   EC_FELEM x;
+#endif
   if (!group->meth->point_get_affine_coordinates(group, p, &x, NULL)) {
     return 0;
   }
@@ -1261,7 +1417,12 @@ size_t EC_get_builtin_curves(EC_builtin_curve *out_curves,
                              size_t max_num_curves) {
   const struct built_in_curves *const curves = OPENSSL_built_in_curves();
 
+#if 1 // hezhiwen
+  size_t i;
+  for (i = 0; i < max_num_curves && i < OPENSSL_NUM_BUILT_IN_CURVES;
+#else
   for (size_t i = 0; i < max_num_curves && i < OPENSSL_NUM_BUILT_IN_CURVES;
+#endif
        i++) {
     out_curves[i].comment = curves->curves[i].comment;
     out_curves[i].nid = curves->curves[i].nid;

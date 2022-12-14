@@ -134,6 +134,10 @@ int SHA224_Update(SHA256_CTX *ctx, const void *data, size_t len) {
 }
 
 static int sha256_final_impl(uint8_t *out, size_t md_len, SHA256_CTX *c) {
+#if 1 // hezhiwen
+  size_t out_words;
+  size_t i;
+#endif
   crypto_md32_final(&sha256_block_data_order, c->h, c->data, SHA256_CBLOCK,
                     &c->num, c->Nh, c->Nl, /*is_big_endian=*/1);
 
@@ -146,8 +150,13 @@ static int sha256_final_impl(uint8_t *out, size_t md_len, SHA256_CTX *c) {
   }
 
   assert(md_len % 4 == 0);
+#if 1 // hezhiwen
+  out_words = md_len / 4;
+  for (i = 0; i < out_words; i++) {
+#else
   const size_t out_words = md_len / 4;
   for (size_t i = 0; i < out_words; i++) {
+#endif
     CRYPTO_store_u32_be(out, c->h[i]);
     out += 4;
   }

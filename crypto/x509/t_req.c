@@ -69,11 +69,18 @@
 
 int X509_REQ_print_fp(FILE *fp, X509_REQ *x) {
   BIO *bio = BIO_new_fp(fp, BIO_NOCLOSE);
+#if 1 // hezhiwen
+  int ret;
+#endif
   if (bio == NULL) {
     OPENSSL_PUT_ERROR(X509, ERR_R_BUF_LIB);
     return 0;
   }
+#if 1 // hezhiwen
+  ret = X509_REQ_print(bio, x);
+#else
   int ret = X509_REQ_print(bio, x);
+#endif
   BIO_free(bio);
   return ret;
 }
@@ -86,6 +93,9 @@ int X509_REQ_print_ex(BIO *bio, X509_REQ *x, unsigned long nmflags,
   char mlch = ' ';
 
   int nmindent = 0;
+#if 1 // hezhiwen
+  X509_REQ_INFO *ri;
+#endif
 
   if ((nmflags & XN_FLAG_SEP_MASK) == XN_FLAG_SEP_MULTILINE) {
     mlch = '\n';
@@ -96,7 +106,11 @@ int X509_REQ_print_ex(BIO *bio, X509_REQ *x, unsigned long nmflags,
     nmindent = 16;
   }
 
+#if 1 // hezhiwen
+  ri = x->req_info;
+#else
   X509_REQ_INFO *ri = x->req_info;
+#endif
   if (!(cflag & X509_FLAG_NO_HEADER)) {
     if (BIO_write(bio, "Certificate Request:\n", 21) <= 0 ||
         BIO_write(bio, "    Data:\n", 10) <= 0) {
@@ -153,6 +167,11 @@ int X509_REQ_print_ex(BIO *bio, X509_REQ *x, unsigned long nmflags,
       for (i = 0; i < sk_X509_ATTRIBUTE_num(sk); i++) {
         X509_ATTRIBUTE *a = sk_X509_ATTRIBUTE_value(sk, i);
         ASN1_OBJECT *aobj = X509_ATTRIBUTE_get0_object(a);
+      #if 1 // hezhiwen
+        int num_attrs;
+        int obj_str_len;
+        int j;
+      #endif
 
         if (X509_REQ_extension_nid(OBJ_obj2nid(aobj))) {
           continue;
@@ -162,8 +181,13 @@ int X509_REQ_print_ex(BIO *bio, X509_REQ *x, unsigned long nmflags,
           goto err;
         }
 
+      #if 1 // hezhiwen
+        num_attrs = X509_ATTRIBUTE_count(a);
+        obj_str_len = i2a_ASN1_OBJECT(bio, aobj);
+      #else
         const int num_attrs = X509_ATTRIBUTE_count(a);
         const int obj_str_len = i2a_ASN1_OBJECT(bio, aobj);
+      #endif
         if (obj_str_len <= 0) {
           if (BIO_puts(bio, "(Unable to print attribute ID.)\n") < 0) {
             goto err;
@@ -172,7 +196,9 @@ int X509_REQ_print_ex(BIO *bio, X509_REQ *x, unsigned long nmflags,
           }
         }
 
+      #if 0 // hezhiwen
         int j;
+      #endif
         for (j = 0; j < num_attrs; j++) {
           const ASN1_TYPE *at = X509_ATTRIBUTE_get0_type(a, j);
           const int type = at->type;
@@ -206,16 +232,33 @@ int X509_REQ_print_ex(BIO *bio, X509_REQ *x, unsigned long nmflags,
   if (!(cflag & X509_FLAG_NO_EXTENSIONS)) {
     STACK_OF(X509_EXTENSION) *exts = X509_REQ_get_extensions(x);
     if (exts) {
+    #if 1 // hezhiwen
+      size_t i;
+    #endif
       BIO_printf(bio, "%8sRequested Extensions:\n", "");
 
+    #if 1 // hezhiwen
+      for (i = 0; i < sk_X509_EXTENSION_num(exts); i++) {
+    #else
       for (size_t i = 0; i < sk_X509_EXTENSION_num(exts); i++) {
+    #endif
         const X509_EXTENSION *ex = sk_X509_EXTENSION_value(exts, i);
+    #if 1 // hezhiwen
+        const ASN1_OBJECT *obj;
+        int is_critical;
+    #endif
         if (BIO_printf(bio, "%12s", "") <= 0) {
           goto err;
         }
+    #if 1 // hezhiwen
+        obj = X509_EXTENSION_get_object(ex);
+        i2a_ASN1_OBJECT(bio, obj);
+        is_critical = X509_EXTENSION_get_critical(ex);
+    #else
         const ASN1_OBJECT *obj = X509_EXTENSION_get_object(ex);
         i2a_ASN1_OBJECT(bio, obj);
         const int is_critical = X509_EXTENSION_get_critical(ex);
+    #endif
         if (BIO_printf(bio, ": %s\n", is_critical ? "critical" : "") <= 0) {
           goto err;
         }

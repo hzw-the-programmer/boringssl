@@ -87,6 +87,9 @@ static int do_esc_char(uint32_t c, unsigned long flags, char *do_quotes,
   // we may be escaping bytes or Unicode codepoints.
   char buf[16];  // Large enough for "\\W01234567".
   unsigned char u8 = (unsigned char)c;
+#if 1 // hezhiwen
+  int len;
+#endif
   if (c > 0xffff) {
     BIO_snprintf(buf, sizeof(buf), "\\W%08" PRIX32, c);
   } else if (c > 0xff) {
@@ -121,7 +124,11 @@ static int do_esc_char(uint32_t c, unsigned long flags, char *do_quotes,
     return maybe_write(out, &u8, 1) ? 1 : -1;
   }
 
+#if 1 // hezhiwen
+  len = (int)strlen(buf);  // |buf| is guaranteed to be short.
+#else
   int len = (int)strlen(buf);  // |buf| is guaranteed to be short.
+#endif
   return maybe_write(out, buf, len) ? len : -1;
 }
 
@@ -133,6 +140,10 @@ static int do_buf(const unsigned char *buf, int buflen, int encoding,
                   unsigned long flags, char *quotes, BIO *out) {
   int (*get_char)(CBS *cbs, uint32_t *out);
   int get_char_error;
+#if 1 // hezhiwen
+  CBS cbs;
+  int outlen = 0;
+#endif
   switch (encoding) {
     case MBSTRING_UNIV:
       get_char = cbs_get_utf32_be;
@@ -155,27 +166,47 @@ static int do_buf(const unsigned char *buf, int buflen, int encoding,
       return -1;
   }
 
+#if 1 // hezhiwen
+  CBS_init(&cbs, buf, buflen);
+#else
   CBS cbs;
   CBS_init(&cbs, buf, buflen);
   int outlen = 0;
+#endif
   while (CBS_len(&cbs) != 0) {
     const int is_first = CBS_data(&cbs) == buf;
     uint32_t c;
+  #if 1 // hezhiwen
+    int is_last;
+  #endif
     if (!get_char(&cbs, &c)) {
       OPENSSL_PUT_ERROR(ASN1, get_char_error);
       return -1;
     }
+  #if 1 // hezhiwen
+    is_last = CBS_len(&cbs) == 0;
+  #else
     const int is_last = CBS_len(&cbs) == 0;
+  #endif
     if (flags & ASN1_STRFLGS_UTF8_CONVERT) {
       uint8_t utf8_buf[6];
       CBB utf8_cbb;
+    #if 1 // hezhiwen
+      size_t utf8_len;
+      size_t i;
+    #endif
       CBB_init_fixed(&utf8_cbb, utf8_buf, sizeof(utf8_buf));
       if (!cbb_add_utf8(&utf8_cbb, c)) {
         OPENSSL_PUT_ERROR(ASN1, ERR_R_INTERNAL_ERROR);
         return 1;
       }
+    #if 1 // hezhiwen
+      utf8_len = CBB_len(&utf8_cbb);
+      for (i = 0; i < utf8_len; i++) {
+    #else
       size_t utf8_len = CBB_len(&utf8_cbb);
       for (size_t i = 0; i < utf8_len; i++) {
+    #endif
         int len = do_esc_char(utf8_buf[i], flags, quotes, out,
                               is_first && i == 0, is_last && i == utf8_len - 1);
         if (len < 0) {
@@ -220,6 +251,12 @@ static int do_hex_dump(BIO *out, unsigned char *buf, int buflen) {
 // encoding. This uses the RFC 2253 #01234 format.
 
 static int do_dump(unsigned long flags, BIO *out, const ASN1_STRING *str) {
+#if 1 // hezhiwen
+  ASN1_TYPE t;
+  unsigned char *der_buf = NULL;
+  int der_len;
+  int outlen;
+#endif
   if (!maybe_write(out, "#", 1)) {
     return -1;
   }
@@ -235,7 +272,9 @@ static int do_dump(unsigned long flags, BIO *out, const ASN1_STRING *str) {
 
   // Placing the ASN1_STRING in a temporary ASN1_TYPE allows the DER encoding
   // to readily obtained.
+#if 0 // hezhiwen
   ASN1_TYPE t;
+#endif
   t.type = str->type;
   // Negative INTEGER and ENUMERATED values are the only case where
   // |ASN1_STRING| and |ASN1_TYPE| types do not match.
@@ -252,12 +291,20 @@ static int do_dump(unsigned long flags, BIO *out, const ASN1_STRING *str) {
     t.type = V_ASN1_ENUMERATED;
   }
   t.value.asn1_string = (ASN1_STRING *)str;
+#if 1 // hezhiwen
+  der_len = i2d_ASN1_TYPE(&t, &der_buf);
+#else
   unsigned char *der_buf = NULL;
   int der_len = i2d_ASN1_TYPE(&t, &der_buf);
+#endif
   if (der_len < 0) {
     return -1;
   }
+#if 1 // hezhiwen
+  outlen = do_hex_dump(out, der_buf, der_len);
+#else
   int outlen = do_hex_dump(out, der_buf, der_len);
+#endif
   OPENSSL_free(der_buf);
   if (outlen < 0) {
     return -1;
@@ -299,6 +346,11 @@ int ASN1_STRING_print_ex(BIO *out, const ASN1_STRING *str,
                          unsigned long flags) {
   int type = str->type;
   int outlen = 0;
+#if 1 // hezhiwen
+  int encoding;
+  char quotes = 0;
+  int len;
+#endif
   if (flags & ASN1_STRFLGS_SHOW_TYPE) {
     const char *tagname = ASN1_tag2str(type);
     outlen += strlen(tagname);
@@ -309,7 +361,9 @@ int ASN1_STRING_print_ex(BIO *out, const ASN1_STRING *str,
   }
 
   // Decide what to do with |str|, either dump the contents or display it.
+#if 0 // hezhiwen
   int encoding;
+#endif
   if (flags & ASN1_STRFLGS_DUMP_ALL) {
     // Dump everything.
     encoding = -1;
@@ -333,8 +387,12 @@ int ASN1_STRING_print_ex(BIO *out, const ASN1_STRING *str,
   }
 
   // Measure the length.
+#if 1 // hezhiwen
+  len = do_buf(str->data, str->length, encoding, flags, &quotes, NULL);
+#else
   char quotes = 0;
   int len = do_buf(str->data, str->length, encoding, flags, &quotes, NULL);
+#endif
   if (len < 0) {
     return -1;
   }
@@ -358,6 +416,9 @@ int ASN1_STRING_print_ex(BIO *out, const ASN1_STRING *str,
 int ASN1_STRING_print_ex_fp(FILE *fp, const ASN1_STRING *str,
                             unsigned long flags) {
   BIO *bio = NULL;
+#if 1 // hezhiwen
+  int ret;
+#endif
   if (fp != NULL) {
     // If |fp| is NULL, this function returns the number of bytes without
     // writing.
@@ -366,25 +427,46 @@ int ASN1_STRING_print_ex_fp(FILE *fp, const ASN1_STRING *str,
       return -1;
     }
   }
+#if 1 // hezhiwen
+  ret = ASN1_STRING_print_ex(bio, str, flags);
+#else
   int ret = ASN1_STRING_print_ex(bio, str, flags);
+#endif
   BIO_free(bio);
   return ret;
 }
 
 int ASN1_STRING_to_UTF8(unsigned char **out, const ASN1_STRING *in) {
+#if 1 // hezhiwen
+  int mbflag;
+  ASN1_STRING stmp, *str;
+  int ret;
+#endif
   if (!in) {
     return -1;
   }
+#if 1 // hezhiwen
+  mbflag = string_type_to_encoding(in->type);
+#else
   int mbflag = string_type_to_encoding(in->type);
+#endif
   if (mbflag == -1) {
     OPENSSL_PUT_ERROR(ASN1, ASN1_R_UNKNOWN_TAG);
     return -1;
   }
+#if 1 // hezhiwen
+  str = &stmp;
+#else
   ASN1_STRING stmp, *str = &stmp;
+#endif
   stmp.data = NULL;
   stmp.length = 0;
   stmp.flags = 0;
+#if 1 // hezhiwen
+  ret =
+#else
   int ret =
+#endif
       ASN1_mbstring_copy(&str, in->data, in->length, mbflag, B_ASN1_UTF8STRING);
   if (ret < 0) {
     return ret;
@@ -440,9 +522,16 @@ static const char *const mon[12] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
                                     "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
 
 int ASN1_GENERALIZEDTIME_print(BIO *bp, const ASN1_GENERALIZEDTIME *tm) {
+#if 1 // hezhiwen
+  CBS cbs;
+  struct tm utc;
+
+  CBS_init(&cbs, tm->data, tm->length);
+#else
   CBS cbs;
   CBS_init(&cbs, tm->data, tm->length);
   struct tm utc;
+#endif
   if (!CBS_parse_generalized_time(&cbs, &utc, /*allow_timezone_offset=*/0)) {
     BIO_puts(bp, "Bad time value");
     return 0;
@@ -454,9 +543,16 @@ int ASN1_GENERALIZEDTIME_print(BIO *bp, const ASN1_GENERALIZEDTIME *tm) {
 }
 
 int ASN1_UTCTIME_print(BIO *bp, const ASN1_UTCTIME *tm) {
+#if 1 // hezhiwen
+  CBS cbs;
+  struct tm utc;
+
+  CBS_init(&cbs, tm->data, tm->length);
+#else
   CBS cbs;
   CBS_init(&cbs, tm->data, tm->length);
   struct tm utc;
+#endif
   if (!CBS_parse_utc_time(&cbs, &utc, /*allow_timezone_offset=*/0)) {
     BIO_puts(bp, "Bad time value");
     return 0;

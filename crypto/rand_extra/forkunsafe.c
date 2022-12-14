@@ -39,8 +39,15 @@ void RAND_enable_fork_unsafe_buffering(int fd) {
 #endif
 
 int rand_fork_unsafe_buffering_enabled(void) {
+#if 1 // hezhiwen
+  int ret;
+#endif
   CRYPTO_STATIC_MUTEX_lock_read(&g_lock);
+#if 1 // hezhiwen
+  ret = g_buffering_enabled;
+#else
   const int ret = g_buffering_enabled;
+#endif
   CRYPTO_STATIC_MUTEX_unlock_read(&g_lock);
   return ret;
 }

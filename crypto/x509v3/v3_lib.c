@@ -199,12 +199,17 @@ int X509V3_add_standard_extensions(void) { return 1; }
 void *X509V3_EXT_d2i(const X509_EXTENSION *ext) {
   const X509V3_EXT_METHOD *method;
   const unsigned char *p;
+#if 1 // hezhiwen
+  void *ret;
+#endif
 
   if (!(method = X509V3_EXT_get(ext))) {
     return NULL;
   }
   p = ext->value->data;
+#if 0 // hezhiwen
   void *ret;
+#endif
   if (method->it) {
     ret =
         ASN1_item_d2i(NULL, &p, ext->value->length, ASN1_ITEM_ptr(method->it));

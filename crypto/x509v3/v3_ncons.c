@@ -239,17 +239,30 @@ int NAME_CONSTRAINTS_check(X509 *x, NAME_CONSTRAINTS *nc) {
   int r, i;
   size_t j;
   X509_NAME *nm;
+#if 1 // hezhiwen
+  size_t name_count;
+  size_t constraint_count;
+  size_t check_count;
+#endif
 
   nm = X509_get_subject_name(x);
 
   // Guard against certificates with an excessive number of names or
   // constraints causing a computationally expensive name constraints
   // check.
+#if 1 // hezhiwen
+  name_count =
+      X509_NAME_entry_count(nm) + sk_GENERAL_NAME_num(x->altname);
+  constraint_count = sk_GENERAL_SUBTREE_num(nc->permittedSubtrees) +
+                     sk_GENERAL_SUBTREE_num(nc->excludedSubtrees);
+  check_count = constraint_count * name_count;
+#else
   size_t name_count =
       X509_NAME_entry_count(nm) + sk_GENERAL_NAME_num(x->altname);
   size_t constraint_count = sk_GENERAL_SUBTREE_num(nc->permittedSubtrees) +
                             sk_GENERAL_SUBTREE_num(nc->excludedSubtrees);
   size_t check_count = constraint_count * name_count;
+#endif
   if (name_count < (size_t)X509_NAME_entry_count(nm) ||
       constraint_count < sk_GENERAL_SUBTREE_num(nc->permittedSubtrees) ||
       (constraint_count && check_count / constraint_count != name_count) ||
@@ -273,11 +286,18 @@ int NAME_CONSTRAINTS_check(X509 *x, NAME_CONSTRAINTS *nc) {
     // Process any email address attributes in subject name
 
     for (i = -1;;) {
+    #if 1 // hezhiwen
+      const X509_NAME_ENTRY *ne;
+    #endif
       i = X509_NAME_get_index_by_NID(nm, NID_pkcs9_emailAddress, i);
       if (i == -1) {
         break;
       }
+    #if 1 // hezhiwen
+      ne = X509_NAME_get_entry(nm, i);
+    #else
       const X509_NAME_ENTRY *ne = X509_NAME_get_entry(nm, i);
+    #endif
       gntmp.d.rfc822Name = X509_NAME_ENTRY_get_data(ne);
       if (gntmp.d.rfc822Name->type != V_ASN1_IA5STRING) {
         return X509_V_ERR_UNSUPPORTED_NAME_SYNTAX;
@@ -405,13 +425,22 @@ static int starts_with(const CBS *cbs, uint8_t c) {
 }
 
 static int equal_case(const CBS *a, const CBS *b) {
+#if 1 // hezhiwen
+  const uint8_t *a_data, *b_data;
+  size_t i;
+#endif
   if (CBS_len(a) != CBS_len(b)) {
     return 0;
   }
   // Note we cannot use |OPENSSL_strncasecmp| because that would stop
   // iterating at NUL.
+#if 1 // hezhiwen
+  a_data = CBS_data(a), b_data = CBS_data(b);
+  for (i = 0; i < CBS_len(a); i++) {
+#else
   const uint8_t *a_data = CBS_data(a), *b_data = CBS_data(b);
   for (size_t i = 0; i < CBS_len(a); i++) {
+#endif
     if (OPENSSL_tolower(a_data[i]) != OPENSSL_tolower(b_data[i])) {
       return 0;
     }
@@ -420,10 +449,15 @@ static int equal_case(const CBS *a, const CBS *b) {
 }
 
 static int has_suffix_case(const CBS *a, const CBS *b) {
+#if 1 // hezhiwen
+  CBS copy = *a;
+#endif
   if (CBS_len(a) < CBS_len(b)) {
     return 0;
   }
+#if 0 // hezhiwen
   CBS copy = *a;
+#endif
   CBS_skip(&copy, CBS_len(a) - CBS_len(b));
   return equal_case(&copy, b);
 }
@@ -466,17 +500,27 @@ static int nc_dns(const ASN1_IA5STRING *dns, const ASN1_IA5STRING *base) {
 
 static int nc_email(const ASN1_IA5STRING *eml, const ASN1_IA5STRING *base) {
   CBS eml_cbs, base_cbs;
+#if 1 // hezhiwen
+  CBS eml_local, base_local;
+  int base_has_at;
+#endif
   CBS_init(&eml_cbs, eml->data, eml->length);
   CBS_init(&base_cbs, base->data, base->length);
 
   // TODO(davidben): In OpenSSL 1.1.1, this switched from the first '@' to the
   // last one. Match them here, or perhaps do an actual parse. Looks like
   // multiple '@'s may be allowed in quoted strings.
+#if 0 // hezhiwen
   CBS eml_local, base_local;
+#endif
   if (!CBS_get_until_first(&eml_cbs, &eml_local, '@')) {
     return X509_V_ERR_UNSUPPORTED_NAME_SYNTAX;
   }
+#if 1 // hezhiwen
+  base_has_at = CBS_get_until_first(&base_cbs, &base_local, '@');
+#else
   int base_has_at = CBS_get_until_first(&base_cbs, &base_local, '@');
+#endif
 
   // Special case: initial '.' is RHS match
   if (!base_has_at && starts_with(&base_cbs, '.')) {
@@ -514,12 +558,19 @@ static int nc_email(const ASN1_IA5STRING *eml, const ASN1_IA5STRING *base) {
 
 static int nc_uri(const ASN1_IA5STRING *uri, const ASN1_IA5STRING *base) {
   CBS uri_cbs, base_cbs;
+#if 1 // hezhiwen
+  CBS scheme;
+  uint8_t byte;
+  CBS host;
+#endif
   CBS_init(&uri_cbs, uri->data, uri->length);
   CBS_init(&base_cbs, base->data, base->length);
 
   // Check for foo:// and skip past it
+#if 0 // hezhiwen
   CBS scheme;
   uint8_t byte;
+#endif
   if (!CBS_get_until_first(&uri_cbs, &scheme, ':') ||
       !CBS_skip(&uri_cbs, 1) ||  // Skip the colon
       !CBS_get_u8(&uri_cbs, &byte) || byte != '/' ||
@@ -531,7 +582,9 @@ static int nc_uri(const ASN1_IA5STRING *uri, const ASN1_IA5STRING *base) {
   // trailing slash, or the end of the string.
   // TODO(davidben): This is not a correct URI parser and mishandles IPv6
   // literals.
+#if 0 // hezhiwen
   CBS host;
+#endif
   if (!CBS_get_until_first(&uri_cbs, &host, ':') &&
       !CBS_get_until_first(&uri_cbs, &host, '/')) {
     host = uri_cbs;

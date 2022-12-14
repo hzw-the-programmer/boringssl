@@ -41,11 +41,18 @@ static const uint8_t sigma[16] = { 'e', 'x', 'p', 'a', 'n', 'd', ' ', '3',
 void CRYPTO_hchacha20(uint8_t out[32], const uint8_t key[32],
                       const uint8_t nonce[16]) {
   uint32_t x[16];
+#if 1 // hezhiwen
+  size_t i;
+#endif
   OPENSSL_memcpy(x, sigma, sizeof(sigma));
   OPENSSL_memcpy(&x[4], key, 32);
   OPENSSL_memcpy(&x[12], nonce, 16);
 
+#if 1 // hezhiwen
+  for (i = 0; i < 20; i += 2) {
+#else
   for (size_t i = 0; i < 20; i += 2) {
+#endif
     QUARTERROUND(0, 4, 8, 12)
     QUARTERROUND(1, 5, 9, 13)
     QUARTERROUND(2, 6, 10, 14)
@@ -65,15 +72,25 @@ void CRYPTO_hchacha20(uint8_t out[32], const uint8_t key[32],
 void CRYPTO_chacha_20(uint8_t *out, const uint8_t *in, size_t in_len,
                       const uint8_t key[32], const uint8_t nonce[12],
                       uint32_t counter) {
+#if 1 // hezhiwen
+  uint32_t counter_nonce[4];
+  const uint32_t *key_ptr;
+#endif
   assert(!buffers_alias(out, in_len, in, in_len) || in == out);
 
+#if 0 // hezhiwen
   uint32_t counter_nonce[4];
+#endif
   counter_nonce[0] = counter;
   counter_nonce[1] = CRYPTO_load_u32_le(nonce + 0);
   counter_nonce[2] = CRYPTO_load_u32_le(nonce + 4);
   counter_nonce[3] = CRYPTO_load_u32_le(nonce + 8);
 
+#if 1 // hezhiwen
+  key_ptr = (const uint32_t *)key;
+#else
   const uint32_t *key_ptr = (const uint32_t *)key;
+#endif
 #if !defined(OPENSSL_X86) && !defined(OPENSSL_X86_64)
   // The assembly expects the key to be four-byte aligned.
   uint32_t key_u32[8];
@@ -125,7 +142,9 @@ static void chacha_core(uint8_t output[64], const uint32_t input[16]) {
 void CRYPTO_chacha_20(uint8_t *out, const uint8_t *in, size_t in_len,
                       const uint8_t key[32], const uint8_t nonce[12],
                       uint32_t counter) {
+#if 0 // hezhiwen
   assert(!buffers_alias(out, in_len, in, in_len) || in == out);
+#endif
 
   uint32_t input[16];
   uint8_t buf[64];

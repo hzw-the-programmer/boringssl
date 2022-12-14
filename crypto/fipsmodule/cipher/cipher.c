@@ -258,6 +258,10 @@ static int block_remainder(const EVP_CIPHER_CTX *ctx, int len) {
 
 int EVP_EncryptUpdate(EVP_CIPHER_CTX *ctx, uint8_t *out, int *out_len,
                       const uint8_t *in, int in_len) {
+#if 1 // hezhiwen
+  int bl;
+  int i;
+#endif
   if (ctx->poisoned) {
     OPENSSL_PUT_ERROR(CIPHER, ERR_R_SHOULD_NOT_HAVE_BEEN_CALLED);
     return 0;
@@ -269,7 +273,11 @@ int EVP_EncryptUpdate(EVP_CIPHER_CTX *ctx, uint8_t *out, int *out_len,
 
   // Ciphers that use blocks may write up to |bl| extra bytes. Ensure the output
   // does not overflow |*out_len|.
+#if 1 // hezhiwen
+  bl = ctx->cipher->block_size;
+#else
   int bl = ctx->cipher->block_size;
+#endif
   if (bl > 1 && in_len > INT_MAX - bl) {
     OPENSSL_PUT_ERROR(CIPHER, ERR_R_OVERFLOW);
     return 0;
@@ -306,7 +314,11 @@ int EVP_EncryptUpdate(EVP_CIPHER_CTX *ctx, uint8_t *out, int *out_len,
     }
   }
 
+#if 1 // hezhiwen
+  i = ctx->buf_len;
+#else
   int i = ctx->buf_len;
+#endif
   assert(bl <= (int)sizeof(ctx->buf));
   if (i != 0) {
     if (bl - i > in_len) {
@@ -401,6 +413,10 @@ out:
 
 int EVP_DecryptUpdate(EVP_CIPHER_CTX *ctx, uint8_t *out, int *out_len,
                       const uint8_t *in, int in_len) {
+#if 1 // hezhiwen
+  unsigned int b;
+  int fix_len = 0;
+#endif
   if (ctx->poisoned) {
     OPENSSL_PUT_ERROR(CIPHER, ERR_R_SHOULD_NOT_HAVE_BEEN_CALLED);
     return 0;
@@ -408,7 +424,11 @@ int EVP_DecryptUpdate(EVP_CIPHER_CTX *ctx, uint8_t *out, int *out_len,
 
   // Ciphers that use blocks may write up to |bl| extra bytes. Ensure the output
   // does not overflow |*out_len|.
+#if 1 // hezhiwen
+  b = ctx->cipher->block_size;
+#else
   unsigned int b = ctx->cipher->block_size;
+#endif
   if (b > 1 && in_len > INT_MAX - (int)b) {
     OPENSSL_PUT_ERROR(CIPHER, ERR_R_OVERFLOW);
     return 0;
@@ -435,7 +455,9 @@ int EVP_DecryptUpdate(EVP_CIPHER_CTX *ctx, uint8_t *out, int *out_len,
   }
 
   assert(b <= sizeof(ctx->final));
+#if 0 // hezhiwen
   int fix_len = 0;
+#endif
   if (ctx->final_used) {
     OPENSSL_memcpy(out, ctx->final, b);
     out += b;

@@ -81,6 +81,13 @@ static int is_valid_epoch_time(int64_t time) {
 // (Public Domain)
 static int posix_time_from_utc(int year, int month, int day, int hours,
                                int minutes, int seconds, int64_t *out_time) {
+#if 1 // hezhiwen
+  int64_t era;
+  int64_t year_of_era;
+  int64_t day_of_year;
+  int64_t day_of_era;
+  int64_t posix_days;
+#endif
   if (!is_valid_date(year, month, day) ||
       !is_valid_time(hours, minutes, seconds)) {
     return 0;
@@ -90,6 +97,15 @@ static int posix_time_from_utc(int year, int month, int day, int hours,
   }
   // At this point year will be in the range -1 and 9999.
   assert(-1 <= year && year <= 9999);
+#if 1 // hezhiwen
+  era = (year >= 0 ? year : year - 399) / 400;
+  year_of_era = year - era * 400;
+  day_of_year =
+      (153 * (month > 2 ? month - 3 : month + 9) + 2) / 5 + day - 1;
+  day_of_era =
+      year_of_era * 365 + year_of_era / 4 - year_of_era / 100 + day_of_year;
+  posix_days = era * 146097 + day_of_era - 719468;
+#else
   int64_t era = (year >= 0 ? year : year - 399) / 400;
   int64_t year_of_era = year - era * 400;
   int64_t day_of_year =
@@ -97,6 +113,7 @@ static int posix_time_from_utc(int year, int month, int day, int hours,
   int64_t day_of_era =
       year_of_era * 365 + year_of_era / 4 - year_of_era / 100 + day_of_year;
   int64_t posix_days = era * 146097 + day_of_era - 719468;
+#endif
   *out_time = posix_days * SECS_PER_DAY + hours * SECS_PER_HOUR + minutes * 60 +
               seconds;
   return 1;
@@ -108,11 +125,25 @@ static int posix_time_from_utc(int year, int month, int day, int hours,
 static int utc_from_posix_time(int64_t time, int *out_year, int *out_month,
                                int *out_day, int *out_hours, int *out_minutes,
                                int *out_seconds) {
+#if 1 // hezhiwen
+  int64_t days;
+  int64_t leftover_seconds;
+  int64_t era;
+  int64_t day_of_era;
+  int64_t year_of_era;
+  int64_t day_of_year;
+  int64_t month_of_year;
+#endif
   if (!is_valid_epoch_time(time)) {
     return 0;
   }
+#if 1 // hezhiwen
+  days = time / SECS_PER_DAY;
+  leftover_seconds = time % SECS_PER_DAY;
+#else
   int64_t days = time / SECS_PER_DAY;
   int64_t leftover_seconds = time % SECS_PER_DAY;
+#endif
   if (leftover_seconds < 0) {
     days--;
     leftover_seconds += SECS_PER_DAY;
@@ -120,6 +151,17 @@ static int utc_from_posix_time(int64_t time, int *out_year, int *out_month,
   days += 719468;  // Shift to starting epoch of Mar 1 0000.
   // At this point, days will be in the range -61 and 3652364.
   assert(-61 <= days && days <= 3652364);
+#if 1 // hezhiwen
+  era = (days > 0 ? days : days - 146096) / 146097;
+  day_of_era = days - era * 146097;
+  year_of_era = (day_of_era - day_of_era / 1460 + day_of_era / 36524 -
+                         day_of_era / 146096) /
+                        365;
+  *out_year = (int)(year_of_era + era * 400);  // Year starting on Mar 1.
+  day_of_year =
+      day_of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
+  month_of_year = (5 * day_of_year + 2) / 153;
+#else
   int64_t era = (days > 0 ? days : days - 146096) / 146097;
   int64_t day_of_era = days - era * 146097;
   int64_t year_of_era = (day_of_era - day_of_era / 1460 + day_of_era / 36524 -
@@ -129,6 +171,7 @@ static int utc_from_posix_time(int64_t time, int *out_year, int *out_month,
   int64_t day_of_year =
       day_of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
   int64_t month_of_year = (5 * day_of_year + 2) / 153;
+#endif
   *out_month =
       (int)(month_of_year < 10 ? month_of_year + 3 : month_of_year - 9);
   if (*out_month <= 2) {
@@ -161,10 +204,15 @@ int OPENSSL_posix_to_tm(int64_t time, struct tm *out_tm) {
 }
 
 int OPENSSL_timegm(const struct tm *tm, time_t *out) {
+#if 1 // hezhiwen
+  int64_t posix_time;
+#endif
   static_assert(
       sizeof(time_t) == sizeof(int32_t) || sizeof(time_t) == sizeof(int64_t),
       "time_t is broken");
+#if 0 // hezhiwen
   int64_t posix_time;
+#endif
   if (!OPENSSL_tm_to_posix(tm, &posix_time)) {
     return 0;
   }
@@ -177,10 +225,17 @@ int OPENSSL_timegm(const struct tm *tm, time_t *out) {
 }
 
 struct tm *OPENSSL_gmtime(const time_t *time, struct tm *out_tm) {
+#if 1 // hezhiwen
+  int64_t posix_time;
+#endif
   static_assert(
       sizeof(time_t) == sizeof(int32_t) || sizeof(time_t) == sizeof(int64_t),
       "time_t is broken");
+#if 1 // hezhiwen
+  posix_time = *time;
+#else
   int64_t posix_time = *time;
+#endif
   if (!OPENSSL_posix_to_tm(posix_time, out_tm)) {
     return NULL;
   }
@@ -208,18 +263,30 @@ int OPENSSL_gmtime_adj(struct tm *tm, int off_day, long offset_sec) {
 int OPENSSL_gmtime_diff(int *out_days, int *out_secs, const struct tm *from,
                         const struct tm *to) {
   int64_t time_to;
+#if 1 // hezhiwen
+  int64_t time_from;
+  int64_t timediff;
+  int64_t daydiff;
+#endif
   if (!posix_time_from_utc(to->tm_year + 1900, to->tm_mon + 1, to->tm_mday,
                            to->tm_hour, to->tm_min, to->tm_sec, &time_to)) {
     return 0;
   }
+#if 0 // hezhiwen
   int64_t time_from;
+#endif
   if (!posix_time_from_utc(from->tm_year + 1900, from->tm_mon + 1,
                            from->tm_mday, from->tm_hour, from->tm_min,
                            from->tm_sec, &time_from)) {
     return 0;
   }
+#if 1 // hezhiwen
+  timediff = time_to - time_from;
+  daydiff = timediff / SECS_PER_DAY;
+#else
   int64_t timediff = time_to - time_from;
   int64_t daydiff = timediff / SECS_PER_DAY;
+#endif
   timediff %= SECS_PER_DAY;
   if (daydiff > INT_MAX || daydiff < INT_MIN) {
     return 0;

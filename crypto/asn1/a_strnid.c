@@ -90,10 +90,17 @@ ASN1_STRING *ASN1_STRING_set_by_NID(ASN1_STRING **out, const unsigned char *in,
                                     int len, int inform, int nid) {
   ASN1_STRING *str = NULL;
   int ret;
+#if 1 // hezhiwen
+  const ASN1_STRING_TABLE *tbl;
+#endif
   if (!out) {
     out = &str;
   }
+#if 1 // hezhiwen
+  tbl = asn1_string_table_get(nid);
+#else
   const ASN1_STRING_TABLE *tbl = asn1_string_table_get(nid);
+#endif
   if (tbl != NULL) {
     unsigned long mask = tbl->mask;
     if (!(tbl->flags & STABLE_NO_MASK)) {
@@ -168,10 +175,17 @@ static uint32_t table_hash(const ASN1_STRING_TABLE *tbl) {
 
 static const ASN1_STRING_TABLE *asn1_string_table_get(int nid) {
   ASN1_STRING_TABLE key;
+#if 1 // hezhiwen
+  const ASN1_STRING_TABLE *tbl =
+      bsearch(&key, tbl_standard, OPENSSL_ARRAY_SIZE(tbl_standard),
+              sizeof(ASN1_STRING_TABLE), table_cmp_void);
+  key.nid = nid;
+#else
   key.nid = nid;
   const ASN1_STRING_TABLE *tbl =
       bsearch(&key, tbl_standard, OPENSSL_ARRAY_SIZE(tbl_standard),
               sizeof(ASN1_STRING_TABLE), table_cmp_void);
+#endif
   if (tbl != NULL) {
     return tbl;
   }
@@ -190,12 +204,19 @@ static const ASN1_STRING_TABLE *asn1_string_table_get(int nid) {
 int ASN1_STRING_TABLE_add(int nid, long minsize, long maxsize,
                           unsigned long mask, unsigned long flags) {
   // Existing entries cannot be overwritten.
+#if 1 // hezhiwen
+  int ret = 0;
+  ASN1_STRING_TABLE *tbl;
+  ASN1_STRING_TABLE *old_tbl;
+#endif
   if (asn1_string_table_get(nid) != NULL) {
     OPENSSL_PUT_ERROR(ASN1, ERR_R_SHOULD_NOT_HAVE_BEEN_CALLED);
     return 0;
   }
 
+#if 0 // hezhiwen
   int ret = 0;
+#endif
   CRYPTO_STATIC_MUTEX_lock_write(&string_tables_lock);
 
   if (string_tables == NULL) {
@@ -214,7 +235,11 @@ int ASN1_STRING_TABLE_add(int nid, long minsize, long maxsize,
     }
   }
 
+#if 1 // hezhiwen
+  tbl = OPENSSL_malloc(sizeof(ASN1_STRING_TABLE));
+#else
   ASN1_STRING_TABLE *tbl = OPENSSL_malloc(sizeof(ASN1_STRING_TABLE));
+#endif
   if (tbl == NULL) {
     goto err;
   }
@@ -223,7 +248,9 @@ int ASN1_STRING_TABLE_add(int nid, long minsize, long maxsize,
   tbl->minsize = minsize;
   tbl->maxsize = maxsize;
   tbl->mask = mask;
+#if 0 // hezhiwen
   ASN1_STRING_TABLE *old_tbl;
+#endif
   if (!lh_ASN1_STRING_TABLE_insert(string_tables, &old_tbl, tbl)) {
     OPENSSL_free(tbl);
     goto err;

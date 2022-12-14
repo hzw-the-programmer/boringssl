@@ -74,11 +74,18 @@ ASN1_INTEGER *ASN1_INTEGER_dup(const ASN1_INTEGER *x) {
 int ASN1_INTEGER_cmp(const ASN1_INTEGER *x, const ASN1_INTEGER *y) {
   // Compare signs.
   int neg = x->type & V_ASN1_NEG;
+#if 1 // hezhiwen
+  int ret;
+#endif
   if (neg != (y->type & V_ASN1_NEG)) {
     return neg ? -1 : 1;
   }
 
+#if 1 // hezhiwen
+  ret = ASN1_STRING_cmp(x, y);
+#else
   int ret = ASN1_STRING_cmp(x, y);
+#endif
   if (neg) {
     // This could be |-ret|, but |ASN1_STRING_cmp| is not forbidden from
     // returning |INT_MIN|.
@@ -98,7 +105,12 @@ int ASN1_INTEGER_cmp(const ASN1_INTEGER *x, const ASN1_INTEGER *y) {
 // as a signed, big-endian two's complement value.
 static void negate_twos_complement(uint8_t *buf, size_t len) {
   uint8_t borrow = 0;
+#if 1 // hezhiwen
+  size_t i;
+  for (i = len - 1; i < len; i--) {
+#else
   for (size_t i = len - 1; i < len; i--) {
+#endif
     uint8_t t = buf[i];
     buf[i] = 0u - borrow - t;
     borrow |= t != 0;
@@ -106,7 +118,12 @@ static void negate_twos_complement(uint8_t *buf, size_t len) {
 }
 
 static int is_all_zeros(const uint8_t *in, size_t len) {
+#if 1 // hezhiwen
+  size_t i;
+  for (i = 0; i < len; i++) {
+#else
   for (size_t i = 0; i < len; i++) {
+#endif
     if (in[i] != 0) {
       return 0;
     }
@@ -115,6 +132,12 @@ static int is_all_zeros(const uint8_t *in, size_t len) {
 }
 
 int i2c_ASN1_INTEGER(const ASN1_INTEGER *in, unsigned char **outp) {
+#if 1 // hezhiwen
+  int start = 0;
+  int is_negative;
+  int pad;
+  int len;
+#endif
   if (in == NULL) {
     return 0;
   }
@@ -122,13 +145,19 @@ int i2c_ASN1_INTEGER(const ASN1_INTEGER *in, unsigned char **outp) {
   // |ASN1_INTEGER|s should be represented minimally, but it is possible to
   // construct invalid ones. Skip leading zeros so this does not produce an
   // invalid encoding or break invariants.
+#if 0 // hezhiwen
   int start = 0;
+#endif
   while (start < in->length && in->data[start] == 0) {
     start++;
   }
 
+#if 1 // hezhiwen
+  is_negative = (in->type & V_ASN1_NEG) != 0;
+#else
   int is_negative = (in->type & V_ASN1_NEG) != 0;
   int pad;
+#endif
   if (start >= in->length) {
     // Zero is represented as a single byte.
     is_negative = 0;
@@ -151,7 +180,11 @@ int i2c_ASN1_INTEGER(const ASN1_INTEGER *in, unsigned char **outp) {
     OPENSSL_PUT_ERROR(ASN1, ERR_R_OVERFLOW);
     return 0;
   }
+#if 1 // hezhiwen
+  len = pad + in->length - start;
+#else
   int len = pad + in->length - start;
+#endif
   assert(len > 0);
   if (outp == NULL) {
     return len;
@@ -176,20 +209,31 @@ ASN1_INTEGER *c2i_ASN1_INTEGER(ASN1_INTEGER **out, const unsigned char **inp,
   // This function can handle lengths up to INT_MAX - 1, but the rest of the
   // legacy ASN.1 code mixes integer types, so avoid exposing it to
   // ASN1_INTEGERS with larger lengths.
+#if 1 // hezhiwen
+  CBS cbs;
+  int is_negative;
+  ASN1_INTEGER *ret = NULL;
+#endif
   if (len < 0 || len > INT_MAX / 2) {
     OPENSSL_PUT_ERROR(ASN1, ASN1_R_TOO_LONG);
     return NULL;
   }
 
+#if 1 // hezhiwen
+  CBS_init(&cbs, *inp, (size_t)len);
+#else
   CBS cbs;
   CBS_init(&cbs, *inp, (size_t)len);
   int is_negative;
+#endif
   if (!CBS_is_valid_asn1_integer(&cbs, &is_negative)) {
     OPENSSL_PUT_ERROR(ASN1, ASN1_R_INVALID_INTEGER);
     return NULL;
   }
 
+#if 0 // hezhiwen
   ASN1_INTEGER *ret = NULL;
+#endif
   if (out == NULL || *out == NULL) {
     ret = ASN1_INTEGER_new();
     if (ret == NULL) {
@@ -284,8 +328,13 @@ int ASN1_ENUMERATED_set(ASN1_ENUMERATED *a, long v) {
 
 static int asn1_string_set_uint64(ASN1_STRING *out, uint64_t v, int type) {
   uint8_t buf[sizeof(uint64_t)];
+#if 1 // hezhiwen
+  size_t leading_zeros;
+  CRYPTO_store_u64_be(buf, v);
+#else
   CRYPTO_store_u64_be(buf, v);
   size_t leading_zeros;
+#endif
   for (leading_zeros = 0; leading_zeros < sizeof(buf); leading_zeros++) {
     if (buf[leading_zeros] != 0) {
       break;
@@ -309,11 +358,16 @@ int ASN1_ENUMERATED_set_uint64(ASN1_ENUMERATED *out, uint64_t v) {
 
 static int asn1_string_get_abs_uint64(uint64_t *out, const ASN1_STRING *a,
                                       int type) {
+#if 1 // hezhiwen
+  uint8_t buf[sizeof(uint64_t)] = {0};
+#endif
   if ((a->type & ~V_ASN1_NEG) != type) {
     OPENSSL_PUT_ERROR(ASN1, ASN1_R_WRONG_INTEGER_TYPE);
     return 0;
   }
+#if 0 // hezhiwen
   uint8_t buf[sizeof(uint64_t)] = {0};
+#endif
   if (a->length > (int)sizeof(buf)) {
     OPENSSL_PUT_ERROR(ASN1, ASN1_R_INVALID_INTEGER);
     return 0;
@@ -345,11 +399,18 @@ int ASN1_ENUMERATED_get_uint64(uint64_t *out, const ASN1_ENUMERATED *a) {
 
 static int asn1_string_get_int64(int64_t *out, const ASN1_STRING *a, int type) {
   uint64_t v;
+#if 1 // hezhiwen
+  int64_t i64;
+  int fits_in_i64;
+#endif
+
   if (!asn1_string_get_abs_uint64(&v, a, type)) {
     return 0;
   }
+#if 0 // hezhiwen
   int64_t i64;
   int fits_in_i64;
+#endif
   // Check |v != 0| to handle manually-constructed negative zeros.
   if ((a->type & V_ASN1_NEG) && v != 0) {
     i64 = (int64_t)(0u - v);
@@ -375,11 +436,16 @@ int ASN1_ENUMERATED_get_int64(int64_t *out, const ASN1_ENUMERATED *a) {
 }
 
 static long asn1_string_get_long(const ASN1_STRING *a, int type) {
+#if 1 // hezhiwen
+  int64_t v;
+#endif
   if (a == NULL) {
     return 0;
   }
 
+#if 0 // hezhiwen
   int64_t v;
+#endif
   if (!asn1_string_get_int64(&v, a, type) ||  //
       v < LONG_MIN || v > LONG_MAX) {
     // This function's return value does not distinguish overflow from -1.
@@ -401,6 +467,9 @@ long ASN1_ENUMERATED_get(const ASN1_ENUMERATED *a) {
 static ASN1_STRING *bn_to_asn1_string(const BIGNUM *bn, ASN1_STRING *ai,
                                       int type) {
   ASN1_INTEGER *ret;
+#if 1 // hezhiwen
+  int len;
+#endif
   if (ai == NULL) {
     ret = ASN1_STRING_type_new(type);
   } else {
@@ -417,7 +486,11 @@ static ASN1_STRING *bn_to_asn1_string(const BIGNUM *bn, ASN1_STRING *ai,
     ret->type = type;
   }
 
+#if 1 // hezhiwen
+  len = BN_num_bytes(bn);
+#else
   int len = BN_num_bytes(bn);
+#endif
   if (!ASN1_STRING_set(ret, NULL, len) ||
       !BN_bn2bin_padded(ret->data, len, bn)) {
     goto err;
@@ -440,12 +513,18 @@ ASN1_ENUMERATED *BN_to_ASN1_ENUMERATED(const BIGNUM *bn, ASN1_ENUMERATED *ai) {
 }
 
 static BIGNUM *asn1_string_to_bn(const ASN1_STRING *ai, BIGNUM *bn, int type) {
+#if 1 // hezhiwen
+  BIGNUM *ret;
+#endif
+
   if ((ai->type & ~V_ASN1_NEG) != type) {
     OPENSSL_PUT_ERROR(ASN1, ASN1_R_WRONG_INTEGER_TYPE);
     return NULL;
   }
 
+#if 0 // hezhiwen
   BIGNUM *ret;
+#endif
   if ((ret = BN_bin2bn(ai->data, ai->length, bn)) == NULL) {
     OPENSSL_PUT_ERROR(ASN1, ASN1_R_BN_LIB);
   } else if (ai->type & V_ASN1_NEG) {

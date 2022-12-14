@@ -103,6 +103,11 @@ static void NTAPI thread_local_destructor(PVOID module, DWORD reason,
   // |DLL_PROCESS_DETACH| runs. See https://crbug.com/575795. This is consistent
   // with |pthread_key_create| which does not call destructors on process exit,
   // only thread exit.
+#if 1 // hezhiwen
+  void **pointers;
+  thread_local_destructor_t destructors[NUM_OPENSSL_THREAD_LOCALS];
+  unsigned i;
+#endif
   if (reason != DLL_THREAD_DETACH) {
     return;
   }
@@ -112,18 +117,28 @@ static void NTAPI thread_local_destructor(PVOID module, DWORD reason,
     return;
   }
 
+#if 1 // hezhiwen
+  pointers = (void**) TlsGetValue(g_thread_local_key);
+#else
   void **pointers = (void**) TlsGetValue(g_thread_local_key);
+#endif
   if (pointers == NULL) {
     return;
   }
 
+#if 0 // hezhiwen
   thread_local_destructor_t destructors[NUM_OPENSSL_THREAD_LOCALS];
+#endif
 
   AcquireSRWLockExclusive(&g_destructors_lock);
   OPENSSL_memcpy(destructors, g_destructors, sizeof(destructors));
   ReleaseSRWLockExclusive(&g_destructors_lock);
 
+#if 1 // hezhiwen
+  for (i = 0; i < NUM_OPENSSL_THREAD_LOCALS; i++) {
+#else
   for (unsigned i = 0; i < NUM_OPENSSL_THREAD_LOCALS; i++) {
+#endif
     if (destructors[i] != NULL) {
       destructors[i](pointers[i]);
     }
@@ -212,12 +227,19 @@ static void **get_thread_locals(void) {
 }
 
 void *CRYPTO_get_thread_local(thread_local_data_t index) {
+#if 1 // hezhiwen
+  void **pointers;
+#endif
   CRYPTO_once(&g_thread_local_init_once, thread_local_init);
   if (g_thread_local_failed) {
     return NULL;
   }
 
+#if 1 // hezhiwen
+  pointers = get_thread_locals();
+#else
   void **pointers = get_thread_locals();
+#endif
   if (pointers == NULL) {
     return NULL;
   }
@@ -226,13 +248,20 @@ void *CRYPTO_get_thread_local(thread_local_data_t index) {
 
 int CRYPTO_set_thread_local(thread_local_data_t index, void *value,
                             thread_local_destructor_t destructor) {
+#if 1 // hezhiwen
+  void **pointers;
+#endif
   CRYPTO_once(&g_thread_local_init_once, thread_local_init);
   if (g_thread_local_failed) {
     destructor(value);
     return 0;
   }
 
+#if 1 // hezhiwen
+  pointers = get_thread_locals();
+#else
   void **pointers = get_thread_locals();
+#endif
   if (pointers == NULL) {
     pointers = OPENSSL_malloc(sizeof(void *) * NUM_OPENSSL_THREAD_LOCALS);
     if (pointers == NULL) {

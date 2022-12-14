@@ -87,9 +87,23 @@
 
 void ec_compute_wNAF(const EC_GROUP *group, int8_t *out,
                      const EC_SCALAR *scalar, size_t bits, int w) {
+#if 1 // hezhiwen
+  int bit;         // 2^w, at most 128
+  int next_bit;  // 2^(w+1), at most 256
+  int mask;  // at most 255
+  int window_val;
+  size_t j;
+#endif
   // 'int8_t' can represent integers with absolute values less than 2^7.
   assert(0 < w && w <= 7);
   assert(bits != 0);
+#if 1 // hezhiwen
+  bit = 1 << w;
+  next_bit = bit << 1;
+  mask = next_bit - 1;
+  window_val = scalar->words[0] & mask;
+  for (j = 0; j < bits + 1; j++) {
+#else
   int bit = 1 << w;         // 2^w, at most 128
   int next_bit = bit << 1;  // 2^(w+1), at most 256
   int mask = next_bit - 1;  // at most 255
@@ -97,6 +111,7 @@ void ec_compute_wNAF(const EC_GROUP *group, int8_t *out,
   int window_val = scalar->words[0] & mask;
   for (size_t j = 0; j < bits + 1; j++) {
     assert(0 <= window_val && window_val <= next_bit);
+#endif
     int digit = 0;
     if (window_val & 1) {
       assert(0 < window_val && window_val < next_bit);
@@ -150,10 +165,20 @@ void ec_compute_wNAF(const EC_GROUP *group, int8_t *out,
 // compute_precomp sets |out[i]| to (2*i+1)*p, for i from 0 to |len|.
 static void compute_precomp(const EC_GROUP *group, EC_RAW_POINT *out,
                             const EC_RAW_POINT *p, size_t len) {
-  ec_GFp_simple_point_copy(&out[0], p);
+#if 1 // hezhiwen
   EC_RAW_POINT two_p;
+  size_t i;
+#endif
+  ec_GFp_simple_point_copy(&out[0], p);
+#if 0 // hezhiwen
+  EC_RAW_POINT two_p;
+#endif
   ec_GFp_mont_dbl(group, &two_p, p);
+#if 1 // hezhiwen
+  for (i = 1; i < len; i++) {
+#else
   for (size_t i = 1; i < len; i++) {
+#endif
     ec_GFp_mont_add(group, &out[i], &out[i - 1], &two_p);
   }
 }
@@ -193,6 +218,16 @@ int ec_GFp_mont_mul_public_batch(const EC_GROUP *group, EC_RAW_POINT *r,
   EC_RAW_POINT precomp_stack[EC_WNAF_STACK][EC_WNAF_TABLE_SIZE];
   EC_RAW_POINT (*precomp_alloc)[EC_WNAF_TABLE_SIZE] = NULL;
   EC_RAW_POINT (*precomp)[EC_WNAF_TABLE_SIZE];
+#if 1 // hezhiwen
+  int8_t g_wNAF[EC_MAX_BYTES * 8 + 1];
+  EC_RAW_POINT g_precomp[EC_WNAF_TABLE_SIZE];
+  const EC_RAW_POINT *g;
+  size_t i;
+  EC_RAW_POINT tmp;
+  int r_is_at_infinity = 1;
+  size_t k;
+#endif
+
   if (num <= EC_WNAF_STACK) {
     wNAF = wNAF_stack;
     precomp = precomp_stack;
@@ -212,24 +247,38 @@ int ec_GFp_mont_mul_public_batch(const EC_GROUP *group, EC_RAW_POINT *r,
     precomp = precomp_alloc;
   }
 
+#if 1 // hezhiwen
+  assert(wNAF_len <= OPENSSL_ARRAY_SIZE(g_wNAF));
+  g = &group->generator->raw;
+#else
   int8_t g_wNAF[EC_MAX_BYTES * 8 + 1];
   EC_RAW_POINT g_precomp[EC_WNAF_TABLE_SIZE];
   assert(wNAF_len <= OPENSSL_ARRAY_SIZE(g_wNAF));
   const EC_RAW_POINT *g = &group->generator->raw;
+#endif
   if (g_scalar != NULL) {
     ec_compute_wNAF(group, g_wNAF, g_scalar, bits, EC_WNAF_WINDOW_BITS);
     compute_precomp(group, g_precomp, g, EC_WNAF_TABLE_SIZE);
   }
 
+#if 1 // hezhiwen
+  for (i = 0; i < num; i++) {
+#else
   for (size_t i = 0; i < num; i++) {
+#endif
     assert(wNAF_len <= OPENSSL_ARRAY_SIZE(wNAF[i]));
     ec_compute_wNAF(group, wNAF[i], &scalars[i], bits, EC_WNAF_WINDOW_BITS);
     compute_precomp(group, precomp[i], &points[i], EC_WNAF_TABLE_SIZE);
   }
 
+#if 1 // hezhiwen
+  for (k = wNAF_len - 1; k < wNAF_len; k--) {
+    size_t i;
+#else
   EC_RAW_POINT tmp;
   int r_is_at_infinity = 1;
   for (size_t k = wNAF_len - 1; k < wNAF_len; k--) {
+#endif
     if (!r_is_at_infinity) {
       ec_GFp_mont_dbl(group, r, r);
     }
@@ -244,7 +293,11 @@ int ec_GFp_mont_mul_public_batch(const EC_GROUP *group, EC_RAW_POINT *r,
       }
     }
 
+  #if 1 // hezhiwen
+    for (i = 0; i < num; i++) {
+  #else
     for (size_t i = 0; i < num; i++) {
+  #endif
       if (wNAF[i][k] != 0) {
         lookup_precomp(group, &tmp, precomp[i], wNAF[i][k]);
         if (r_is_at_infinity) {

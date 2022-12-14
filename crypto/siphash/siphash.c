@@ -40,6 +40,10 @@ static void siphash_round(uint64_t v[4]) {
 uint64_t SIPHASH_24(const uint64_t key[2], const uint8_t *input,
                     size_t input_len) {
   const size_t orig_input_len = input_len;
+#if 1 // hezhiwen
+  uint8_t last_block[8];
+  uint64_t last_block_word;
+#endif
 
   uint64_t v[4];
   v[0] = key[0] ^ UINT64_C(0x736f6d6570736575);
@@ -58,12 +62,18 @@ uint64_t SIPHASH_24(const uint64_t key[2], const uint8_t *input,
     input_len -= sizeof(uint64_t);
   }
 
+#if 0 // hezhiwen
   uint8_t last_block[8];
+#endif
   OPENSSL_memset(last_block, 0, sizeof(last_block));
   OPENSSL_memcpy(last_block, input, input_len);
   last_block[7] = orig_input_len & 0xff;
 
+#if 1 // hezhiwen
+  last_block_word = CRYPTO_load_u64_le(last_block);
+#else
   uint64_t last_block_word = CRYPTO_load_u64_le(last_block);
+#endif
   v[3] ^= last_block_word;
   siphash_round(v);
   siphash_round(v);

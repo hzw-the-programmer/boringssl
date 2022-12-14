@@ -119,7 +119,12 @@ static const struct {
 };
 
 static const EVP_CIPHER *cbs_to_cipher(const CBS *cbs) {
+#if 1 // hezhiwen
+  size_t i;
+  for (i = 0; i < OPENSSL_ARRAY_SIZE(kCipherOIDs); i++) {
+#else
   for (size_t i = 0; i < OPENSSL_ARRAY_SIZE(kCipherOIDs); i++) {
+#endif
     if (CBS_mem_equal(cbs, kCipherOIDs[i].oid, kCipherOIDs[i].oid_len)) {
       return kCipherOIDs[i].cipher_func();
     }
@@ -129,7 +134,12 @@ static const EVP_CIPHER *cbs_to_cipher(const CBS *cbs) {
 }
 
 static int add_cipher_oid(CBB *out, int nid) {
+#if 1 // hezhiwen
+  size_t i;
+  for (i = 0; i < OPENSSL_ARRAY_SIZE(kCipherOIDs); i++) {
+#else
   for (size_t i = 0; i < OPENSSL_ARRAY_SIZE(kCipherOIDs); i++) {
+#endif
     if (kCipherOIDs[i].nid == nid) {
       CBB child;
       return CBB_add_asn1(out, &child, CBS_ASN1_OBJECT) &&
@@ -148,15 +158,25 @@ static int pkcs5_pbe2_cipher_init(EVP_CIPHER_CTX *ctx, const EVP_CIPHER *cipher,
                                   const char *pass, size_t pass_len,
                                   const uint8_t *salt, size_t salt_len,
                                   const uint8_t *iv, size_t iv_len, int enc) {
+#if 1 // hezhiwen
+  uint8_t key[EVP_MAX_KEY_LENGTH];
+  int ret;
+#endif
   if (iv_len != EVP_CIPHER_iv_length(cipher)) {
     OPENSSL_PUT_ERROR(PKCS8, PKCS8_R_ERROR_SETTING_CIPHER_PARAMS);
     return 0;
   }
 
+#if 1 // hezhiwen
+  ret = PKCS5_PBKDF2_HMAC(pass, pass_len, salt, salt_len, iterations,
+                          pbkdf2_md, EVP_CIPHER_key_length(cipher), key) &&
+        EVP_CipherInit_ex(ctx, cipher, NULL /* engine */, key, iv, enc);
+#else
   uint8_t key[EVP_MAX_KEY_LENGTH];
   int ret = PKCS5_PBKDF2_HMAC(pass, pass_len, salt, salt_len, iterations,
                               pbkdf2_md, EVP_CIPHER_key_length(cipher), key) &&
             EVP_CipherInit_ex(ctx, cipher, NULL /* engine */, key, iv, enc);
+#endif
   OPENSSL_cleanse(key, EVP_MAX_KEY_LENGTH);
   return ret;
 }
@@ -166,20 +186,29 @@ int PKCS5_pbe2_encrypt_init(CBB *out, EVP_CIPHER_CTX *ctx,
                             const char *pass, size_t pass_len,
                             const uint8_t *salt, size_t salt_len) {
   int cipher_nid = EVP_CIPHER_nid(cipher);
+#if 1 // hezhiwen
+  uint8_t iv[EVP_MAX_IV_LENGTH];
+  CBB algorithm, oid, param, kdf, kdf_oid, kdf_param, salt_cbb, cipher_cbb,
+      iv_cbb;
+#endif
   if (cipher_nid == NID_undef) {
     OPENSSL_PUT_ERROR(PKCS8, PKCS8_R_CIPHER_HAS_NO_OBJECT_IDENTIFIER);
     return 0;
   }
 
   // Generate a random IV.
+#if 0 // hezhiwen
   uint8_t iv[EVP_MAX_IV_LENGTH];
+#endif
   if (!RAND_bytes(iv, EVP_CIPHER_iv_length(cipher))) {
     return 0;
   }
 
   // See RFC 2898, appendix A.
+#if 0 // hezhiwen
   CBB algorithm, oid, param, kdf, kdf_oid, kdf_param, salt_cbb, cipher_cbb,
       iv_cbb;
+#endif
   if (!CBB_add_asn1(out, &algorithm, CBS_ASN1_SEQUENCE) ||
       !CBB_add_asn1(&algorithm, &oid, CBS_ASN1_OBJECT) ||
       !CBB_add_bytes(&oid, kPBES2, sizeof(kPBES2)) ||
@@ -213,6 +242,13 @@ int PKCS5_pbe2_encrypt_init(CBB *out, EVP_CIPHER_CTX *ctx,
 int PKCS5_pbe2_decrypt_init(const struct pbe_suite *suite, EVP_CIPHER_CTX *ctx,
                             const char *pass, size_t pass_len, CBS *param) {
   CBS pbe_param, kdf, kdf_obj, enc_scheme, enc_obj;
+#if 1 // hezhiwen
+  const EVP_CIPHER *cipher;
+  CBS pbkdf2_params, salt;
+  uint64_t iterations;
+  const EVP_MD *md;
+  CBS iv;
+#endif
   if (!CBS_get_asn1(param, &pbe_param, CBS_ASN1_SEQUENCE) ||
       CBS_len(param) != 0 ||
       !CBS_get_asn1(&pbe_param, &kdf, CBS_ASN1_SEQUENCE) ||
@@ -231,15 +267,21 @@ int PKCS5_pbe2_decrypt_init(const struct pbe_suite *suite, EVP_CIPHER_CTX *ctx,
   }
 
   // See if we recognise the encryption algorithm.
+#if 1 // hezhiwen
+  cipher = cbs_to_cipher(&enc_obj);
+#else
   const EVP_CIPHER *cipher = cbs_to_cipher(&enc_obj);
+#endif
   if (cipher == NULL) {
     OPENSSL_PUT_ERROR(PKCS8, PKCS8_R_UNSUPPORTED_CIPHER);
     return 0;
   }
 
   // Parse the KDF parameters. See RFC 8018, appendix A.2.
+#if 0 // hezhiwen
   CBS pbkdf2_params, salt;
   uint64_t iterations;
+#endif
   if (!CBS_get_asn1(&kdf, &pbkdf2_params, CBS_ASN1_SEQUENCE) ||
       CBS_len(&kdf) != 0 ||
       !CBS_get_asn1(&pbkdf2_params, &salt, CBS_ASN1_OCTETSTRING) ||
@@ -268,9 +310,16 @@ int PKCS5_pbe2_decrypt_init(const struct pbe_suite *suite, EVP_CIPHER_CTX *ctx,
     }
   }
 
+#if 1 // hezhiwen
+  md = EVP_sha1();
+#else
   const EVP_MD *md = EVP_sha1();
+#endif
   if (CBS_len(&pbkdf2_params) != 0) {
     CBS alg_id, prf;
+  #if 1 // hezhiwen
+    CBS null;
+  #endif
     if (!CBS_get_asn1(&pbkdf2_params, &alg_id, CBS_ASN1_SEQUENCE) ||
         !CBS_get_asn1(&alg_id, &prf, CBS_ASN1_OBJECT) ||
         CBS_len(&pbkdf2_params) != 0) {
@@ -290,7 +339,9 @@ int PKCS5_pbe2_decrypt_init(const struct pbe_suite *suite, EVP_CIPHER_CTX *ctx,
     }
 
     // All supported PRFs use a NULL parameter.
+  #if 0
     CBS null;
+  #endif
     if (!CBS_get_asn1(&alg_id, &null, CBS_ASN1_NULL) ||
         CBS_len(&null) != 0 ||
         CBS_len(&alg_id) != 0) {
@@ -303,7 +354,9 @@ int PKCS5_pbe2_decrypt_init(const struct pbe_suite *suite, EVP_CIPHER_CTX *ctx,
   // specification. Per RFC 2898, this should depend on the encryption scheme.
   // In particular, RC2-CBC uses a SEQUENCE with version and IV. We align with
   // OpenSSL.
+#if 0 // hezhiwen
   CBS iv;
+#endif
   if (!CBS_get_asn1(&enc_scheme, &iv, CBS_ASN1_OCTETSTRING) ||
       CBS_len(&enc_scheme) != 0) {
     OPENSSL_PUT_ERROR(PKCS8, PKCS8_R_UNSUPPORTED_PRF);

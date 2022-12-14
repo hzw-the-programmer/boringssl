@@ -57,10 +57,17 @@ static_assert(16 % sizeof(size_t) == 0, "block cannot be divided into size_t");
 void CRYPTO_ofb128_encrypt(const uint8_t *in, uint8_t *out, size_t len,
                            const AES_KEY *key, uint8_t ivec[16], unsigned *num,
                            block128_f block) {
+#if 1 // hezhiwen
+  unsigned n;
+#endif
   assert(key != NULL && ivec != NULL && num != NULL);
   assert(len == 0 || (in != NULL && out != NULL));
 
+#if 1 // hezhiwen
+  n = *num;
+#else
   unsigned n = *num;
+#endif
 
   while (n && len) {
     *(out++) = *(in++) ^ ivec[n];
@@ -72,10 +79,17 @@ void CRYPTO_ofb128_encrypt(const uint8_t *in, uint8_t *out, size_t len,
     (*block)(ivec, ivec, key);
     for (; n < 16; n += sizeof(size_t)) {
       size_t a, b;
+    #if 1 // hezhiwen
+      size_t c;
+    #endif
       OPENSSL_memcpy(&a, in + n, sizeof(size_t));
       OPENSSL_memcpy(&b, ivec + n, sizeof(size_t));
 
+    #if 1 // hezhiwen
+      c = a ^ b;
+    #else
       const size_t c = a ^ b;
+    #endif
       OPENSSL_memcpy(out + n, &c, sizeof(size_t));
     }
     len -= 16;

@@ -68,6 +68,10 @@
 
 
 int i2d_ASN1_OBJECT(const ASN1_OBJECT *a, unsigned char **pp) {
+#if 1 // hezhiwen
+  int objsize;
+  unsigned char *p, *allocated = NULL;
+#endif
   if (a == NULL) {
     OPENSSL_PUT_ERROR(ASN1, ERR_R_PASSED_NULL_PARAMETER);
     return -1;
@@ -78,12 +82,18 @@ int i2d_ASN1_OBJECT(const ASN1_OBJECT *a, unsigned char **pp) {
     return -1;
   }
 
+#if 1 // hezhiwen
+  objsize = ASN1_object_size(0, a->length, V_ASN1_OBJECT);
+#else
   int objsize = ASN1_object_size(0, a->length, V_ASN1_OBJECT);
+#endif
   if (pp == NULL || objsize == -1) {
     return objsize;
   }
 
+#if 0 // hezhiwen
   unsigned char *p, *allocated = NULL;
+#endif
   if (*pp == NULL) {
     if ((p = allocated = OPENSSL_malloc(objsize)) == NULL) {
       OPENSSL_PUT_ERROR(ASN1, ERR_R_MALLOC_FAILURE);
@@ -116,13 +126,23 @@ static int write_str(BIO *bp, const char *str) {
 }
 
 int i2a_ASN1_OBJECT(BIO *bp, const ASN1_OBJECT *a) {
+#if 1 // hezhiwen
+  char buf[80], *allocated = NULL;
+  const char *str = buf;
+  int len;
+  int ret;
+#endif
   if (a == NULL || a->data == NULL) {
     return write_str(bp, "NULL");
   }
 
+#if 1 // hezhiwen
+  len = i2t_ASN1_OBJECT(buf, sizeof(buf), a);
+#else
   char buf[80], *allocated = NULL;
   const char *str = buf;
   int len = i2t_ASN1_OBJECT(buf, sizeof(buf), a);
+#endif
   if (len > (int)sizeof(buf) - 1) {
     // The input was truncated. Allocate a buffer that fits.
     allocated = OPENSSL_malloc(len + 1);
@@ -136,7 +156,11 @@ int i2a_ASN1_OBJECT(BIO *bp, const ASN1_OBJECT *a) {
     str = "<INVALID>";
   }
 
+#if 1 // hezhiwen
+  ret = write_str(bp, str);
+#else
   int ret = write_str(bp, str);
+#endif
   OPENSSL_free(allocated);
   return ret;
 }
@@ -147,6 +171,9 @@ ASN1_OBJECT *d2i_ASN1_OBJECT(ASN1_OBJECT **a, const unsigned char **pp,
   int tag, xclass;
   const unsigned char *p = *pp;
   int inf = ASN1_get_object(&p, &len, &tag, &xclass, length);
+#if 1 // hezhiwen
+  ASN1_OBJECT *ret;
+#endif
   if (inf & 0x80) {
     OPENSSL_PUT_ERROR(ASN1, ASN1_R_BAD_OBJECT_HEADER);
     return NULL;
@@ -161,7 +188,11 @@ ASN1_OBJECT *d2i_ASN1_OBJECT(ASN1_OBJECT **a, const unsigned char **pp,
     OPENSSL_PUT_ERROR(ASN1, ASN1_R_EXPECTING_AN_OBJECT);
     return NULL;
   }
+#if 1 // hezhiwen
+  ret = c2i_ASN1_OBJECT(a, &p, len);
+#else
   ASN1_OBJECT *ret = c2i_ASN1_OBJECT(a, &p, len);
+#endif
   if (ret) {
     *pp = p;
   }

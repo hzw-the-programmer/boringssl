@@ -172,21 +172,37 @@ IMPLEMENT_ASN1_FUNCTIONS(X509)
 IMPLEMENT_ASN1_DUP_FUNCTION(X509)
 
 X509 *X509_parse_from_buffer(CRYPTO_BUFFER *buf) {
+#if 1 // hezhiwen
+  X509 *x509;
+  const uint8_t *inp;
+  X509 *x509p;
+  X509 *ret;
+#endif
   if (CRYPTO_BUFFER_len(buf) > LONG_MAX) {
     OPENSSL_PUT_ERROR(SSL, ERR_R_OVERFLOW);
     return 0;
   }
 
+#if 1 // hezhiwen
+  x509 = X509_new();
+#else
   X509 *x509 = X509_new();
+#endif
   if (x509 == NULL) {
     return NULL;
   }
 
   x509->cert_info->enc.alias_only_on_next_parse = 1;
 
+#if 1 // hezhiwen
+  inp = CRYPTO_BUFFER_data(buf);
+  x509p = x509;
+  ret = d2i_X509(&x509p, &inp, CRYPTO_BUFFER_len(buf));
+#else
   const uint8_t *inp = CRYPTO_BUFFER_data(buf);
   X509 *x509p = x509;
   X509 *ret = d2i_X509(&x509p, &inp, CRYPTO_BUFFER_len(buf));
+#endif
   if (ret == NULL ||
       inp - CRYPTO_BUFFER_data(buf) != (ptrdiff_t)CRYPTO_BUFFER_len(buf)) {
     X509_free(x509p);

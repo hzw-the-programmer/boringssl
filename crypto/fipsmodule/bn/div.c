@@ -198,6 +198,14 @@ int BN_div(BIGNUM *quotient, BIGNUM *rem, const BIGNUM *numerator,
   BN_ULONG *resp, *wnump;
   BN_ULONG d0, d1;
   int num_n, div_n;
+#if 1 // hezhiwen
+  BIGNUM *tmp;
+  BIGNUM *snum;
+  BIGNUM *sdiv;
+  BIGNUM *res = NULL;
+  int numerator_neg;
+  int i;
+#endif
 
   // This function relies on the historical minimal-width |BIGNUM| invariant.
   // It is already not constant-time (constant-time reductions should use
@@ -219,10 +227,16 @@ int BN_div(BIGNUM *quotient, BIGNUM *rem, const BIGNUM *numerator,
   }
 
   BN_CTX_start(ctx);
+#if 1 // hezhiwen
+  tmp = BN_CTX_get(ctx);
+  snum = BN_CTX_get(ctx);
+  sdiv = BN_CTX_get(ctx);
+#else
   BIGNUM *tmp = BN_CTX_get(ctx);
   BIGNUM *snum = BN_CTX_get(ctx);
   BIGNUM *sdiv = BN_CTX_get(ctx);
   BIGNUM *res = NULL;
+#endif
   if (quotient == NULL) {
     res = BN_CTX_get(ctx);
   } else {
@@ -250,10 +264,17 @@ int BN_div(BIGNUM *quotient, BIGNUM *rem, const BIGNUM *numerator,
   // larger than sdiv, we pad snum with enough zeroes without changing its
   // value.
   if (snum->width <= sdiv->width + 1) {
+  #if 1 // hezhiwen
+    int i;
+  #endif
     if (!bn_wexpand(snum, sdiv->width + 2)) {
       goto err;
     }
+  #if 1 // hezhiwen
+    for (i = snum->width; i < sdiv->width + 2; i++) {
+  #else
     for (int i = snum->width; i < sdiv->width + 2; i++) {
+  #endif
       snum->d[i] = 0;
     }
     snum->width = sdiv->width + 2;
@@ -287,7 +308,11 @@ int BN_div(BIGNUM *quotient, BIGNUM *rem, const BIGNUM *numerator,
 
   // Setup |res|. |numerator| and |res| may alias, so we save |numerator->neg|
   // for later.
+#if 1 // hezhiwen
+  numerator_neg = numerator->neg;
+#else
   const int numerator_neg = numerator->neg;
+#endif
   res->neg = (numerator_neg ^ divisor->neg);
   if (!bn_wexpand(res, loop + 1)) {
     goto err;
@@ -308,11 +333,20 @@ int BN_div(BIGNUM *quotient, BIGNUM *rem, const BIGNUM *numerator,
     resp--;
   }
 
+#if 1 // hezhiwen
+  for (i = 0; i < loop - 1; i++, wnump--, resp--) {
+#else
   for (int i = 0; i < loop - 1; i++, wnump--, resp--) {
+#endif
     BN_ULONG q, l0;
     // the first part of the loop uses the top two words of snum and sdiv to
     // calculate a BN_ULONG q such that | wnum - sdiv * q | < sdiv
     BN_ULONG n0, n1, rm = 0;
+  #if 1 // hezhiwen
+  #ifdef BN_ULLONG
+    BN_ULLONG t2;
+  #endif
+  #endif
 
     n0 = wnump[0];
     n1 = wnump[-1];
@@ -323,7 +357,11 @@ int BN_div(BIGNUM *quotient, BIGNUM *rem, const BIGNUM *numerator,
       bn_div_rem_words(&q, &rm, n0, n1, d0);
 
 #ifdef BN_ULLONG
+    #if 1 // hezhiwen
+      t2 = (BN_ULLONG)d1 * q;
+    #else
       BN_ULLONG t2 = (BN_ULLONG)d1 * q;
+    #endif
       for (;;) {
         if (t2 <= ((((BN_ULLONG)rm) << BN_BITS2) | wnump[-2])) {
           break;
@@ -457,6 +495,14 @@ void bn_mod_add_words(BN_ULONG *r, const BN_ULONG *a, const BN_ULONG *b,
 int bn_div_consttime(BIGNUM *quotient, BIGNUM *remainder,
                      const BIGNUM *numerator, const BIGNUM *divisor,
                      unsigned divisor_min_bits, BN_CTX *ctx) {
+#if 1 // hezhiwen
+  int ret = 0;
+  BIGNUM *q, *r;
+  BIGNUM *tmp;
+  int initial_words = 0;
+  int i;
+  int bit;
+#endif
   if (BN_is_negative(numerator) || BN_is_negative(divisor)) {
     OPENSSL_PUT_ERROR(BN, BN_R_NEGATIVE_NUMBER);
     return 0;
@@ -470,16 +516,26 @@ int bn_div_consttime(BIGNUM *quotient, BIGNUM *remainder,
   // but it is simple, easy to make constant-time, and performant enough for RSA
   // key generation.
 
+#if 1 // hezhiwen
+  BN_CTX_start(ctx);
+  q = quotient;
+  r = remainder;
+#else
   int ret = 0;
   BN_CTX_start(ctx);
   BIGNUM *q = quotient, *r = remainder;
+#endif
   if (quotient == NULL || quotient == numerator || quotient == divisor) {
     q = BN_CTX_get(ctx);
   }
   if (remainder == NULL || remainder == numerator || remainder == divisor) {
     r = BN_CTX_get(ctx);
   }
+#if 1 // hezhiwen
+  tmp = BN_CTX_get(ctx);
+#else
   BIGNUM *tmp = BN_CTX_get(ctx);
+#endif
   if (q == NULL || r == NULL || tmp == NULL ||
       !bn_wexpand(q, numerator->width) ||
       !bn_wexpand(r, divisor->width) ||
@@ -505,7 +561,9 @@ int bn_div_consttime(BIGNUM *quotient, BIGNUM *remainder,
   // without reductions. This significantly speeds up |RSA_check_key|. For
   // simplicity, we round down to a whole number of words.
   assert(divisor_min_bits <= BN_num_bits(divisor));
+#if 0 // hezhiwen
   int initial_words = 0;
+#endif
   if (divisor_min_bits > 0) {
     initial_words = (divisor_min_bits - 1) / BN_BITS2;
     if (initial_words > numerator->width) {
@@ -515,19 +573,32 @@ int bn_div_consttime(BIGNUM *quotient, BIGNUM *remainder,
                    initial_words * sizeof(BN_ULONG));
   }
 
+#if 1 // hezhiwen
+  for (i = numerator->width - initial_words - 1; i >= 0; i--) {
+    for (bit = BN_BITS2 - 1; bit >= 0; bit--) {
+#else
   for (int i = numerator->width - initial_words - 1; i >= 0; i--) {
     for (int bit = BN_BITS2 - 1; bit >= 0; bit--) {
+#endif
       // Incorporate the next bit of the numerator, by computing
       // r = 2*r or 2*r + 1. Note the result fits in one more word. We store the
       // extra word in |carry|.
       BN_ULONG carry = bn_add_words(r->d, r->d, r->d, divisor->width);
+    #if 1 // hezhiwen
+      BN_ULONG subtracted;
+    #endif
       r->d[0] |= (numerator->d[i] >> bit) & 1;
       // |r| was previously fully-reduced, so we know:
       //      2*0 <= r <= 2*(divisor-1) + 1
       //        0 <= r <= 2*divisor - 1 < 2*divisor.
       // Thus |r| satisfies the preconditions for |bn_reduce_once_in_place|.
+    #if 1 // hezhiwen
+      subtracted = bn_reduce_once_in_place(r->d, carry, divisor->d,
+                                           tmp->d, divisor->width);
+    #else
       BN_ULONG subtracted = bn_reduce_once_in_place(r->d, carry, divisor->d,
                                                     tmp->d, divisor->width);
+    #endif
       // The corresponding bit of the quotient is set iff we needed to subtract.
       q->d[i] |= (~subtracted & 1) << bit;
     }
@@ -563,12 +634,19 @@ static BIGNUM *bn_scratch_space_from_ctx(size_t width, BN_CTX *ctx) {
 // |width| words.
 static const BIGNUM *bn_resized_from_ctx(const BIGNUM *bn, size_t width,
                                          BN_CTX *ctx) {
+#if 1 // hezhiwen
+  BIGNUM *ret;
+#endif
   if ((size_t)bn->width >= width) {
     // Any excess words must be zero.
     assert(bn_fits_in_words(bn, width));
     return bn;
   }
+#if 1 // hezhiwen
+  ret = bn_scratch_space_from_ctx(width, ctx);
+#else
   BIGNUM *ret = bn_scratch_space_from_ctx(width, ctx);
+#endif
   if (ret == NULL ||
       !BN_copy(ret, bn) ||
       !bn_resize_words(ret, width)) {
@@ -596,12 +674,22 @@ int BN_mod_add_quick(BIGNUM *r, const BIGNUM *a, const BIGNUM *b,
 
 int bn_mod_add_consttime(BIGNUM *r, const BIGNUM *a, const BIGNUM *b,
                          const BIGNUM *m, BN_CTX *ctx) {
+#if 1 // hezhiwen
+  BIGNUM *tmp;
+  int ok;
+#endif
   BN_CTX_start(ctx);
   a = bn_resized_from_ctx(a, m->width, ctx);
   b = bn_resized_from_ctx(b, m->width, ctx);
+#if 1 // hezhiwen
+  tmp = bn_scratch_space_from_ctx(m->width, ctx);
+  ok = a != NULL && b != NULL && tmp != NULL &&
+       bn_wexpand(r, m->width);
+#else
   BIGNUM *tmp = bn_scratch_space_from_ctx(m->width, ctx);
   int ok = a != NULL && b != NULL && tmp != NULL &&
            bn_wexpand(r, m->width);
+#endif
   if (ok) {
     bn_mod_add_words(r->d, a->d, b->d, m->d, tmp->d, m->width);
     r->width = m->width;
@@ -621,12 +709,22 @@ int BN_mod_sub(BIGNUM *r, const BIGNUM *a, const BIGNUM *b, const BIGNUM *m,
 
 int bn_mod_sub_consttime(BIGNUM *r, const BIGNUM *a, const BIGNUM *b,
                          const BIGNUM *m, BN_CTX *ctx) {
+#if 1 // hezhiwen
+  BIGNUM *tmp;
+  int ok;
+#endif
   BN_CTX_start(ctx);
   a = bn_resized_from_ctx(a, m->width, ctx);
   b = bn_resized_from_ctx(b, m->width, ctx);
+#if 1 // hezhiwen
+  tmp = bn_scratch_space_from_ctx(m->width, ctx);
+  ok = a != NULL && b != NULL && tmp != NULL &&
+       bn_wexpand(r, m->width);
+#else
   BIGNUM *tmp = bn_scratch_space_from_ctx(m->width, ctx);
   int ok = a != NULL && b != NULL && tmp != NULL &&
            bn_wexpand(r, m->width);
+#endif
   if (ok) {
     bn_mod_sub_words(r->d, a->d, b->d, m->d, tmp->d, m->width);
     r->width = m->width;
@@ -711,10 +809,17 @@ int BN_mod_lshift(BIGNUM *r, const BIGNUM *a, int n, const BIGNUM *m,
 
 int bn_mod_lshift_consttime(BIGNUM *r, const BIGNUM *a, int n, const BIGNUM *m,
                             BN_CTX *ctx) {
+#if 1 // hezhiwen
+  int i;
+#endif
   if (!BN_copy(r, a)) {
     return 0;
   }
+#if 1 // hezhiwen
+  for (i = 0; i < n; i++) {
+#else
   for (int i = 0; i < n; i++) {
+#endif
     if (!bn_mod_lshift1_consttime(r, r, m, ctx)) {
       return 0;
     }
@@ -823,12 +928,20 @@ BN_ULONG BN_mod_word(const BIGNUM *a, BN_ULONG w) {
 }
 
 int BN_mod_pow2(BIGNUM *r, const BIGNUM *a, size_t e) {
+#if 1 // hezhiwen
+  size_t num_words;
+  size_t top_word_exponent;
+#endif
   if (e == 0 || a->width == 0) {
     BN_zero(r);
     return 1;
   }
 
+#if 1 // hezhiwen
+  num_words = 1 + ((e - 1) / BN_BITS2);
+#else
   size_t num_words = 1 + ((e - 1) / BN_BITS2);
+#endif
 
   // If |a| definitely has less than |e| bits, just BN_copy.
   if ((size_t) a->width < num_words) {
@@ -845,7 +958,11 @@ int BN_mod_pow2(BIGNUM *r, const BIGNUM *a, size_t e) {
   OPENSSL_memcpy(r->d, a->d, num_words * sizeof(BN_ULONG));
 
   // If |e| isn't word-aligned, we have to mask off some of our bits.
+#if 1 // hezhiwen
+  top_word_exponent = e % (sizeof(BN_ULONG) * 8);
+#else
   size_t top_word_exponent = e % (sizeof(BN_ULONG) * 8);
+#endif
   if (top_word_exponent != 0) {
     r->d[num_words - 1] &= (((BN_ULONG) 1) << top_word_exponent) - 1;
   }
@@ -858,6 +975,11 @@ int BN_mod_pow2(BIGNUM *r, const BIGNUM *a, size_t e) {
 }
 
 int BN_nnmod_pow2(BIGNUM *r, const BIGNUM *a, size_t e) {
+#if 1 // hezhiwen
+  size_t num_words;
+  size_t top_word_exponent;
+  int i;
+#endif
   if (!BN_mod_pow2(r, a, e)) {
     return 0;
   }
@@ -867,7 +989,11 @@ int BN_nnmod_pow2(BIGNUM *r, const BIGNUM *a, size_t e) {
     return 1;
   }
 
+#if 1 // hezhiwen
+  num_words = 1 + (e - 1) / BN_BITS2;
+#else
   size_t num_words = 1 + (e - 1) / BN_BITS2;
+#endif
 
   // Expand |r| to the size of our modulus.
   if (!bn_wexpand(r, num_words)) {
@@ -884,12 +1010,20 @@ int BN_nnmod_pow2(BIGNUM *r, const BIGNUM *a, size_t e) {
   // Now, invert every word. The idea here is that we want to compute 2^e-|x|,
   // which is actually equivalent to the twos-complement representation of |x|
   // in |e| bits, which is -x = ~x + 1.
+#if 1 // hezhiwen
+  for (i = 0; i < r->width; i++) {
+#else
   for (int i = 0; i < r->width; i++) {
+#endif
     r->d[i] = ~r->d[i];
   }
 
   // If our exponent doesn't span the top word, we have to mask the rest.
+#if 1 // hezhiwen
+  top_word_exponent = e % BN_BITS2;
+#else
   size_t top_word_exponent = e % BN_BITS2;
+#endif
   if (top_word_exponent != 0) {
     r->d[r->width - 1] &= (((BN_ULONG) 1) << top_word_exponent) - 1;
   }

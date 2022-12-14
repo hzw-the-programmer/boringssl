@@ -119,15 +119,25 @@ static int cbs_convert_ber(CBS *in, CBB *out, CBS_ASN1_TAG string_tag,
   }
 
   while (CBS_len(in) > 0) {
-    if (looking_for_eoc && cbs_get_eoc(in)) {
-      return 1;
-    }
-
+  #if 1 // hezhiwen
     CBS contents;
     CBS_ASN1_TAG tag, child_string_tag = string_tag;
     size_t header_len;
     int indefinite;
     CBB *out_contents, out_contents_storage;
+  #endif
+
+    if (looking_for_eoc && cbs_get_eoc(in)) {
+      return 1;
+    }
+
+  #if 0 // hezhiwen
+    CBS contents;
+    CBS_ASN1_TAG tag, child_string_tag = string_tag;
+    size_t header_len;
+    int indefinite;
+    CBB *out_contents, out_contents_storage;
+  #endif
     if (!CBS_get_any_ber_asn1_element(in, &contents, &tag, &header_len,
                                       /*out_ber_found=*/NULL, &indefinite)) {
       return 0;
@@ -192,6 +202,9 @@ static int cbs_convert_ber(CBS *in, CBB *out, CBS_ASN1_TAG string_tag,
 
 int CBS_asn1_ber_to_der(CBS *in, CBS *out, uint8_t **out_storage) {
   CBB cbb;
+#if 1 // hezhiwen
+  size_t len;
+#endif
 
   // First, do a quick walk to find any indefinite-length elements. Most of the
   // time we hope that there aren't any and thus we can quickly return.
@@ -208,7 +221,9 @@ int CBS_asn1_ber_to_der(CBS *in, CBS *out, uint8_t **out_storage) {
     return 1;
   }
 
+#if 0 // hezhiwen
   size_t len;
+#endif
   if (!CBB_init(&cbb, CBS_len(in)) ||
       !cbs_convert_ber(in, &cbb, 0, 0, 0) ||
       !CBB_finish(&cbb, out_storage, &len)) {
@@ -223,6 +238,12 @@ int CBS_asn1_ber_to_der(CBS *in, CBS *out, uint8_t **out_storage) {
 int CBS_get_asn1_implicit_string(CBS *in, CBS *out, uint8_t **out_storage,
                                  CBS_ASN1_TAG outer_tag,
                                  CBS_ASN1_TAG inner_tag) {
+#if 1 // hezhiwen
+  CBB result;
+  CBS child;
+  uint8_t *data;
+  size_t len;
+#endif
   assert(!(outer_tag & CBS_ASN1_CONSTRUCTED));
   assert(!(inner_tag & CBS_ASN1_CONSTRUCTED));
   assert(is_string_type(inner_tag));
@@ -236,8 +257,10 @@ int CBS_get_asn1_implicit_string(CBS *in, CBS *out, uint8_t **out_storage,
   // Otherwise, try to parse an implicitly-tagged constructed string.
   // |CBS_asn1_ber_to_der| is assumed to have run, so only allow one level deep
   // of nesting.
+#if 0 // hezhiwen
   CBB result;
   CBS child;
+#endif
   if (!CBB_init(&result, CBS_len(in)) ||
       !CBS_get_asn1(in, &child, outer_tag | CBS_ASN1_CONSTRUCTED)) {
     goto err;
@@ -251,8 +274,10 @@ int CBS_get_asn1_implicit_string(CBS *in, CBS *out, uint8_t **out_storage,
     }
   }
 
+#if 0 // hezhiwen
   uint8_t *data;
   size_t len;
+#endif
   if (!CBB_finish(&result, &data, &len)) {
     goto err;
   }

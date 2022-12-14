@@ -62,18 +62,31 @@
 
 
 int DH_check_pub_key(const DH *dh, const BIGNUM *pub_key, int *out_flags) {
+#if 1 // hezhiwen
+  int ok = 0;
+  BIGNUM *tmp;
+  BN_CTX *ctx;
+#endif
   *out_flags = 0;
 
+#if 1 // hezhiwen
+  ctx = BN_CTX_new();
+#else
   BN_CTX *ctx = BN_CTX_new();
+#endif
   if (ctx == NULL) {
     return 0;
   }
   BN_CTX_start(ctx);
 
+#if 1 // hezhiwen
+  tmp = BN_CTX_get(ctx);
+#else
   int ok = 0;
 
   // Check |pub_key| is greater than 1.
   BIGNUM *tmp = BN_CTX_get(ctx);
+#endif
   if (tmp == NULL ||
       !BN_set_word(tmp, 1)) {
     goto err;

@@ -106,12 +106,19 @@ static const struct nid_to_digest nid_to_digest_mapping[] = {
 };
 
 const EVP_MD* EVP_get_digestbynid(int nid) {
+#if 1 // hezhiwen
+  unsigned i;
+#endif
   if (nid == NID_undef) {
     // Skip the |NID_undef| entries in |nid_to_digest_mapping|.
     return NULL;
   }
 
+#if 1 // hezhiwen
+  for (i = 0; i < OPENSSL_ARRAY_SIZE(nid_to_digest_mapping); i++) {
+#else
   for (unsigned i = 0; i < OPENSSL_ARRAY_SIZE(nid_to_digest_mapping); i++) {
+#endif
     if (nid_to_digest_mapping[i].nid == nid) {
       return nid_to_digest_mapping[i].md_func();
     }
@@ -142,7 +149,12 @@ static const struct {
 };
 
 static const EVP_MD *cbs_to_md(const CBS *cbs) {
+#if 1 // hezhiwen
+  size_t i;
+  for (i = 0; i < OPENSSL_ARRAY_SIZE(kMDOIDs); i++) {
+#else
   for (size_t i = 0; i < OPENSSL_ARRAY_SIZE(kMDOIDs); i++) {
+#endif
     if (CBS_len(cbs) == kMDOIDs[i].oid_len &&
         OPENSSL_memcmp(CBS_data(cbs), kMDOIDs[i].oid, kMDOIDs[i].oid_len) ==
             0) {
@@ -154,26 +166,38 @@ static const EVP_MD *cbs_to_md(const CBS *cbs) {
 }
 
 const EVP_MD *EVP_get_digestbyobj(const ASN1_OBJECT *obj) {
+#if 1 // hezhiwen
+  CBS cbs;
+#endif
   // Handle objects with no corresponding OID. Note we don't use |OBJ_obj2nid|
   // here to avoid pulling in the OID table.
   if (obj->nid != NID_undef) {
     return EVP_get_digestbynid(obj->nid);
   }
 
+#if 0 // hezhiwen
   CBS cbs;
+#endif
   CBS_init(&cbs, OBJ_get0_data(obj), OBJ_length(obj));
   return cbs_to_md(&cbs);
 }
 
 const EVP_MD *EVP_parse_digest_algorithm(CBS *cbs) {
   CBS algorithm, oid;
+#if 1 // hezhiwen
+  const EVP_MD *ret;
+#endif
   if (!CBS_get_asn1(cbs, &algorithm, CBS_ASN1_SEQUENCE) ||
       !CBS_get_asn1(&algorithm, &oid, CBS_ASN1_OBJECT)) {
     OPENSSL_PUT_ERROR(DIGEST, DIGEST_R_DECODE_ERROR);
     return NULL;
   }
 
+#if 1 // hezhiwen
+  ret = cbs_to_md(&oid);
+#else
   const EVP_MD *ret = cbs_to_md(&oid);
+#endif
   if (ret == NULL) {
     OPENSSL_PUT_ERROR(DIGEST, DIGEST_R_UNKNOWN_HASH);
     return NULL;
@@ -198,15 +222,25 @@ const EVP_MD *EVP_parse_digest_algorithm(CBS *cbs) {
 
 int EVP_marshal_digest_algorithm(CBB *cbb, const EVP_MD *md) {
   CBB algorithm, oid, null;
+#if 1 // hezhiwen
+  int found = 0;
+  int nid;
+  size_t i;
+#endif
   if (!CBB_add_asn1(cbb, &algorithm, CBS_ASN1_SEQUENCE) ||
       !CBB_add_asn1(&algorithm, &oid, CBS_ASN1_OBJECT)) {
     OPENSSL_PUT_ERROR(DIGEST, ERR_R_MALLOC_FAILURE);
     return 0;
   }
 
+#if 1 // hezhiwen
+  nid = EVP_MD_type(md);
+  for (i = 0; i < OPENSSL_ARRAY_SIZE(kMDOIDs); i++) {
+#else
   int found = 0;
   int nid = EVP_MD_type(md);
   for (size_t i = 0; i < OPENSSL_ARRAY_SIZE(kMDOIDs); i++) {
+#endif
     if (nid == kMDOIDs[i].nid) {
       if (!CBB_add_bytes(&oid, kMDOIDs[i].oid, kMDOIDs[i].oid_len)) {
         OPENSSL_PUT_ERROR(DIGEST, ERR_R_MALLOC_FAILURE);
@@ -232,7 +266,12 @@ int EVP_marshal_digest_algorithm(CBB *cbb, const EVP_MD *md) {
 }
 
 const EVP_MD *EVP_get_digestbyname(const char *name) {
+#if 1 // hezhiwen
+  unsigned i;
+  for (i = 0; i < OPENSSL_ARRAY_SIZE(nid_to_digest_mapping); i++) {
+#else
   for (unsigned i = 0; i < OPENSSL_ARRAY_SIZE(nid_to_digest_mapping); i++) {
+#endif
     const char *short_name = nid_to_digest_mapping[i].short_name;
     const char *long_name = nid_to_digest_mapping[i].long_name;
     if ((short_name && strcmp(short_name, name) == 0) ||

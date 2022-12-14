@@ -106,6 +106,15 @@ static void asn1_put_length(unsigned char **pp, int length);
 
 int ASN1_get_object(const unsigned char **inp, long *out_len, int *out_tag,
                     int *out_class, long in_len) {
+#if 1 // hezhiwen
+  CBS_ASN1_TAG tag;
+  size_t header_len;
+  int indefinite;
+  CBS cbs, body;
+  int tag_class;
+  int constructed;
+  int tag_number;
+#endif
   if (in_len < 0) {
     OPENSSL_PUT_ERROR(ASN1, ASN1_R_HEADER_TOO_LONG);
     return 0x80;
@@ -117,10 +126,12 @@ int ASN1_get_object(const unsigned char **inp, long *out_len, int *out_tag,
   // signature fields (see b/18228011). Make this only apply to that field,
   // while requiring DER elsewhere. Better yet, it should be limited to an
   // preprocessing step in that part of Android.
+#if 0 // hezhiwen
   CBS_ASN1_TAG tag;
   size_t header_len;
   int indefinite;
   CBS cbs, body;
+#endif
   CBS_init(&cbs, *inp, (size_t)in_len);
   if (!CBS_get_any_ber_asn1_element(&cbs, &body, &tag, &header_len,
                                     /*out_ber_found=*/NULL, &indefinite) ||
@@ -133,9 +144,15 @@ int ASN1_get_object(const unsigned char **inp, long *out_len, int *out_tag,
   }
 
   // Convert between tag representations.
+#if 1 // hezhiwen
+  tag_class = (tag & CBS_ASN1_CLASS_MASK) >> CBS_ASN1_TAG_SHIFT;
+  constructed = (tag & CBS_ASN1_CONSTRUCTED) >> CBS_ASN1_TAG_SHIFT;
+  tag_number = tag & CBS_ASN1_TAG_NUMBER_MASK;
+#else
   int tag_class = (tag & CBS_ASN1_CLASS_MASK) >> CBS_ASN1_TAG_SHIFT;
   int constructed = (tag & CBS_ASN1_CONSTRUCTED) >> CBS_ASN1_TAG_SHIFT;
   int tag_number = tag & CBS_ASN1_TAG_NUMBER_MASK;
+#endif
 
   // To avoid ambiguity with V_ASN1_NEG, impose a limit on universal tags.
   if (tag_class == V_ASN1_UNIVERSAL && tag_number > V_ASN1_MAX_UNIVERSAL) {
@@ -353,6 +370,9 @@ int ASN1_STRING_cmp(const ASN1_STRING *a, const ASN1_STRING *b) {
   // Capture padding bits and implicit truncation in BIT STRINGs.
   int a_length = a->length, b_length = b->length;
   uint8_t a_padding = 0, b_padding = 0;
+#if 1 // hezhiwen
+  int ret;
+#endif
   if (a->type == V_ASN1_BIT_STRING) {
     a_length = asn1_bit_string_length(a, &a_padding);
   }
@@ -375,7 +395,11 @@ int ASN1_STRING_cmp(const ASN1_STRING *a, const ASN1_STRING *b) {
     return 1;
   }
 
+#if 1 // hezhiwen
+  ret = OPENSSL_memcmp(a->data, b->data, a_length);
+#else
   int ret = OPENSSL_memcmp(a->data, b->data, a_length);
+#endif
   if (ret != 0) {
     return ret;
   }

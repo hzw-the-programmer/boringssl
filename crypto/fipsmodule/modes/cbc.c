@@ -56,6 +56,10 @@
 void CRYPTO_cbc128_encrypt(const uint8_t *in, uint8_t *out, size_t len,
                            const AES_KEY *key, uint8_t ivec[16],
                            block128_f block) {
+#if 1 // hezhiwen
+  size_t n;
+  const uint8_t *iv;
+#endif
   assert(key != NULL && ivec != NULL);
   if (len == 0) {
     // Avoid |ivec| == |iv| in the |memcpy| below, which is not legal in C.
@@ -63,8 +67,12 @@ void CRYPTO_cbc128_encrypt(const uint8_t *in, uint8_t *out, size_t len,
   }
 
   assert(in != NULL && out != NULL);
+#if 1 // hezhiwen
+  iv = ivec;
+#else
   size_t n;
   const uint8_t *iv = ivec;
+#endif
   while (len >= 16) {
     for (n = 0; n < 16; n += sizeof(crypto_word_t)) {
       CRYPTO_store_word_le(
@@ -100,6 +108,12 @@ void CRYPTO_cbc128_encrypt(const uint8_t *in, uint8_t *out, size_t len,
 void CRYPTO_cbc128_decrypt(const uint8_t *in, uint8_t *out, size_t len,
                            const AES_KEY *key, uint8_t ivec[16],
                            block128_f block) {
+#if 1 // hezhiwen
+  uintptr_t inptr;
+  uintptr_t outptr;
+  size_t n;
+  alignas(16) uint8_t tmp[16];
+#endif
   assert(key != NULL && ivec != NULL);
   if (len == 0) {
     // Avoid |ivec| == |iv| in the |memcpy| below, which is not legal in C.
@@ -108,19 +122,33 @@ void CRYPTO_cbc128_decrypt(const uint8_t *in, uint8_t *out, size_t len,
 
   assert(in != NULL && out != NULL);
 
+#if 1 // hezhiwen
+  inptr = (uintptr_t) in;
+  outptr = (uintptr_t) out;
+#else
   const uintptr_t inptr = (uintptr_t) in;
   const uintptr_t outptr = (uintptr_t) out;
+#endif
   // If |in| and |out| alias, |in| must be ahead.
   assert(inptr >= outptr || inptr + len <= outptr);
 
+#if 0 // hezhiwen
   size_t n;
   alignas(16) uint8_t tmp[16];
+#endif
   if ((inptr >= 32 && outptr <= inptr - 32) || inptr < outptr) {
     // If |out| is at least two blocks behind |in| or completely disjoint, there
     // is no need to decrypt to a temporary block.
+  #if 1 // hezhiwen
+    const uint8_t *iv;
+  #endif
     static_assert(16 % sizeof(crypto_word_t) == 0,
                   "block cannot be evenly divided into words");
+  #if 1 // hezhiwen
+    iv = ivec;
+  #else
     const uint8_t *iv = ivec;
+  #endif
     while (len >= 16) {
       (*block)(in, out, key);
       for (n = 0; n < 16; n += sizeof(crypto_word_t)) {

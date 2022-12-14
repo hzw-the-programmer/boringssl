@@ -75,6 +75,9 @@
 static int pkcs12_encode_password(const char *in, size_t in_len, uint8_t **out,
                                   size_t *out_len) {
   CBB cbb;
+#if 1 // hezhiwen
+  CBS cbs;
+#endif
   if (!CBB_init(&cbb, in_len * 2)) {
     OPENSSL_PUT_ERROR(PKCS8, ERR_R_MALLOC_FAILURE);
     return 0;
@@ -82,7 +85,9 @@ static int pkcs12_encode_password(const char *in, size_t in_len, uint8_t **out,
 
   // Convert the password to BMPString, or UCS-2. See
   // https://tools.ietf.org/html/rfc7292#appendix-B.1.
+#if 0 // hezhiwen
   CBS cbs;
+#endif
   CBS_init(&cbs, (const uint8_t *)in, in_len);
   while (CBS_len(&cbs) != 0) {
     uint32_t c;
@@ -111,17 +116,32 @@ int pkcs12_key_gen(const char *pass, size_t pass_len, const uint8_t *salt,
                    size_t out_len, uint8_t *out, const EVP_MD *md) {
   // See https://tools.ietf.org/html/rfc7292#appendix-B. Quoted parts of the
   // specification have errata applied and other typos fixed.
+#if 1 // hezhiwen
+  int ret = 0;
+  EVP_MD_CTX ctx;
+  uint8_t *pass_raw = NULL, *I = NULL;
+  size_t pass_raw_len = 0, I_len = 0;
+  size_t block_size;
+  uint8_t D[EVP_MAX_MD_BLOCK_SIZE];
+  size_t S_len;
+  size_t P_len;
+  size_t i;
+#endif
 
   if (iterations < 1) {
     OPENSSL_PUT_ERROR(PKCS8, PKCS8_R_BAD_ITERATION_COUNT);
     return 0;
   }
 
+#if 1 // hezhiwen
+  EVP_MD_CTX_init(&ctx);
+#else
   int ret = 0;
   EVP_MD_CTX ctx;
   EVP_MD_CTX_init(&ctx);
   uint8_t *pass_raw = NULL, *I = NULL;
   size_t pass_raw_len = 0, I_len = 0;
+#endif
   // If |pass| is NULL, we use the empty string rather than {0, 0} as the raw
   // password.
   if (pass != NULL &&
@@ -130,11 +150,17 @@ int pkcs12_key_gen(const char *pass, size_t pass_len, const uint8_t *salt,
   }
 
   // In the spec, |block_size| is called "v", but measured in bits.
+#if 1 // hezhiwen
+  block_size = EVP_MD_block_size(md);
+#else
   size_t block_size = EVP_MD_block_size(md);
+#endif
 
   // 1. Construct a string, D (the "diversifier"), by concatenating v/8 copies
   // of ID.
+#if 0 // hezhiwen
   uint8_t D[EVP_MAX_MD_BLOCK_SIZE];
+#endif
   OPENSSL_memset(D, id, block_size);
 
   // 2. Concatenate copies of the salt together to create a string S of length
@@ -152,8 +178,13 @@ int pkcs12_key_gen(const char *pass, size_t pass_len, const uint8_t *salt,
     OPENSSL_PUT_ERROR(PKCS8, ERR_R_OVERFLOW);
     goto err;
   }
+#if 1 // hezhiwen
+  S_len = block_size * ((salt_len + block_size - 1) / block_size);
+  P_len = block_size * ((pass_raw_len + block_size - 1) / block_size);
+#else
   size_t S_len = block_size * ((salt_len + block_size - 1) / block_size);
   size_t P_len = block_size * ((pass_raw_len + block_size - 1) / block_size);
+#endif
   I_len = S_len + P_len;
   if (I_len < S_len) {
     OPENSSL_PUT_ERROR(PKCS8, ERR_R_OVERFLOW);
@@ -166,10 +197,18 @@ int pkcs12_key_gen(const char *pass, size_t pass_len, const uint8_t *salt,
     goto err;
   }
 
+#if 1 // hezhiwen
+  for (i = 0; i < S_len; i++) {
+#else
   for (size_t i = 0; i < S_len; i++) {
+#endif
     I[i] = salt[i % salt_len];
   }
+#if 1 // hezhiwen
+  for (i = 0; i < P_len; i++) {
+#else
   for (size_t i = 0; i < P_len; i++) {
+#endif
     I[i + S_len] = pass_raw[i % pass_raw_len];
   }
 
@@ -178,13 +217,23 @@ int pkcs12_key_gen(const char *pass, size_t pass_len, const uint8_t *salt,
     // H(H(H(... H(D||I))))
     uint8_t A[EVP_MAX_MD_SIZE];
     unsigned A_len;
+  #if 1 // hezhiwen
+    unsigned iter;
+    size_t todo;
+    uint8_t B[EVP_MAX_MD_BLOCK_SIZE];
+    size_t i, j;
+  #endif
     if (!EVP_DigestInit_ex(&ctx, md, NULL) ||
         !EVP_DigestUpdate(&ctx, D, block_size) ||
         !EVP_DigestUpdate(&ctx, I, I_len) ||
         !EVP_DigestFinal_ex(&ctx, A, &A_len)) {
       goto err;
     }
+  #if 1 // hezhiwen
+    for (iter = 1; iter < iterations; iter++) {
+  #else
     for (unsigned iter = 1; iter < iterations; iter++) {
+  #endif
       if (!EVP_DigestInit_ex(&ctx, md, NULL) ||
           !EVP_DigestUpdate(&ctx, A, A_len) ||
           !EVP_DigestFinal_ex(&ctx, A, &A_len)) {
@@ -192,7 +241,11 @@ int pkcs12_key_gen(const char *pass, size_t pass_len, const uint8_t *salt,
       }
     }
 
+  #if 1 // hezhiwen
+    todo = out_len < A_len ? out_len : A_len;
+  #else
     size_t todo = out_len < A_len ? out_len : A_len;
+  #endif
     OPENSSL_memcpy(out, A, todo);
     out += todo;
     out_len -= todo;
@@ -202,8 +255,12 @@ int pkcs12_key_gen(const char *pass, size_t pass_len, const uint8_t *salt,
 
     // B. Concatenate copies of A_i to create a string B of length v bits (the
     // final copy of A_i may be truncated to create B).
+  #if 1 // hezhiwen
+    for (i = 0; i < block_size; i++) {
+  #else
     uint8_t B[EVP_MAX_MD_BLOCK_SIZE];
     for (size_t i = 0; i < block_size; i++) {
+  #endif
       B[i] = A[i % A_len];
     }
 
@@ -211,9 +268,15 @@ int pkcs12_key_gen(const char *pass, size_t pass_len, const uint8_t *salt,
     // where k=ceiling(s/v)+ceiling(p/v), modify I by setting I_j=(I_j+B+1) mod
     // 2^v for each j.
     assert(I_len % block_size == 0);
+  #if 1 // hezhiwen
+    for (i = 0; i < I_len; i += block_size) {
+      unsigned carry = 1;
+      for (j = block_size - 1; j < block_size; j--) {
+  #else
     for (size_t i = 0; i < I_len; i += block_size) {
       unsigned carry = 1;
       for (size_t j = block_size - 1; j < block_size; j--) {
+  #endif
         carry += I[i + j] + B[j];
         I[i + j] = (uint8_t)carry;
         carry >>= 8;
@@ -237,7 +300,9 @@ static int pkcs12_pbe_cipher_init(const struct pbe_suite *suite,
                                   int is_encrypt) {
   const EVP_CIPHER *cipher = suite->cipher_func();
   const EVP_MD *md = suite->md_func();
-
+#if 1 // hezhiwen
+  int ret;
+#endif
   uint8_t key[EVP_MAX_KEY_LENGTH];
   uint8_t iv[EVP_MAX_IV_LENGTH];
   if (!pkcs12_key_gen(pass, pass_len, salt, salt_len, PKCS12_KEY_ID, iterations,
@@ -248,7 +313,11 @@ static int pkcs12_pbe_cipher_init(const struct pbe_suite *suite,
     return 0;
   }
 
+#if 1 // hezhiwen
+  ret = EVP_CipherInit_ex(ctx, cipher, NULL, key, iv, is_encrypt);
+#else
   int ret = EVP_CipherInit_ex(ctx, cipher, NULL, key, iv, is_encrypt);
+#endif
   OPENSSL_cleanse(key, EVP_MAX_KEY_LENGTH);
   OPENSSL_cleanse(iv, EVP_MAX_IV_LENGTH);
   return ret;
@@ -318,7 +387,12 @@ static const struct pbe_suite kBuiltinPBE[] = {
 };
 
 static const struct pbe_suite *get_pkcs12_pbe_suite(int pbe_nid) {
+#if 1 // hezhiwen
+  unsigned i;
+  for (i = 0; i < OPENSSL_ARRAY_SIZE(kBuiltinPBE); i++) {
+#else
   for (unsigned i = 0; i < OPENSSL_ARRAY_SIZE(kBuiltinPBE); i++) {
+#endif
     if (kBuiltinPBE[i].pbe_nid == pbe_nid &&
         // If |cipher_func| or |md_func| are missing, this is a PBES2 scheme.
         kBuiltinPBE[i].cipher_func != NULL &&
@@ -335,13 +409,18 @@ int pkcs12_pbe_encrypt_init(CBB *out, EVP_CIPHER_CTX *ctx, int alg,
                             size_t pass_len, const uint8_t *salt,
                             size_t salt_len) {
   const struct pbe_suite *suite = get_pkcs12_pbe_suite(alg);
+#if 1 // hezhiwen
+  CBB algorithm, oid, param, salt_cbb;
+#endif
   if (suite == NULL) {
     OPENSSL_PUT_ERROR(PKCS8, PKCS8_R_UNKNOWN_ALGORITHM);
     return 0;
   }
 
   // See RFC 2898, appendix A.3.
+#if 0 // hezhiwen
   CBB algorithm, oid, param, salt_cbb;
+#endif
   if (!CBB_add_asn1(out, &algorithm, CBS_ASN1_SEQUENCE) ||
       !CBB_add_asn1(&algorithm, &oid, CBS_ASN1_OBJECT) ||
       !CBB_add_bytes(&oid, suite->oid, suite->oid_len) ||
@@ -360,19 +439,35 @@ int pkcs12_pbe_encrypt_init(CBB *out, EVP_CIPHER_CTX *ctx, int alg,
 int pkcs8_pbe_decrypt(uint8_t **out, size_t *out_len, CBS *algorithm,
                       const char *pass, size_t pass_len, const uint8_t *in,
                       size_t in_len) {
+#if 1 // hezhiwen
+  int ret = 0;
+  uint8_t *buf = NULL;
+  EVP_CIPHER_CTX ctx;
+  CBS obj;
+  const struct pbe_suite *suite = NULL;
+  unsigned i;
+  int n1, n2;
+#else
   int ret = 0;
   uint8_t *buf = NULL;;
   EVP_CIPHER_CTX ctx;
+#endif
   EVP_CIPHER_CTX_init(&ctx);
 
+#if 0 // hezhiwen
   CBS obj;
+#endif
   if (!CBS_get_asn1(algorithm, &obj, CBS_ASN1_OBJECT)) {
     OPENSSL_PUT_ERROR(PKCS8, PKCS8_R_DECODE_ERROR);
     goto err;
   }
 
+#if 1 // hezhiwen
+  for (i = 0; i < OPENSSL_ARRAY_SIZE(kBuiltinPBE); i++) {
+#else
   const struct pbe_suite *suite = NULL;
   for (unsigned i = 0; i < OPENSSL_ARRAY_SIZE(kBuiltinPBE); i++) {
+#endif
     if (CBS_mem_equal(&obj, kBuiltinPBE[i].oid, kBuiltinPBE[i].oid_len)) {
       suite = &kBuiltinPBE[i];
       break;
@@ -399,7 +494,9 @@ int pkcs8_pbe_decrypt(uint8_t **out, size_t *out_len, CBS *algorithm,
     goto err;
   }
 
+#if 0 // hezhiwen
   int n1, n2;
+#endif
   if (!EVP_DecryptUpdate(&ctx, buf, &n1, in, (int)in_len) ||
       !EVP_DecryptFinal_ex(&ctx, buf + n1, &n2)) {
     goto err;
@@ -420,6 +517,12 @@ EVP_PKEY *PKCS8_parse_encrypted_private_key(CBS *cbs, const char *pass,
                                             size_t pass_len) {
   // See RFC 5208, section 6.
   CBS epki, algorithm, ciphertext;
+#if 1 // hezhiwen
+  uint8_t *out;
+  size_t out_len;
+  CBS pki;
+  EVP_PKEY *ret;
+#endif
   if (!CBS_get_asn1(cbs, &epki, CBS_ASN1_SEQUENCE) ||
       !CBS_get_asn1(&epki, &algorithm, CBS_ASN1_SEQUENCE) ||
       !CBS_get_asn1(&epki, &ciphertext, CBS_ASN1_OCTETSTRING) ||
@@ -428,16 +531,23 @@ EVP_PKEY *PKCS8_parse_encrypted_private_key(CBS *cbs, const char *pass,
     return 0;
   }
 
+#if 0 // hezhiwen
   uint8_t *out;
   size_t out_len;
+#endif
   if (!pkcs8_pbe_decrypt(&out, &out_len, &algorithm, pass, pass_len,
                          CBS_data(&ciphertext), CBS_len(&ciphertext))) {
     return 0;
   }
 
+#if 1 // hezhiwen
+  CBS_init(&pki, out, out_len);
+  ret = EVP_parse_private_key(&pki);
+#else
   CBS pki;
   CBS_init(&pki, out, out_len);
   EVP_PKEY *ret = EVP_parse_private_key(&pki);
+#endif
   OPENSSL_free(out);
   return ret;
 }
@@ -451,6 +561,15 @@ int PKCS8_marshal_encrypted_private_key(CBB *out, int pbe_nid,
   uint8_t *plaintext = NULL, *salt_buf = NULL;
   size_t plaintext_len = 0;
   EVP_CIPHER_CTX ctx;
+#if 1 // hezhiwen
+  CBB plaintext_cbb;
+  CBB epki;
+  int alg_ok;
+  size_t max_out;
+  CBB ciphertext;
+  uint8_t *ptr;
+  int n1, n2;
+#endif
   EVP_CIPHER_CTX_init(&ctx);
 
   // Generate a random salt if necessary.
@@ -473,7 +592,9 @@ int PKCS8_marshal_encrypted_private_key(CBB *out, int pbe_nid,
   }
 
   // Serialize the input key.
+#if 0 // hezhiwen
   CBB plaintext_cbb;
+#endif
   if (!CBB_init(&plaintext_cbb, 128) ||
       !EVP_marshal_private_key(&plaintext_cbb, pkey) ||
       !CBB_finish(&plaintext_cbb, &plaintext, &plaintext_len)) {
@@ -481,7 +602,9 @@ int PKCS8_marshal_encrypted_private_key(CBB *out, int pbe_nid,
     goto err;
   }
 
+#if 0 // hezhiwen
   CBB epki;
+#endif
   if (!CBB_add_asn1(out, &epki, CBS_ASN1_SEQUENCE)) {
     goto err;
   }
@@ -490,7 +613,9 @@ int PKCS8_marshal_encrypted_private_key(CBB *out, int pbe_nid,
   // PBES1 scheme or the PBES2 PRF. E.g. passing |NID_hmacWithSHA256| will
   // select PBES2 with HMAC-SHA256 as the PRF. Implement this if anything uses
   // it. See 5693a30813a031d3921a016a870420e7eb93ec90 in OpenSSL.
+#if 0 // hezhiwen
   int alg_ok;
+#endif
   if (pbe_nid == -1) {
     alg_ok = PKCS5_pbe2_encrypt_init(&epki, &ctx, cipher, (unsigned)iterations,
                                      pass, pass_len, salt, salt_len);
@@ -502,15 +627,21 @@ int PKCS8_marshal_encrypted_private_key(CBB *out, int pbe_nid,
     goto err;
   }
 
+#if 1 // hezhiwen
+  max_out = plaintext_len + EVP_CIPHER_CTX_block_size(&ctx);
+#else
   size_t max_out = plaintext_len + EVP_CIPHER_CTX_block_size(&ctx);
+#endif
   if (max_out < plaintext_len) {
     OPENSSL_PUT_ERROR(PKCS8, PKCS8_R_TOO_LONG);
     goto err;
   }
 
+#if 0 // hezhiwen
   CBB ciphertext;
   uint8_t *ptr;
   int n1, n2;
+#endif
   if (!CBB_add_asn1(&epki, &ciphertext, CBS_ASN1_OCTETSTRING) ||
       !CBB_reserve(&ciphertext, &ptr, max_out) ||
       !EVP_CipherUpdate(&ctx, ptr, &n1, plaintext, plaintext_len) ||

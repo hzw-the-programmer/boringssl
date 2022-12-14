@@ -211,6 +211,10 @@ static int pkey_rsa_verify(EVP_PKEY_CTX *ctx, const uint8_t *sig,
                            size_t tbslen) {
   RSA_PKEY_CTX *rctx = ctx->data;
   RSA *rsa = ctx->pkey->pkey.rsa;
+#if 1 // hezhiwen
+  size_t rslen;
+  size_t key_len;
+#endif
 
   if (rctx->md) {
     switch (rctx->pad_mode) {
@@ -226,8 +230,12 @@ static int pkey_rsa_verify(EVP_PKEY_CTX *ctx, const uint8_t *sig,
     }
   }
 
+#if 1 // hezhiwen
+  key_len = EVP_PKEY_size(ctx->pkey);
+#else
   size_t rslen;
   const size_t key_len = EVP_PKEY_size(ctx->pkey);
+#endif
   if (!setup_tbuf(rctx, ctx) ||
       !RSA_verify_raw(rsa, &rslen, rctx->tbuf, key_len, sig, siglen,
                       rctx->pad_mode) ||
@@ -245,6 +253,15 @@ static int pkey_rsa_verify_recover(EVP_PKEY_CTX *ctx, uint8_t *out,
   RSA_PKEY_CTX *rctx = ctx->data;
   RSA *rsa = ctx->pkey->pkey.rsa;
   const size_t key_len = EVP_PKEY_size(ctx->pkey);
+#if 1 // hezhiwen
+  static const uint8_t kDummyHash[EVP_MAX_MD_SIZE] = {0};
+  size_t hash_len;
+  uint8_t *asn1_prefix;
+  size_t asn1_prefix_len;
+  int asn1_prefix_allocated;
+  size_t rslen;
+  int ok = 1;
+#endif
 
   if (out == NULL) {
     *out_len = key_len;
@@ -266,11 +283,15 @@ static int pkey_rsa_verify_recover(EVP_PKEY_CTX *ctx, uint8_t *out,
   }
 
   // Assemble the encoded hash, using a placeholder hash value.
+#if 1 // hezhiwen
+  hash_len = EVP_MD_size(rctx->md);
+#else
   static const uint8_t kDummyHash[EVP_MAX_MD_SIZE] = {0};
   const size_t hash_len = EVP_MD_size(rctx->md);
   uint8_t *asn1_prefix;
   size_t asn1_prefix_len;
   int asn1_prefix_allocated;
+#endif
   if (!setup_tbuf(rctx, ctx) ||
       !RSA_add_pkcs1_prefix(&asn1_prefix, &asn1_prefix_len,
                             &asn1_prefix_allocated, EVP_MD_type(rctx->md),
@@ -278,8 +299,10 @@ static int pkey_rsa_verify_recover(EVP_PKEY_CTX *ctx, uint8_t *out,
     return 0;
   }
 
+#if 0 // hezhiwen
   size_t rslen;
   int ok = 1;
+#endif
   if (!RSA_verify_raw(rsa, &rslen, rctx->tbuf, key_len, sig, sig_len,
                       RSA_PKCS1_PADDING) ||
       rslen != asn1_prefix_len ||
@@ -491,12 +514,19 @@ static int pkey_rsa_ctrl(EVP_PKEY_CTX *ctx, int type, int p1, void *p2) {
       return 1;
 
     case EVP_PKEY_CTRL_RSA_OAEP_LABEL: {
+    #if 1 // hezhiwen
+      RSA_OAEP_LABEL_PARAMS *params;
+    #endif
       if (rctx->pad_mode != RSA_PKCS1_OAEP_PADDING) {
         OPENSSL_PUT_ERROR(EVP, EVP_R_INVALID_PADDING_MODE);
         return 0;
       }
       OPENSSL_free(rctx->oaep_label);
+    #if 1 // hezhiwen
+      params = p2;
+    #else
       RSA_OAEP_LABEL_PARAMS *params = p2;
+    #endif
       rctx->oaep_label = params->data;
       rctx->oaep_labellen = params->len;
       return 1;

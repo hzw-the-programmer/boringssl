@@ -93,6 +93,10 @@ static int tls1_P_hash(uint8_t *out, size_t out_len,
   for (;;) {
     unsigned len_u;
     uint8_t hmac[EVP_MAX_MD_SIZE];
+  #if 1 // hezhiwen
+    size_t len;
+    size_t i;
+  #endif
     if (!HMAC_CTX_copy_ex(&ctx, &ctx_init) ||
         !HMAC_Update(&ctx, A1, A1_len) ||
         // Save a copy of |ctx| to compute the next A1 value below.
@@ -103,14 +107,22 @@ static int tls1_P_hash(uint8_t *out, size_t out_len,
         !HMAC_Final(&ctx, hmac, &len_u)) {
       goto err;
     }
+  #if 1 // hezhiwen
+    len = len_u;
+  #else
     size_t len = len_u;
+  #endif
     assert(len == chunk);
 
     // XOR the result into |out|.
     if (len > out_len) {
       len = out_len;
     }
+  #if 1 // hezhiwen
+    for (i = 0; i < len; i++) {
+  #else
     for (size_t i = 0; i < len; i++) {
+  #endif
       out[i] ^= hmac[i];
     }
     out += len;
@@ -142,15 +154,24 @@ int CRYPTO_tls1_prf(const EVP_MD *digest,
                     const char *label, size_t label_len,
                     const uint8_t *seed1, size_t seed1_len,
                     const uint8_t *seed2, size_t seed2_len) {
+#if 1 // hezhiwen
+  const EVP_MD *original_digest;
+  int ret = 0;
+#endif
   if (out_len == 0) {
     return 1;
   }
 
   OPENSSL_memset(out, 0, out_len);
 
+#if 1 // hezhiwen
+  original_digest = digest;
+  FIPS_service_indicator_lock_state();
+#else
   const EVP_MD *const original_digest = digest;
   FIPS_service_indicator_lock_state();
   int ret = 0;
+#endif
 
   if (digest == EVP_md5_sha1()) {
     // If using the MD5/SHA1 PRF, |secret| is partitioned between MD5 and SHA-1.

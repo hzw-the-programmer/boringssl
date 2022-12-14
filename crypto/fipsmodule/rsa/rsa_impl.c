@@ -74,12 +74,21 @@
 
 
 int rsa_check_public_key(const RSA *rsa) {
+#if 1 // hezhiwen
+  unsigned n_bits;
+  static const unsigned kMaxExponentBits = 33;
+  unsigned e_bits;
+#endif
   if (rsa->n == NULL || rsa->e == NULL) {
     OPENSSL_PUT_ERROR(RSA, RSA_R_VALUE_MISSING);
     return 0;
   }
 
+#if 1 // hezhiwen
+  n_bits = BN_num_bits(rsa->n);
+#else
   unsigned n_bits = BN_num_bits(rsa->n);
+#endif
   if (n_bits > 16 * 1024) {
     OPENSSL_PUT_ERROR(RSA, RSA_R_MODULUS_TOO_LARGE);
     return 0;
@@ -94,8 +103,12 @@ int rsa_check_public_key(const RSA *rsa) {
   // [1] https://www.imperialviolet.org/2012/03/16/rsae.html
   // [2] https://www.imperialviolet.org/2012/03/17/rsados.html
   // [3] https://msdn.microsoft.com/en-us/library/aa387685(VS.85).aspx
+#if 1 // hezhiwen
+  e_bits = BN_num_bits(rsa->e);
+#else
   static const unsigned kMaxExponentBits = 33;
   unsigned e_bits = BN_num_bits(rsa->e);
+#endif
   if (e_bits > kMaxExponentBits ||
       // Additionally reject e = 1 or even e. e must be odd to be relatively
       // prime with phi(n).
@@ -119,10 +132,17 @@ int rsa_check_public_key(const RSA *rsa) {
 }
 
 static int ensure_fixed_copy(BIGNUM **out, const BIGNUM *in, int width) {
+#if 1 // hezhiwen
+  BIGNUM *copy;
+#endif
   if (*out != NULL) {
     return 1;
   }
+#if 1 // hezhiwen
+  copy = BN_dup(in);
+#else
   BIGNUM *copy = BN_dup(in);
+#endif
   if (copy == NULL ||
       !bn_resize_words(copy, width)) {
     BN_free(copy);
@@ -139,14 +159,25 @@ static int ensure_fixed_copy(BIGNUM **out, const BIGNUM *in, int width) {
 // because |RSA| is a public struct and, additionally, OpenSSL 1.1.0 opaquified
 // it wrong (see https://github.com/openssl/openssl/issues/5158).
 static int freeze_private_key(RSA *rsa, BN_CTX *ctx) {
+#if 1 // hezhiwen
+  int frozen;
+  int ret = 0;
+  const BIGNUM *n_fixed;
+#endif
   CRYPTO_MUTEX_lock_read(&rsa->lock);
+#if 1 // hezhiwen
+  frozen = rsa->private_key_frozen;
+#else
   int frozen = rsa->private_key_frozen;
+#endif
   CRYPTO_MUTEX_unlock_read(&rsa->lock);
   if (frozen) {
     return 1;
   }
 
+#if 0 // hezhiwen
   int ret = 0;
+#endif
   CRYPTO_MUTEX_lock_write(&rsa->lock);
   if (rsa->private_key_frozen) {
     ret = 1;
@@ -165,7 +196,11 @@ static int freeze_private_key(RSA *rsa, BN_CTX *ctx) {
       goto err;
     }
   }
+#if 1 // hezhiwen
+  n_fixed = &rsa->mont_n->N;
+#else
   const BIGNUM *n_fixed = &rsa->mont_n->N;
+#endif
 
   // The only public upper-bound of |rsa->d| is the bit length of |rsa->n|. The
   // ASN.1 serialization of RSA private keys unfortunately leaks the byte length
@@ -177,6 +212,10 @@ static int freeze_private_key(RSA *rsa, BN_CTX *ctx) {
   }
 
   if (rsa->p != NULL && rsa->q != NULL) {
+  #if 1 // hezhiwen
+    const BIGNUM *p_fixed;
+    const BIGNUM *q_fixed;
+  #endif
     // TODO: p and q are also CONSTTIME_SECRET but not yet marked as such
     // because the Montgomery code does things like test whether or not values
     // are zero. So the secret marking probably needs to happen inside that
@@ -188,7 +227,11 @@ static int freeze_private_key(RSA *rsa, BN_CTX *ctx) {
         goto err;
       }
     }
+  #if 1 // hezhiwen
+    p_fixed = &rsa->mont_p->N;
+  #else
     const BIGNUM *p_fixed = &rsa->mont_p->N;
+  #endif
 
     if (rsa->mont_q == NULL) {
       rsa->mont_q = BN_MONT_CTX_new_consttime(rsa->q, ctx);
@@ -196,7 +239,11 @@ static int freeze_private_key(RSA *rsa, BN_CTX *ctx) {
         goto err;
       }
     }
+  #if 1 // hezhiwen
+    q_fixed = &rsa->mont_q->N;
+  #else
     const BIGNUM *q_fixed = &rsa->mont_q->N;
+  #endif
 
     if (rsa->dmp1 != NULL && rsa->dmq1 != NULL) {
       // Key generation relies on this function to compute |iqmp|.
@@ -261,17 +308,28 @@ size_t rsa_default_size(const RSA *rsa) {
 
 int RSA_encrypt(RSA *rsa, size_t *out_len, uint8_t *out, size_t max_out,
                 const uint8_t *in, size_t in_len, int padding) {
+#if 1 // hezhiwen
+  unsigned rsa_size;
+  BIGNUM *f, *result;
+  uint8_t *buf = NULL;
+  BN_CTX *ctx = NULL;
+  int i, ret = 0;
+#endif
   boringssl_ensure_rsa_self_test();
 
   if (!rsa_check_public_key(rsa)) {
     return 0;
   }
 
+#if 1 // hezhiwen
+  rsa_size = RSA_size(rsa);
+#else
   const unsigned rsa_size = RSA_size(rsa);
   BIGNUM *f, *result;
   uint8_t *buf = NULL;
   BN_CTX *ctx = NULL;
   int i, ret = 0;
+#endif
 
   if (max_out < rsa_size) {
     OPENSSL_PUT_ERROR(RSA, RSA_R_OUTPUT_BUFFER_TOO_SMALL);
@@ -367,16 +425,34 @@ err:
 // |*index_used| and must be passed to |rsa_blinding_release| when finished.
 static BN_BLINDING *rsa_blinding_get(RSA *rsa, size_t *index_used,
                                      BN_CTX *ctx) {
+#if 1 // hezhiwen
+  BN_BLINDING *ret = NULL;
+  uint64_t fork_generation;
+  uint8_t *free_inuse_flag;
+  size_t new_num_blindings;
+  BN_BLINDING **new_blindings;
+  uint8_t *new_blindings_inuse;
+  size_t i;
+#endif
   assert(ctx != NULL);
   assert(rsa->mont_n != NULL);
 
+#if 1 // hezhiwen
+  fork_generation = CRYPTO_get_fork_generation();
+#else
   BN_BLINDING *ret = NULL;
   const uint64_t fork_generation = CRYPTO_get_fork_generation();
+#endif
   CRYPTO_MUTEX_lock_write(&rsa->lock);
 
   // Wipe the blinding cache on |fork|.
   if (rsa->blinding_fork_generation != fork_generation) {
+  #if 1 // hezhiwen
+    size_t i;
+    for (i = 0; i < rsa->num_blindings; i++) {
+  #else
     for (size_t i = 0; i < rsa->num_blindings; i++) {
+  #endif
       // The inuse flag must be zero unless we were forked from a
       // multi-threaded process, in which case calling back into BoringSSL is
       // forbidden.
@@ -386,8 +462,13 @@ static BN_BLINDING *rsa_blinding_get(RSA *rsa, size_t *index_used,
     rsa->blinding_fork_generation = fork_generation;
   }
 
+#if 1 // hezhiwen
+  free_inuse_flag =
+      OPENSSL_memchr(rsa->blindings_inuse, 0, rsa->num_blindings);
+#else
   uint8_t *const free_inuse_flag =
       OPENSSL_memchr(rsa->blindings_inuse, 0, rsa->num_blindings);
+#endif
   if (free_inuse_flag != NULL) {
     *free_inuse_flag = 1;
     *index_used = free_inuse_flag - rsa->blindings_inuse;
@@ -407,7 +488,11 @@ static BN_BLINDING *rsa_blinding_get(RSA *rsa, size_t *index_used,
   // Double the length of the cache.
   static_assert(MAX_BLINDINGS_PER_RSA < UINT_MAX / 2,
                 "MAX_BLINDINGS_PER_RSA too large");
+#if 1 // hezhiwen
+  new_num_blindings = rsa->num_blindings * 2;
+#else
   size_t new_num_blindings = rsa->num_blindings * 2;
+#endif
   if (new_num_blindings == 0) {
     new_num_blindings = 1;
   }
@@ -416,9 +501,15 @@ static BN_BLINDING *rsa_blinding_get(RSA *rsa, size_t *index_used,
   }
   assert(new_num_blindings > rsa->num_blindings);
 
+#if 1 // hezhiwen
+  new_blindings =
+      OPENSSL_malloc(sizeof(BN_BLINDING *) * new_num_blindings);
+  new_blindings_inuse = OPENSSL_malloc(new_num_blindings);
+#else
   BN_BLINDING **new_blindings =
       OPENSSL_malloc(sizeof(BN_BLINDING *) * new_num_blindings);
   uint8_t *new_blindings_inuse = OPENSSL_malloc(new_num_blindings);
+#endif
   if (new_blindings == NULL || new_blindings_inuse == NULL) {
     goto err;
   }
@@ -427,10 +518,19 @@ static BN_BLINDING *rsa_blinding_get(RSA *rsa, size_t *index_used,
                  sizeof(BN_BLINDING *) * rsa->num_blindings);
   OPENSSL_memcpy(new_blindings_inuse, rsa->blindings_inuse, rsa->num_blindings);
 
+#if 1 // hezhiwen
+  for (i = rsa->num_blindings; i < new_num_blindings; i++) {
+#else
   for (size_t i = rsa->num_blindings; i < new_num_blindings; i++) {
+#endif
     new_blindings[i] = BN_BLINDING_new();
     if (new_blindings[i] == NULL) {
+    #if 1 // hezhiwen
+      size_t j;
+      for (j = rsa->num_blindings; j < i; j++) {
+    #else
       for (size_t j = rsa->num_blindings; j < i; j++) {
+    #endif
         BN_BLINDING_free(new_blindings[j]);
       }
       goto err;
@@ -527,11 +627,21 @@ err:
 
 int rsa_default_decrypt(RSA *rsa, size_t *out_len, uint8_t *out, size_t max_out,
                         const uint8_t *in, size_t in_len, int padding) {
+#if 1 // hezhiwen
+  unsigned rsa_size;
+  uint8_t *buf = NULL;
+  int ret = 0;
+#endif
+
   boringssl_ensure_rsa_self_test();
 
+#if 1 // hezhiwen
+  rsa_size = RSA_size(rsa);
+#else
   const unsigned rsa_size = RSA_size(rsa);
   uint8_t *buf = NULL;
   int ret = 0;
+#endif
 
   if (max_out < rsa_size) {
     OPENSSL_PUT_ERROR(RSA, RSA_R_OUTPUT_BUFFER_TOO_SMALL);
@@ -597,12 +707,23 @@ static int mod_exp(BIGNUM *r0, const BIGNUM *I, RSA *rsa, BN_CTX *ctx);
 int rsa_verify_raw_no_self_test(RSA *rsa, size_t *out_len, uint8_t *out,
                                 size_t max_out, const uint8_t *in,
                                 size_t in_len, int padding) {
+#if 1 // hezhiwen
+  unsigned rsa_size;
+  BIGNUM *f, *result;
+  BN_CTX *ctx;
+  int ret = 0;
+  uint8_t *buf = NULL;
+#endif
   if (!rsa_check_public_key(rsa)) {
     return 0;
   }
 
+#if 1 // hezhiwen
+  rsa_size = RSA_size(rsa);
+#else
   const unsigned rsa_size = RSA_size(rsa);
   BIGNUM *f, *result;
+#endif
 
   if (max_out < rsa_size) {
     OPENSSL_PUT_ERROR(RSA, RSA_R_OUTPUT_BUFFER_TOO_SMALL);
@@ -614,13 +735,19 @@ int rsa_verify_raw_no_self_test(RSA *rsa, size_t *out_len, uint8_t *out,
     return 0;
   }
 
+#if 1 // hezhiwen
+  ctx = BN_CTX_new();
+#else
   BN_CTX *ctx = BN_CTX_new();
+#endif
   if (ctx == NULL) {
     return 0;
   }
 
+#if 0 // hezhiwen
   int ret = 0;
   uint8_t *buf = NULL;
+#endif
 
   BN_CTX_start(ctx);
   f = BN_CTX_get(ctx);
@@ -698,16 +825,26 @@ int RSA_verify_raw(RSA *rsa, size_t *out_len, uint8_t *out,
 
 int rsa_default_private_transform(RSA *rsa, uint8_t *out, const uint8_t *in,
                                   size_t len) {
-  if (rsa->n == NULL || rsa->d == NULL) {
-    OPENSSL_PUT_ERROR(RSA, RSA_R_VALUE_MISSING);
-    return 0;
-  }
-
+#if 1 // hezhiwen
   BIGNUM *f, *result;
   BN_CTX *ctx = NULL;
   size_t blinding_index = 0;
   BN_BLINDING *blinding = NULL;
   int ret = 0;
+  int do_blinding;
+#endif
+  if (rsa->n == NULL || rsa->d == NULL) {
+    OPENSSL_PUT_ERROR(RSA, RSA_R_VALUE_MISSING);
+    return 0;
+  }
+
+#if 0 // hezhiwen
+  BIGNUM *f, *result;
+  BN_CTX *ctx = NULL;
+  size_t blinding_index = 0;
+  BN_BLINDING *blinding = NULL;
+  int ret = 0;
+#endif
 
   ctx = BN_CTX_new();
   if (ctx == NULL) {
@@ -737,7 +874,11 @@ int rsa_default_private_transform(RSA *rsa, uint8_t *out, const uint8_t *in,
     goto err;
   }
 
+#if 1 // hezhiwen
+  do_blinding = (rsa->flags & RSA_FLAG_NO_BLINDING) == 0;
+#else
   const int do_blinding = (rsa->flags & RSA_FLAG_NO_BLINDING) == 0;
+#endif
 
   if (rsa->e == NULL && do_blinding) {
     // We cannot do blinding or verification without |e|, and continuing without
@@ -857,6 +998,15 @@ static int mod_montgomery(BIGNUM *r, const BIGNUM *I, const BIGNUM *p,
 }
 
 static int mod_exp(BIGNUM *r0, const BIGNUM *I, RSA *rsa, BN_CTX *ctx) {
+#if 1 // hezhiwen
+  BIGNUM *r1, *m1;
+  int ret = 0;
+  const BIGNUM *dmp1, *dmq1;
+  const BN_MONT_CTX *mont_p, *mont_q;
+  const BIGNUM *n;
+  const BIGNUM *p;
+  const BIGNUM *q;
+#endif
   assert(ctx != NULL);
 
   assert(rsa->n != NULL);
@@ -868,8 +1018,10 @@ static int mod_exp(BIGNUM *r0, const BIGNUM *I, RSA *rsa, BN_CTX *ctx) {
   assert(rsa->dmq1 != NULL);
   assert(rsa->iqmp != NULL);
 
+#if 0 // hezhiwen
   BIGNUM *r1, *m1;
   int ret = 0;
+#endif
 
   BN_CTX_start(ctx);
   r1 = BN_CTX_get(ctx);
@@ -885,8 +1037,15 @@ static int mod_exp(BIGNUM *r0, const BIGNUM *I, RSA *rsa, BN_CTX *ctx) {
 
   // Implementing RSA with CRT in constant-time is sensitive to which prime is
   // larger. Canonicalize fields so that |p| is the larger prime.
+#if 1 // hezhiwen
+  dmp1 = rsa->dmp1_fixed;
+  dmq1 = rsa->dmq1_fixed;
+  mont_p = rsa->mont_p;
+  mont_q = rsa->mont_q;
+#else
   const BIGNUM *dmp1 = rsa->dmp1_fixed, *dmq1 = rsa->dmq1_fixed;
   const BN_MONT_CTX *mont_p = rsa->mont_p, *mont_q = rsa->mont_q;
+#endif
   if (BN_cmp(rsa->p, rsa->q) < 0) {
     mont_p = rsa->mont_q;
     mont_q = rsa->mont_p;
@@ -897,9 +1056,15 @@ static int mod_exp(BIGNUM *r0, const BIGNUM *I, RSA *rsa, BN_CTX *ctx) {
   // Use the minimal-width versions of |n|, |p|, and |q|. Either works, but if
   // someone gives us non-minimal values, these will be slightly more efficient
   // on the non-Montgomery operations.
+#if 1 // hezhiwen
+  n = &rsa->mont_n->N;
+  p = &mont_p->N;
+  q = &mont_q->N;
+#else
   const BIGNUM *n = &rsa->mont_n->N;
   const BIGNUM *p = &mont_p->N;
   const BIGNUM *q = &mont_q->N;
+#endif
 
   // This is a pre-condition for |mod_montgomery|. It was already checked by the
   // caller.
@@ -1022,6 +1187,11 @@ static int generate_prime(BIGNUM *out, int bits, const BIGNUM *e,
                           const BIGNUM *p, const BIGNUM *sqrt2,
                           const BIGNUM *pow2_bits_100, BN_CTX *ctx,
                           BN_GENCB *cb) {
+#if 1 // hezhiwen
+  int limit;
+  int ret = 0, tries = 0, rand_tries = 0;
+  BIGNUM *tmp;
+#endif
   if (bits < 128 || (bits % BN_BITS2) != 0) {
     OPENSSL_PUT_ERROR(RSA, ERR_R_INTERNAL_ERROR);
     return 0;
@@ -1063,11 +1233,20 @@ static int generate_prime(BIGNUM *out, int bits, const BIGNUM *e,
     OPENSSL_PUT_ERROR(RSA, RSA_R_MODULUS_TOO_LARGE);
     return 0;
   }
+#if 1 // hezhiwen
+  limit = BN_is_word(e, 3) ? bits * 8 : bits * 5;
+#else
   int limit = BN_is_word(e, 3) ? bits * 8 : bits * 5;
+#endif
 
+#if 1 // hezhiwen
+  BN_CTX_start(ctx);
+  tmp = BN_CTX_get(ctx);
+#else
   int ret = 0, tries = 0, rand_tries = 0;
   BN_CTX_start(ctx);
   BIGNUM *tmp = BN_CTX_get(ctx);
+#endif
   if (tmp == NULL) {
     goto err;
   }
@@ -1150,6 +1329,18 @@ err:
 // probability of about 2^-20.
 static int rsa_generate_key_impl(RSA *rsa, int bits, const BIGNUM *e_value,
                                  BN_GENCB *cb) {
+#if 1 // hezhiwen
+  int ret = 0;
+  int prime_bits;
+  BN_CTX *ctx;
+  BIGNUM *totient;
+  BIGNUM *pm1;
+  BIGNUM *qm1;
+  BIGNUM *sqrt2;
+  BIGNUM *pow2_prime_bits_100;
+  BIGNUM *pow2_prime_bits;
+  int sqrt2_bits;
+#endif
   // See FIPS 186-4 appendix B.3. This function implements a generalized version
   // of the FIPS algorithm. |RSA_generate_key_fips| performs additional checks
   // for FIPS-compliant key generation.
@@ -1175,19 +1366,33 @@ static int rsa_generate_key_impl(RSA *rsa, int bits, const BIGNUM *e_value,
     return 0;
   }
 
+#if 1 // hezhiwen
+  prime_bits = bits / 2;
+  ctx = BN_CTX_new();
+#else
   int ret = 0;
   int prime_bits = bits / 2;
   BN_CTX *ctx = BN_CTX_new();
+#endif
   if (ctx == NULL) {
     goto bn_err;
   }
   BN_CTX_start(ctx);
+#if 1 // hezhiwen
+  totient = BN_CTX_get(ctx);
+  pm1 = BN_CTX_get(ctx);
+  qm1 = BN_CTX_get(ctx);
+  sqrt2 = BN_CTX_get(ctx);
+  pow2_prime_bits_100 = BN_CTX_get(ctx);
+  pow2_prime_bits = BN_CTX_get(ctx);
+#else
   BIGNUM *totient = BN_CTX_get(ctx);
   BIGNUM *pm1 = BN_CTX_get(ctx);
   BIGNUM *qm1 = BN_CTX_get(ctx);
   BIGNUM *sqrt2 = BN_CTX_get(ctx);
   BIGNUM *pow2_prime_bits_100 = BN_CTX_get(ctx);
   BIGNUM *pow2_prime_bits = BN_CTX_get(ctx);
+#endif
   if (totient == NULL || pm1 == NULL || qm1 == NULL || sqrt2 == NULL ||
       pow2_prime_bits_100 == NULL || pow2_prime_bits == NULL ||
       !BN_set_bit(pow2_prime_bits_100, prime_bits - 100) ||
@@ -1214,7 +1419,11 @@ static int rsa_generate_key_impl(RSA *rsa, int bits, const BIGNUM *e_value,
   if (!bn_set_words(sqrt2, kBoringSSLRSASqrtTwo, kBoringSSLRSASqrtTwoLen)) {
     goto bn_err;
   }
+#if 1 // hezhiwen
+  sqrt2_bits = kBoringSSLRSASqrtTwoLen * BN_BITS2;
+#else
   int sqrt2_bits = kBoringSSLRSASqrtTwoLen * BN_BITS2;
+#endif
   assert(sqrt2_bits == (int)BN_num_bits(sqrt2));
   if (sqrt2_bits > prime_bits) {
     // For key sizes up to 4096 (prime_bits = 2048), this is exactly
@@ -1238,6 +1447,9 @@ static int rsa_generate_key_impl(RSA *rsa, int bits, const BIGNUM *e_value,
     //
     // Each call to |generate_prime| fails with probability p = 2^-21. The
     // probability that either call fails is 1 - (1-p)^2, which is around 2^-20.
+  #if 1 // hezhiwen
+    int no_inverse;
+  #endif
     if (!generate_prime(rsa->p, prime_bits, rsa->e, NULL, sqrt2,
                         pow2_prime_bits_100, ctx, cb) ||
         !BN_GENCB_call(cb, 3, 0) ||
@@ -1260,7 +1472,9 @@ static int rsa_generate_key_impl(RSA *rsa, int bits, const BIGNUM *e_value,
     // q-1. However, we do operations with Chinese Remainder Theorem, so we only
     // use d (mod p-1) and d (mod q-1) as exponents. Using a minimal totient
     // does not affect those two values.
+  #if 0 // hezhiwen
     int no_inverse;
+  #endif
     if (!bn_usub_consttime(pm1, rsa->p, BN_value_one()) ||
         !bn_usub_consttime(qm1, rsa->q, BN_value_one()) ||
         !bn_lcm_consttime(totient, pm1, qm1, ctx) ||
@@ -1334,8 +1548,15 @@ static void replace_bn_mont_ctx(BN_MONT_CTX **out, BN_MONT_CTX **in) {
 static int RSA_generate_key_ex_maybe_fips(RSA *rsa, int bits,
                                           const BIGNUM *e_value, BN_GENCB *cb,
                                           int check_fips) {
+#if 1 // hezhiwen
+  RSA *tmp = NULL;
+  uint32_t err;
+  int ret = 0;
+  int failures = 0;
+#endif
   boringssl_ensure_rsa_self_test();
 
+#if 0 // hezhiwen
   RSA *tmp = NULL;
   uint32_t err;
   int ret = 0;
@@ -1345,6 +1566,7 @@ static int RSA_generate_key_ex_maybe_fips(RSA *rsa, int bits,
   // should just adjust the retry limit, but FIPS 186-4 prescribes that value
   // and thus results in unnecessary complexity.
   int failures = 0;
+#endif
   do {
     ERR_clear_error();
     // Generate into scratch space, to avoid leaving partial work on failure.
@@ -1402,6 +1624,10 @@ int RSA_generate_key_ex(RSA *rsa, int bits, const BIGNUM *e_value,
 }
 
 int RSA_generate_key_fips(RSA *rsa, int bits, BN_GENCB *cb) {
+#if 1 // hezhiwen
+  BIGNUM *e;
+  int ret;
+#endif
   // FIPS 186-4 allows 2048-bit and 3072-bit RSA keys (1024-bit and 1536-bit
   // primes, respectively) with the prime generation method we use.
   // Subsequently, IG A.14 stated that larger modulus sizes can be used and ACVP
@@ -1411,10 +1637,17 @@ int RSA_generate_key_fips(RSA *rsa, int bits, BN_GENCB *cb) {
     return 0;
   }
 
+#if 1 // hezhiwen
+  e = BN_new();
+  ret = e != NULL &&
+        BN_set_word(e, RSA_F4) &&
+        RSA_generate_key_ex_maybe_fips(rsa, bits, e, cb, /*check_fips=*/1);
+#else
   BIGNUM *e = BN_new();
   int ret = e != NULL &&
             BN_set_word(e, RSA_F4) &&
             RSA_generate_key_ex_maybe_fips(rsa, bits, e, cb, /*check_fips=*/1);
+#endif
   BN_free(e);
 
   if (ret) {

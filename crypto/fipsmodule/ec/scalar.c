@@ -39,7 +39,12 @@ int ec_scalar_equal_vartime(const EC_GROUP *group, const EC_SCALAR *a,
 
 int ec_scalar_is_zero(const EC_GROUP *group, const EC_SCALAR *a) {
   BN_ULONG mask = 0;
+#if 1 // hezhiwen
+  int i;
+  for (i = 0; i < group->order.width; i++) {
+#else
   for (int i = 0; i < group->order.width; i++) {
+#endif
     mask |= a->words[i];
   }
   return mask == 0;

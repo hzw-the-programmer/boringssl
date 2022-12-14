@@ -73,11 +73,18 @@
 STACK_OF(X509_INFO) *PEM_X509_INFO_read(FILE *fp, STACK_OF(X509_INFO) *sk,
                                         pem_password_cb *cb, void *u) {
   BIO *b = BIO_new_fp(fp, BIO_NOCLOSE);
+#if 1 // hezhiwen
+  STACK_OF(X509_INFO) *ret;
+#endif
   if (b == NULL) {
     OPENSSL_PUT_ERROR(PEM, ERR_R_BUF_LIB);
     return 0;
   }
+#if 1 // hezhiwen
+  ret = PEM_X509_INFO_read_bio(b, sk, cb, u);
+#else
   STACK_OF(X509_INFO) *ret = PEM_X509_INFO_read_bio(b, sk, cb, u);
+#endif
   BIO_free(b);
   return ret;
 }
@@ -136,6 +143,9 @@ STACK_OF(X509_INFO) *PEM_X509_INFO_read_bio(BIO *bp, STACK_OF(X509_INFO) *sk,
   long len;
   int ok = 0;
   STACK_OF(X509_INFO) *ret = NULL;
+#if 1 // hezhiwen
+  size_t orig_num;
+#endif
 
   if (sk == NULL) {
     ret = sk_X509_INFO_new_null();
@@ -146,7 +156,11 @@ STACK_OF(X509_INFO) *PEM_X509_INFO_read_bio(BIO *bp, STACK_OF(X509_INFO) *sk,
   } else {
     ret = sk;
   }
+#if 1 // hezhiwen
+  orig_num = sk_X509_INFO_num(ret);
+#else
   size_t orig_num = sk_X509_INFO_num(ret);
+#endif
 
   info = X509_INFO_new();
   if (info == NULL) {
@@ -154,6 +168,11 @@ STACK_OF(X509_INFO) *PEM_X509_INFO_read_bio(BIO *bp, STACK_OF(X509_INFO) *sk,
   }
 
   for (;;) {
+  #if 1 // hezhiwen
+    enum parse_result_t (*parse_function)(X509_INFO *, const uint8_t *, size_t,
+                                          int) = NULL;
+    int key_type = EVP_PKEY_NONE;
+  #endif
     if (!PEM_read_bio(bp, &name, &header, &data, &len)) {
       uint32_t error = ERR_peek_last_error();
       if (ERR_GET_LIB(error) == ERR_LIB_PEM &&
@@ -164,9 +183,11 @@ STACK_OF(X509_INFO) *PEM_X509_INFO_read_bio(BIO *bp, STACK_OF(X509_INFO) *sk,
       goto err;
     }
 
+  #if 0 // hezhiwen
     enum parse_result_t (*parse_function)(X509_INFO *, const uint8_t *, size_t,
                                           int) = NULL;
     int key_type = EVP_PKEY_NONE;
+  #endif
     if (strcmp(name, PEM_STRING_X509) == 0 ||
         strcmp(name, PEM_STRING_X509_OLD) == 0) {
       parse_function = parse_x509;
@@ -207,11 +228,18 @@ STACK_OF(X509_INFO) *PEM_X509_INFO_read_bio(BIO *bp, STACK_OF(X509_INFO) *sk,
       data = NULL;
     } else if (parse_function != NULL) {
       EVP_CIPHER_INFO cipher;
+    #if 1 // hezhiwen
+      enum parse_result_t result;
+    #endif
       if (!PEM_get_EVP_CIPHER_INFO(header, &cipher) ||
           !PEM_do_header(&cipher, data, &len, cb, u)) {
         goto err;
       }
+    #if 1 // hezhiwen
+      result = parse_function(info, data, len, key_type);
+    #else
       enum parse_result_t result = parse_function(info, data, len, key_type);
+    #endif
       if (result == parse_new_entry) {
         if (!sk_X509_INFO_push(ret, info)) {
           goto err;

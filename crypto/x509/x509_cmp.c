@@ -210,11 +210,18 @@ unsigned long X509_NAME_hash_old(X509_NAME *x) {
 
 X509 *X509_find_by_issuer_and_serial(const STACK_OF(X509) *sk, X509_NAME *name,
                                      const ASN1_INTEGER *serial) {
+#if 1 // hezhiwen
+  size_t i;
+#endif
   if (serial->type != V_ASN1_INTEGER && serial->type != V_ASN1_NEG_INTEGER) {
     return NULL;
   }
 
+#if 1 // hezhiwen
+  for (i = 0; i < sk_X509_num(sk); i++) {
+#else
   for (size_t i = 0; i < sk_X509_num(sk); i++) {
+#endif
     X509 *x509 = sk_X509_value(sk, i);
     if (ASN1_INTEGER_cmp(X509_get0_serialNumber(x509), serial) == 0 &&
         X509_NAME_cmp(X509_get_issuer_name(x509), name) == 0) {
@@ -225,7 +232,12 @@ X509 *X509_find_by_issuer_and_serial(const STACK_OF(X509) *sk, X509_NAME *name,
 }
 
 X509 *X509_find_by_subject(const STACK_OF(X509) *sk, X509_NAME *name) {
+#if 1 // hezhiwen
+  size_t i;
+  for (i = 0; i < sk_X509_num(sk); i++) {
+#else
   for (size_t i = 0; i < sk_X509_num(sk); i++) {
+#endif
     X509 *x509 = sk_X509_value(sk, i);
     if (X509_NAME_cmp(X509_get_subject_name(x509), name) == 0) {
       return x509;

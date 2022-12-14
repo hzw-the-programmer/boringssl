@@ -224,6 +224,9 @@ int X509_verify_cert(X509_STORE_CTX *ctx) {
   depth = param->depth;
 
   for (;;) {
+  #if 1 // hezhiwen
+    int is_self_signed;
+  #endif
     // If we have enough, we break
     if (depth < num) {
       break;  // FIXME: If this happens, we should take
@@ -232,7 +235,9 @@ int X509_verify_cert(X509_STORE_CTX *ctx) {
               // later.
     }
 
+  #if 0 // hezhiwen
     int is_self_signed;
+  #endif
     if (!cert_self_signed(x, &is_self_signed)) {
       ctx->error = X509_V_ERR_INVALID_EXTENSION;
       goto end;
@@ -287,10 +292,15 @@ int X509_verify_cert(X509_STORE_CTX *ctx) {
 
   do {
     // Examine last certificate in chain and see if it is self signed.
+  #if 1 // hezhiwen
+    int is_self_signed;
+  #endif
     i = sk_X509_num(ctx->chain);
     x = sk_X509_value(ctx->chain, i - 1);
 
+  #if 0 // hezhiwen
     int is_self_signed;
+  #endif
     if (!cert_self_signed(x, &is_self_signed)) {
       ctx->error = X509_V_ERR_INVALID_EXTENSION;
       goto end;
@@ -680,22 +690,39 @@ end:
 static int reject_dns_name_in_common_name(X509 *x509) {
   const X509_NAME *name = X509_get_subject_name(x509);
   int i = -1;
+#if 1 // hezhiwen
+  const X509_NAME_ENTRY *entry;
+  const ASN1_STRING *common_name;
+  unsigned char *idval;
+  int idlen;
+  int looks_like_dns;
+#endif
   for (;;) {
     i = X509_NAME_get_index_by_NID(name, NID_commonName, i);
     if (i == -1) {
       return X509_V_OK;
     }
 
+#if 1 // hezhiwen
+    entry = X509_NAME_get_entry(name, i);
+    common_name = X509_NAME_ENTRY_get_data(entry);
+    idlen = ASN1_STRING_to_UTF8(&idval, common_name);
+#else
     const X509_NAME_ENTRY *entry = X509_NAME_get_entry(name, i);
     const ASN1_STRING *common_name = X509_NAME_ENTRY_get_data(entry);
     unsigned char *idval;
     int idlen = ASN1_STRING_to_UTF8(&idval, common_name);
+#endif
     if (idlen < 0) {
       return X509_V_ERR_OUT_OF_MEM;
     }
     // Only process attributes that look like host names. Note it is
     // important that this check be mirrored in |X509_check_host|.
+  #if 1 // hezhiwen
+    looks_like_dns = x509v3_looks_like_dns_name(idval, (size_t)idlen);
+  #else
     int looks_like_dns = x509v3_looks_like_dns_name(idval, (size_t)idlen);
+  #endif
     OPENSSL_free(idval);
     if (looks_like_dns) {
       return X509_V_ERR_NAME_CONSTRAINTS_WITHOUT_SANS;
@@ -706,6 +733,9 @@ static int reject_dns_name_in_common_name(X509 *x509) {
 static int check_name_constraints(X509_STORE_CTX *ctx) {
   int i, j, rv;
   int has_name_constraints = 0;
+#if 1 // hezhiwen
+  X509 *leaf;
+#endif
   // Check name constraints for all certificates
   for (i = sk_X509_num(ctx->chain) - 1; i >= 0; i--) {
     X509 *x = sk_X509_value(ctx->chain, i);
@@ -751,7 +781,11 @@ static int check_name_constraints(X509_STORE_CTX *ctx) {
   // standard. Note this does not make "DNS-like" heuristic failures any
   // worse. A decorative common-name misidentified as a DNS name would fail
   // the name constraint anyway.
+#if 1 // hezhiwen
+  leaf = sk_X509_value(ctx->chain, 0);
+#else
   X509 *leaf = sk_X509_value(ctx->chain, 0);
+#endif
   if (has_name_constraints && leaf->altname == NULL) {
     rv = reject_dns_name_in_common_name(leaf);
     switch (rv) {
@@ -971,6 +1005,10 @@ err:
 // Check CRL times against values in X509_STORE_CTX
 
 static int check_crl_time(X509_STORE_CTX *ctx, X509_CRL *crl, int notify) {
+#if 1 // hezhiwen
+  time_t *ptime;
+  int i;
+#endif
   if (ctx->param->flags & X509_V_FLAG_NO_CHECK_TIME) {
     return 1;
   }
@@ -978,14 +1016,20 @@ static int check_crl_time(X509_STORE_CTX *ctx, X509_CRL *crl, int notify) {
   if (notify) {
     ctx->current_crl = crl;
   }
+#if 0 // hezhiwen
   time_t *ptime;
+#endif
   if (ctx->param->flags & X509_V_FLAG_USE_CHECK_TIME) {
     ptime = &ctx->param->check_time;
   } else {
     ptime = NULL;
   }
 
+#if 1 // hezhiwen
+  i = X509_cmp_time(X509_CRL_get0_lastUpdate(crl), ptime);
+#else
   int i = X509_cmp_time(X509_CRL_get0_lastUpdate(crl), ptime);
+#endif
   if (i == 0) {
     if (!notify) {
       return 0;
@@ -1742,18 +1786,28 @@ static int check_policy(X509_STORE_CTX *ctx) {
 }
 
 static int check_cert_time(X509_STORE_CTX *ctx, X509 *x) {
+#if 1 // hezhiwen
+  time_t *ptime;
+  int i;
+#endif
   if (ctx->param->flags & X509_V_FLAG_NO_CHECK_TIME) {
     return 1;
   }
 
+#if 0 // hezhiwen
   time_t *ptime;
+#endif
   if (ctx->param->flags & X509_V_FLAG_USE_CHECK_TIME) {
     ptime = &ctx->param->check_time;
   } else {
     ptime = NULL;
   }
 
+#if 1 // hezhiwen
+  i = X509_cmp_time(X509_get_notBefore(x), ptime);
+#else
   int i = X509_cmp_time(X509_get_notBefore(x), ptime);
+#endif
   if (i == 0) {
     ctx->error = X509_V_ERR_ERROR_IN_CERT_NOT_BEFORE_FIELD;
     ctx->current_cert = x;
@@ -1878,10 +1932,17 @@ int X509_cmp_current_time(const ASN1_TIME *ctm) {
 
 int X509_cmp_time(const ASN1_TIME *ctm, time_t *cmp_time) {
   int64_t ctm_time;
+#if 1 // hezhiwen
+  int64_t compare_time;
+#endif
   if (!ASN1_TIME_to_posix(ctm, &ctm_time)) {
     return 0;
   }
+#if 1 // hezhiwen
+  compare_time = (cmp_time == NULL) ? time(NULL) : *cmp_time;
+#else
   int64_t compare_time = (cmp_time == NULL) ? time(NULL) : *cmp_time;
+#endif
   // The return value 0 is reserved for errors.
   return (ctm_time - compare_time <= 0) ? -1 : 1;
 }

@@ -132,11 +132,20 @@ void asn1_item_combine_free(ASN1_VALUE **pval, const ASN1_ITEM *it,
       break;
 
     case ASN1_ITYPE_SEQUENCE: {
+    #if 1 // hezhiwen
+      const ASN1_AUX *aux;
+      ASN1_aux_cb *asn1_cb;
+    #endif
       if (!asn1_refcount_dec_and_test_zero(pval, it)) {
         return;
       }
+    #if 1 // hezhiwen
+      aux = it->funcs;
+      asn1_cb = aux != NULL ? aux->asn1_cb : NULL;
+    #else
       const ASN1_AUX *aux = it->funcs;
       ASN1_aux_cb *asn1_cb = aux != NULL ? aux->asn1_cb : NULL;
+    #endif
       if (asn1_cb) {
         i = asn1_cb(ASN1_OP_FREE_PRE, pval, it, NULL);
         if (i == 2) {

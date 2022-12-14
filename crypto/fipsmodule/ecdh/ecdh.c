@@ -81,22 +81,36 @@
 
 int ECDH_compute_key_fips(uint8_t *out, size_t out_len, const EC_POINT *pub_key,
                           const EC_KEY *priv_key) {
+#if 1 // hezhiwen
+  const EC_SCALAR *priv;
+  const EC_GROUP *group;
+  EC_RAW_POINT shared_point;
+  uint8_t buf[EC_MAX_BYTES];
+  size_t buflen;
+#endif
   boringssl_ensure_ecc_self_test();
 
   if (priv_key->priv_key == NULL) {
     OPENSSL_PUT_ERROR(ECDH, ECDH_R_NO_PRIVATE_VALUE);
     return 0;
   }
+#if 1 // hezhiwen
+  priv = &priv_key->priv_key->scalar;
+  group = EC_KEY_get0_group(priv_key);
+#else
   const EC_SCALAR *const priv = &priv_key->priv_key->scalar;
   const EC_GROUP *const group = EC_KEY_get0_group(priv_key);
+#endif
   if (EC_GROUP_cmp(group, pub_key->group, NULL) != 0) {
     OPENSSL_PUT_ERROR(EC, EC_R_INCOMPATIBLE_OBJECTS);
     return 0;
   }
 
+#if 0 // hezhiwen
   EC_RAW_POINT shared_point;
   uint8_t buf[EC_MAX_BYTES];
   size_t buflen;
+#endif
   if (!ec_point_mul_scalar(group, &shared_point, &pub_key->raw, priv) ||
       !ec_get_x_coordinate_as_bytes(group, buf, &buflen, sizeof(buf),
                                     &shared_point)) {

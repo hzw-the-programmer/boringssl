@@ -63,12 +63,17 @@
 ASN1_STRING *ASN1_item_pack(void *obj, const ASN1_ITEM *it, ASN1_STRING **out) {
   uint8_t *new_data = NULL;
   int len = ASN1_item_i2d(obj, &new_data, it);
+#if 1 // hezhiwen
+  ASN1_STRING *ret = NULL;
+#endif
   if (len <= 0) {
     OPENSSL_PUT_ERROR(ASN1, ASN1_R_ENCODE_ERROR);
     return NULL;
   }
 
+#if 0 // hezhiwen
   ASN1_STRING *ret = NULL;
+#endif
   if (out == NULL || *out == NULL) {
     ret = ASN1_STRING_new();
     if (ret == NULL) {

@@ -75,7 +75,12 @@ static const EVP_PKEY_METHOD *const evp_methods[] = {
 };
 
 static const EVP_PKEY_METHOD *evp_pkey_meth_find(int type) {
+#if 1 // hezhiwen
+  size_t i;
+  for (i = 0; i < sizeof(evp_methods)/sizeof(EVP_PKEY_METHOD*); i++) {
+#else
   for (size_t i = 0; i < sizeof(evp_methods)/sizeof(EVP_PKEY_METHOD*); i++) {
+#endif
     if (evp_methods[i]->pkey_id == type) {
       return evp_methods[i];
     }
@@ -114,12 +119,19 @@ static EVP_PKEY_CTX *evp_pkey_ctx_new(EVP_PKEY *pkey, ENGINE *e,
 }
 
 EVP_PKEY_CTX *EVP_PKEY_CTX_new(EVP_PKEY *pkey, ENGINE *e) {
+#if 1 // hezhiwen
+  const EVP_PKEY_METHOD *pkey_method;
+#endif
   if (pkey == NULL || pkey->ameth == NULL) {
     OPENSSL_PUT_ERROR(EVP, ERR_R_PASSED_NULL_PARAMETER);
     return NULL;
   }
 
+#if 1 // hezhiwen
+  pkey_method = pkey->ameth->pkey_method;
+#else
   const EVP_PKEY_METHOD *pkey_method = pkey->ameth->pkey_method;
+#endif
   if (pkey_method == NULL) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_UNSUPPORTED_ALGORITHM);
     ERR_add_error_dataf("algorithm %d", pkey->ameth->pkey_id);
@@ -153,11 +165,18 @@ void EVP_PKEY_CTX_free(EVP_PKEY_CTX *ctx) {
 }
 
 EVP_PKEY_CTX *EVP_PKEY_CTX_dup(EVP_PKEY_CTX *ctx) {
+#if 1 // hezhiwen
+  EVP_PKEY_CTX *ret;
+#endif
   if (!ctx->pmeth || !ctx->pmeth->copy) {
     return NULL;
   }
 
+#if 1 // hezhiwen
+  ret = OPENSSL_malloc(sizeof(EVP_PKEY_CTX));
+#else
   EVP_PKEY_CTX *ret = OPENSSL_malloc(sizeof(EVP_PKEY_CTX));
+#endif
   if (!ret) {
     return NULL;
   }

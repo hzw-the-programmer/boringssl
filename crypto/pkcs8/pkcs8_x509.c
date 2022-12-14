@@ -102,13 +102,22 @@ IMPLEMENT_ASN1_FUNCTIONS_const(PKCS8_PRIV_KEY_INFO)
 EVP_PKEY *EVP_PKCS82PKEY(const PKCS8_PRIV_KEY_INFO *p8) {
   uint8_t *der = NULL;
   int der_len = i2d_PKCS8_PRIV_KEY_INFO(p8, &der);
+#if 1 // hezhiwen
+  CBS cbs;
+  EVP_PKEY *ret;
+#endif
   if (der_len < 0) {
     return NULL;
   }
 
+#if 1 // hezhiwen
+  CBS_init(&cbs, der, (size_t)der_len);
+  ret = EVP_parse_private_key(&cbs);
+#else
   CBS cbs;
   CBS_init(&cbs, der, (size_t)der_len);
   EVP_PKEY *ret = EVP_parse_private_key(&cbs);
+#endif
   if (ret == NULL || CBS_len(&cbs) != 0) {
     OPENSSL_PUT_ERROR(PKCS8, PKCS8_R_DECODE_ERROR);
     EVP_PKEY_free(ret);
@@ -124,6 +133,10 @@ PKCS8_PRIV_KEY_INFO *EVP_PKEY2PKCS8(const EVP_PKEY *pkey) {
   CBB cbb;
   uint8_t *der = NULL;
   size_t der_len;
+#if 1 // hezhiwen
+  const uint8_t *p;
+  PKCS8_PRIV_KEY_INFO *p8;
+#endif
   if (!CBB_init(&cbb, 0) ||
       !EVP_marshal_private_key(&cbb, pkey) ||
       !CBB_finish(&cbb, &der, &der_len) ||
@@ -133,8 +146,13 @@ PKCS8_PRIV_KEY_INFO *EVP_PKEY2PKCS8(const EVP_PKEY *pkey) {
     goto err;
   }
 
+#if 1 // hezhiwen
+  p = der;
+  p8 = d2i_PKCS8_PRIV_KEY_INFO(NULL, &p, (long)der_len);
+#else
   const uint8_t *p = der;
   PKCS8_PRIV_KEY_INFO *p8 = d2i_PKCS8_PRIV_KEY_INFO(NULL, &p, (long)der_len);
+#endif
   if (p8 == NULL || p != der + der_len) {
     PKCS8_PRIV_KEY_INFO_free(p8);
     OPENSSL_PUT_ERROR(PKCS8, PKCS8_R_DECODE_ERROR);
@@ -152,23 +170,39 @@ err:
 PKCS8_PRIV_KEY_INFO *PKCS8_decrypt(X509_SIG *pkcs8, const char *pass,
                                    int pass_len_in) {
   size_t pass_len;
+#if 1 // hezhiwen
+  PKCS8_PRIV_KEY_INFO *ret = NULL;
+  EVP_PKEY *pkey = NULL;
+  uint8_t *in = NULL;
+  int in_len;
+  CBS cbs;
+#endif
+
   if (pass_len_in == -1 && pass != NULL) {
     pass_len = strlen(pass);
   } else {
     pass_len = (size_t)pass_len_in;
   }
 
+#if 0 // hezhiwen
   PKCS8_PRIV_KEY_INFO *ret = NULL;
   EVP_PKEY *pkey = NULL;
   uint8_t *in = NULL;
+#endif
 
   // Convert the legacy ASN.1 object to a byte string.
+#if 1 // hezhiwen
+  in_len = i2d_X509_SIG(pkcs8, &in);
+#else
   int in_len = i2d_X509_SIG(pkcs8, &in);
+#endif
   if (in_len < 0) {
     goto err;
   }
 
+#if 0 // hezhiwen
   CBS cbs;
+#endif
   CBS_init(&cbs, in, in_len);
   pkey = PKCS8_parse_encrypted_private_key(&cbs, pass, pass_len);
   if (pkey == NULL || CBS_len(&cbs) != 0) {
@@ -187,6 +221,14 @@ X509_SIG *PKCS8_encrypt(int pbe_nid, const EVP_CIPHER *cipher, const char *pass,
                         int pass_len_in, const uint8_t *salt, size_t salt_len,
                         int iterations, PKCS8_PRIV_KEY_INFO *p8inf) {
   size_t pass_len;
+#if 1 // hezhiwen
+  EVP_PKEY *pkey;
+  X509_SIG *ret = NULL;
+  uint8_t *der = NULL;
+  size_t der_len;
+  CBB cbb;
+  const uint8_t *ptr;
+#endif
   if (pass_len_in == -1 && pass != NULL) {
     pass_len = strlen(pass);
   } else {
@@ -194,15 +236,21 @@ X509_SIG *PKCS8_encrypt(int pbe_nid, const EVP_CIPHER *cipher, const char *pass,
   }
 
   // Parse out the private key.
+#if 1 // hezhiwen
+  pkey = EVP_PKCS82PKEY(p8inf);
+#else
   EVP_PKEY *pkey = EVP_PKCS82PKEY(p8inf);
+#endif
   if (pkey == NULL) {
     return NULL;
   }
 
+#if 0 // hezhiwen
   X509_SIG *ret = NULL;
   uint8_t *der = NULL;
   size_t der_len;
   CBB cbb;
+#endif
   if (!CBB_init(&cbb, 128) ||
       !PKCS8_marshal_encrypted_private_key(&cbb, pbe_nid, cipher, pass,
                                            pass_len, salt, salt_len, iterations,
@@ -213,7 +261,11 @@ X509_SIG *PKCS8_encrypt(int pbe_nid, const EVP_CIPHER *cipher, const char *pass,
   }
 
   // Convert back to legacy ASN.1 objects.
+#if 1 // hezhiwen
+  ptr = der;
+#else
   const uint8_t *ptr = der;
+#endif
   ret = d2i_X509_SIG(NULL, &ptr, der_len);
   if (ret == NULL || ptr != der + der_len) {
     OPENSSL_PUT_ERROR(PKCS8, ERR_R_INTERNAL_ERROR);
@@ -242,6 +294,9 @@ static int PKCS12_handle_sequence(
   uint8_t *storage = NULL;
   CBS in;
   int ret = 0;
+#if 1 // hezhiwen
+  CBS child;
+#endif
 
   // Although a BER->DER conversion is done at the beginning of |PKCS12_parse|,
   // the ASN.1 data gets wrapped in OCTETSTRINGs and/or encrypted and the
@@ -252,7 +307,9 @@ static int PKCS12_handle_sequence(
     return 0;
   }
 
+#if 0 // hezhiwen
   CBS child;
+#endif
   if (!CBS_get_asn1(&in, &child, CBS_ASN1_SEQUENCE) ||
       CBS_len(&in) != 0) {
     OPENSSL_PUT_ERROR(PKCS8, PKCS8_R_BAD_PKCS12_DATA);
@@ -324,6 +381,9 @@ static int parse_bag_attributes(CBS *attrs, uint8_t **out_friendly_name,
     if (CBS_mem_equal(&oid, kFriendlyName, sizeof(kFriendlyName))) {
       // See https://tools.ietf.org/html/rfc2985, section 5.5.1.
       CBS value;
+    #if 1 // hezhiwen
+      CBB cbb;
+    #endif
       if (*out_friendly_name != NULL ||
           !CBS_get_asn1(&values, &value, CBS_ASN1_BMPSTRING) ||
           CBS_len(&values) != 0 ||
@@ -332,7 +392,9 @@ static int parse_bag_attributes(CBS *attrs, uint8_t **out_friendly_name,
         goto err;
       }
       // Convert the friendly name to UTF-8.
+    #if 0 // hezhiwen
       CBB cbb;
+    #endif
       if (!CBB_init(&cbb, CBS_len(&value))) {
         OPENSSL_PUT_ERROR(PKCS8, ERR_R_MALLOC_FAILURE);
         goto err;
@@ -367,6 +429,10 @@ err:
 // structure.
 static int PKCS12_handle_safe_bag(CBS *safe_bag, struct pkcs12_context *ctx) {
   CBS bag_id, wrapped_value, bag_attrs;
+#if 1 // hezhiwen
+  int is_key_bag;
+  int is_shrouded_key_bag;
+#endif
   if (!CBS_get_asn1(safe_bag, &bag_id, CBS_ASN1_OBJECT) ||
       !CBS_get_asn1(safe_bag, &wrapped_value,
                     CBS_ASN1_CONTEXT_SPECIFIC | CBS_ASN1_CONSTRUCTED | 0)) {
@@ -381,20 +447,36 @@ static int PKCS12_handle_safe_bag(CBS *safe_bag, struct pkcs12_context *ctx) {
     return 0;
   }
 
+#if 1 // hezhiwen
+  is_key_bag = CBS_mem_equal(&bag_id, kKeyBag, sizeof(kKeyBag));
+  is_shrouded_key_bag = CBS_mem_equal(&bag_id, kPKCS8ShroudedKeyBag,
+                                      sizeof(kPKCS8ShroudedKeyBag));
+#else
   const int is_key_bag = CBS_mem_equal(&bag_id, kKeyBag, sizeof(kKeyBag));
   const int is_shrouded_key_bag = CBS_mem_equal(&bag_id, kPKCS8ShroudedKeyBag,
                                                 sizeof(kPKCS8ShroudedKeyBag));
+#endif
   if (is_key_bag || is_shrouded_key_bag) {
     // See RFC 7292, section 4.2.1 and 4.2.2.
+  #if 1 // hezhiwen
+    EVP_PKEY *pkey;
+  #endif
     if (*ctx->out_key) {
       OPENSSL_PUT_ERROR(PKCS8, PKCS8_R_MULTIPLE_PRIVATE_KEYS_IN_PKCS12);
       return 0;
     }
 
+  #if 1 // hezhiwen
+    pkey =
+        is_key_bag ? EVP_parse_private_key(&wrapped_value)
+                   : PKCS8_parse_encrypted_private_key(
+                         &wrapped_value, ctx->password, ctx->password_len);
+  #else
     EVP_PKEY *pkey =
         is_key_bag ? EVP_parse_private_key(&wrapped_value)
                    : PKCS8_parse_encrypted_private_key(
                          &wrapped_value, ctx->password, ctx->password_len);
+  #endif
     if (pkey == NULL) {
       return 0;
     }
@@ -412,6 +494,13 @@ static int PKCS12_handle_safe_bag(CBS *safe_bag, struct pkcs12_context *ctx) {
   if (CBS_mem_equal(&bag_id, kCertBag, sizeof(kCertBag))) {
     // See RFC 7292, section 4.2.3.
     CBS cert_bag, cert_type, wrapped_cert, cert;
+  #if 1 // hezhiwen
+    const uint8_t *inp;
+    X509 *x509;
+    uint8_t *friendly_name;
+    size_t friendly_name_len;
+    int ok;
+  #endif
     if (!CBS_get_asn1(&wrapped_value, &cert_bag, CBS_ASN1_SEQUENCE) ||
         !CBS_get_asn1(&cert_bag, &cert_type, CBS_ASN1_OBJECT) ||
         !CBS_get_asn1(&cert_bag, &wrapped_cert,
@@ -432,8 +521,13 @@ static int PKCS12_handle_safe_bag(CBS *safe_bag, struct pkcs12_context *ctx) {
       return 0;
     }
 
+  #if 1 // hezhiwen
+    inp = CBS_data(&cert);
+    x509 = d2i_X509(NULL, &inp, (long)CBS_len(&cert));
+  #else
     const uint8_t *inp = CBS_data(&cert);
     X509 *x509 = d2i_X509(NULL, &inp, (long)CBS_len(&cert));
+  #endif
     if (!x509) {
       OPENSSL_PUT_ERROR(PKCS8, PKCS8_R_BAD_PKCS12_DATA);
       return 0;
@@ -445,14 +539,21 @@ static int PKCS12_handle_safe_bag(CBS *safe_bag, struct pkcs12_context *ctx) {
       return 0;
     }
 
+  #if 0 // hezhiwen
     uint8_t *friendly_name;
     size_t friendly_name_len;
+  #endif
     if (!parse_bag_attributes(&bag_attrs, &friendly_name, &friendly_name_len)) {
       X509_free(x509);
       return 0;
     }
+  #if 1 // hezhiwen
+    ok = friendly_name_len == 0 ||
+             X509_alias_set1(x509, friendly_name, friendly_name_len);
+  #else
     int ok = friendly_name_len == 0 ||
              X509_alias_set1(x509, friendly_name, friendly_name_len);
+  #endif
     OPENSSL_free(friendly_name);
     if (!ok ||
         0 == sk_X509_push(ctx->out_certs, x509)) {
@@ -501,6 +602,9 @@ static int PKCS12_handle_content_info(CBS *content_info,
     CBS version_bytes, eci, contents_type, ai, encrypted_contents;
     uint8_t *out;
     size_t out_len;
+  #if 1 // hezhiwen
+    CBS safe_contents;
+  #endif
 
     if (!CBS_get_asn1(&wrapped_contents, &contents, CBS_ASN1_SEQUENCE) ||
         !CBS_get_asn1(&contents, &version_bytes, CBS_ASN1_INTEGER) ||
@@ -529,7 +633,9 @@ static int PKCS12_handle_content_info(CBS *content_info,
       goto err;
     }
 
+  #if 0 // hezhiwen
     CBS safe_contents;
+  #endif
     CBS_init(&safe_contents, out, out_len);
     ret = PKCS12_handle_sequence(&safe_contents, ctx, PKCS12_handle_safe_bag);
     OPENSSL_free(out);
@@ -560,14 +666,21 @@ static int pkcs12_check_mac(int *out_mac_ok, const char *password,
                             const CBS *authsafes, const CBS *expected_mac) {
   int ret = 0;
   uint8_t hmac_key[EVP_MAX_MD_SIZE];
+#if 1 // hezhiwen
+  uint8_t hmac[EVP_MAX_MD_SIZE];
+  unsigned hmac_len;
+#endif
+
   if (!pkcs12_key_gen(password, password_len, CBS_data(salt), CBS_len(salt),
                       PKCS12_MAC_ID, iterations, EVP_MD_size(md), hmac_key,
                       md)) {
     goto err;
   }
 
+#if 0 // hezhiwen
   uint8_t hmac[EVP_MAX_MD_SIZE];
   unsigned hmac_len;
+#endif
   if (NULL == HMAC(md, hmac_key, EVP_MD_size(md), CBS_data(authsafes),
                    CBS_len(authsafes), hmac, &hmac_len)) {
     goto err;
@@ -661,12 +774,21 @@ int PKCS12_get_key_and_certs(EVP_PKEY **out_key, STACK_OF(X509) *out_certs,
   // Verify the MAC.
   {
     CBS mac, salt, expected_mac;
+  #if 1 // hezhiwen
+    const EVP_MD *md;
+    uint64_t iterations = 1;
+    int mac_ok;
+  #endif
     if (!CBS_get_asn1(&mac_data, &mac, CBS_ASN1_SEQUENCE)) {
       OPENSSL_PUT_ERROR(PKCS8, PKCS8_R_BAD_PKCS12_DATA);
       goto err;
     }
 
+  #if 1 // hezhiwen
+    md = EVP_parse_digest_algorithm(&mac);
+  #else
     const EVP_MD *md = EVP_parse_digest_algorithm(&mac);
+  #endif
     if (md == NULL) {
       goto err;
     }
@@ -678,7 +800,9 @@ int PKCS12_get_key_and_certs(EVP_PKEY **out_key, STACK_OF(X509) *out_certs,
     }
 
     // The iteration count is optional and the default is one.
+  #if 0 // hezhiwen
     uint64_t iterations = 1;
+  #endif
     if (CBS_len(&mac_data) > 0) {
       if (!CBS_get_asn1_uint64(&mac_data, &iterations) ||
           !pkcs12_iterations_acceptable(iterations)) {
@@ -687,7 +811,9 @@ int PKCS12_get_key_and_certs(EVP_PKEY **out_key, STACK_OF(X509) *out_certs,
       }
     }
 
+  #if 0 // hezhiwen
     int mac_ok;
+  #endif
     if (!pkcs12_check_mac(&mac_ok, ctx.password, ctx.password_len, &salt,
                           iterations, md, &authsafes, &expected_mac)) {
       goto err;
@@ -861,11 +987,18 @@ int i2d_PKCS12_bio(BIO *bio, const PKCS12 *p12) {
 
 int i2d_PKCS12_fp(FILE *fp, const PKCS12 *p12) {
   BIO *bio = BIO_new_fp(fp, 0 /* don't take ownership */);
+#if 1 // hezhiwen
+  int ret;
+#endif
   if (bio == NULL) {
     return 0;
   }
 
+#if 1 // hezhiwen
+  ret = i2d_PKCS12_bio(bio, p12);
+#else
   int ret = i2d_PKCS12_bio(bio, p12);
+#endif
   BIO_free(bio);
   return ret;
 }
@@ -875,6 +1008,10 @@ int PKCS12_parse(const PKCS12 *p12, const char *password, EVP_PKEY **out_pkey,
   CBS ber_bytes;
   STACK_OF(X509) *ca_certs = NULL;
   char ca_certs_alloced = 0;
+#if 1 // hezhiwen
+  size_t num_certs;
+  size_t i;
+#endif
 
   if (out_ca_certs != NULL && *out_ca_certs != NULL) {
     ca_certs = *out_ca_certs;
@@ -900,9 +1037,17 @@ int PKCS12_parse(const PKCS12 *p12, const char *password, EVP_PKEY **out_pkey,
   // OpenSSL selects the last certificate which matches the private key as
   // |out_cert|.
   *out_cert = NULL;
+#if 1 // hezhiwen
+  num_certs = sk_X509_num(ca_certs);
+#else
   size_t num_certs = sk_X509_num(ca_certs);
+#endif
   if (*out_pkey != NULL && num_certs > 0) {
+  #if 1 // hezhiwen
+    for (i = num_certs - 1; i < num_certs; i--) {
+  #else
     for (size_t i = num_certs - 1; i < num_certs; i--) {
+  #endif
       X509 *cert = sk_X509_value(ca_certs, i);
       if (X509_check_private_key(cert, *out_pkey)) {
         *out_cert = cert;
@@ -924,6 +1069,11 @@ int PKCS12_parse(const PKCS12 *p12, const char *password, EVP_PKEY **out_pkey,
 
 int PKCS12_verify_mac(const PKCS12 *p12, const char *password,
                       int password_len) {
+#if 1 // hezhiwen
+  EVP_PKEY *pkey = NULL;
+  X509 *cert = NULL;
+#endif
+
   if (password == NULL) {
     if (password_len != 0) {
       return 0;
@@ -934,8 +1084,10 @@ int PKCS12_verify_mac(const PKCS12 *p12, const char *password,
     return 0;
   }
 
+#if 0 // hezhiwen
   EVP_PKEY *pkey = NULL;
   X509 *cert = NULL;
+#endif
   if (!PKCS12_parse(p12, password, &pkey, &cert, NULL)) {
     ERR_clear_error();
     return 0;
@@ -951,16 +1103,24 @@ int PKCS12_verify_mac(const PKCS12 *p12, const char *password,
 // containing the specified friendlyName and localKeyId attributes.
 static int add_bag_attributes(CBB *bag, const char *name, size_t name_len,
                               const uint8_t *key_id, size_t key_id_len) {
+#if 1 // hezhiwen
+  CBB attrs, attr, oid, values, value;
+#endif
   if (name == NULL && key_id_len == 0) {
     return 1;  // Omit the OPTIONAL SET.
   }
   // See https://tools.ietf.org/html/rfc7292#section-4.2.
+#if 0 // hezhiwen
   CBB attrs, attr, oid, values, value;
+#endif
   if (!CBB_add_asn1(bag, &attrs, CBS_ASN1_SET)) {
     return 0;
   }
   if (name_len != 0) {
     // See https://tools.ietf.org/html/rfc2985, section 5.5.1.
+  #if 1 // hezhiwen
+    CBS name_cbs;
+  #endif
     if (!CBB_add_asn1(&attrs, &attr, CBS_ASN1_SEQUENCE) ||
         !CBB_add_asn1(&attr, &oid, CBS_ASN1_OBJECT) ||
         !CBB_add_bytes(&oid, kFriendlyName, sizeof(kFriendlyName)) ||
@@ -969,7 +1129,9 @@ static int add_bag_attributes(CBB *bag, const char *name, size_t name_len,
       return 0;
     }
     // Convert the friendly name to a BMPString.
+  #if 0 // hezhiwen
     CBS name_cbs;
+  #endif
     CBS_init(&name_cbs, (const uint8_t *)name, name_len);
     while (CBS_len(&name_cbs) != 0) {
       uint32_t c;
@@ -998,6 +1160,14 @@ static int add_bag_attributes(CBB *bag, const char *name, size_t name_len,
 static int add_cert_bag(CBB *cbb, X509 *cert, const char *name,
                         const uint8_t *key_id, size_t key_id_len) {
   CBB bag, bag_oid, bag_contents, cert_bag, cert_type, wrapped_cert, cert_value;
+#if 1 // hezhiwen
+  uint8_t *buf;
+  int len;
+
+  int int_name_len = 0;
+  const char *cert_name;
+  size_t name_len;
+#endif
   if (// See https://tools.ietf.org/html/rfc7292#section-4.2.
       !CBB_add_asn1(cbb, &bag, CBS_ASN1_SEQUENCE) ||
       !CBB_add_asn1(&bag, &bag_oid, CBS_ASN1_OBJECT) ||
@@ -1013,12 +1183,18 @@ static int add_cert_bag(CBB *cbb, X509 *cert, const char *name,
       !CBB_add_asn1(&wrapped_cert, &cert_value, CBS_ASN1_OCTETSTRING)) {
     return 0;
   }
+#if 1 // hezhiwen
+  len = i2d_X509(cert, NULL);
+  cert_name = (const char *)X509_alias_get0(cert, &int_name_len);
+  name_len = int_name_len;
+#else
   uint8_t *buf;
   int len = i2d_X509(cert, NULL);
 
   int int_name_len = 0;
   const char *cert_name = (const char *)X509_alias_get0(cert, &int_name_len);
   size_t name_len = int_name_len;
+#endif
   if (name) {
     if (name_len != 0) {
       OPENSSL_PUT_ERROR(PKCS8, PKCS8_R_AMBIGUOUS_FRIENDLY_NAME);
@@ -1043,13 +1219,20 @@ static int add_cert_safe_contents(CBB *cbb, X509 *cert,
                                   const STACK_OF(X509) *chain, const char *name,
                                   const uint8_t *key_id, size_t key_id_len) {
   CBB safe_contents;
+#if 1 // hezhiwen
+  size_t i;
+#endif
   if (!CBB_add_asn1(cbb, &safe_contents, CBS_ASN1_SEQUENCE) ||
       (cert != NULL &&
        !add_cert_bag(&safe_contents, cert, name, key_id, key_id_len))) {
     return 0;
   }
 
+#if 1 // hezhiwen
+  for (i = 0; i < sk_X509_num(chain); i++) {
+#else
   for (size_t i = 0; i < sk_X509_num(chain); i++) {
+#endif
     // Only the leaf certificate gets attributes.
     if (!add_cert_bag(&safe_contents, sk_X509_value(chain, i), NULL, NULL, 0)) {
       return 0;
@@ -1063,15 +1246,28 @@ static int add_encrypted_data(CBB *out, int pbe_nid, const char *password,
                               size_t password_len, unsigned iterations,
                               const uint8_t *in, size_t in_len) {
   uint8_t salt[PKCS5_SALT_LEN];
+#if 1 // hezhiwen
+  int ret = 0;
+  EVP_CIPHER_CTX ctx;
+  CBB content_info, type, wrapper, encrypted_data, encrypted_content_info,
+      inner_type, encrypted_content;
+  size_t max_out;
+  uint8_t *ptr;
+  int n1, n2;
+#endif
   if (!RAND_bytes(salt, sizeof(salt))) {
     return 0;
   }
 
+#if 1 // hezhiwen
+  EVP_CIPHER_CTX_init(&ctx);
+#else
   int ret = 0;
   EVP_CIPHER_CTX ctx;
   EVP_CIPHER_CTX_init(&ctx);
   CBB content_info, type, wrapper, encrypted_data, encrypted_content_info,
       inner_type, encrypted_content;
+#endif
   if (// Add the ContentInfo wrapping.
       !CBB_add_asn1(out, &content_info, CBS_ASN1_SEQUENCE) ||
       !CBB_add_asn1(&content_info, &type, CBS_ASN1_OBJECT) ||
@@ -1097,14 +1293,20 @@ static int add_encrypted_data(CBB *out, int pbe_nid, const char *password,
     goto err;
   }
 
+#if 1 // hezhiwen
+  max_out = in_len + EVP_CIPHER_CTX_block_size(&ctx);
+#else
   size_t max_out = in_len + EVP_CIPHER_CTX_block_size(&ctx);
+#endif
   if (max_out < in_len) {
     OPENSSL_PUT_ERROR(PKCS8, PKCS8_R_TOO_LONG);
     goto err;
   }
 
+#if 0 // hezhiwen
   uint8_t *ptr;
   int n1, n2;
+#endif
   if (!CBB_reserve(&encrypted_content, &ptr, max_out) ||
       !EVP_CipherUpdate(&ctx, ptr, &n1, in, in_len) ||
       !EVP_CipherFinal_ex(&ctx, ptr + n1, &n2) ||
@@ -1124,6 +1326,20 @@ PKCS12 *PKCS12_create(const char *password, const char *name,
                       const EVP_PKEY *pkey, X509 *cert,
                       const STACK_OF(X509)* chain, int key_nid, int cert_nid,
                       int iterations, int mac_iterations, int key_type) {
+#if 1 // hezhiwen
+  size_t password_len;
+  uint8_t key_id[EVP_MAX_MD_SIZE];
+  unsigned key_id_len = 0;
+  PKCS12 *ret = NULL;
+  CBB cbb, pfx, auth_safe, auth_safe_oid, auth_safe_wrapper, auth_safe_data,
+      content_infos;
+  uint8_t mac_key[EVP_MAX_MD_SIZE];
+  const EVP_MD *mac_md;
+  uint8_t mac_salt[PKCS5_SALT_LEN];
+  uint8_t mac[EVP_MAX_MD_SIZE];
+  unsigned mac_len;
+  CBB mac_data, digest_info, mac_cbb, mac_salt_cbb;
+#endif
   if (key_nid == 0) {
     key_nid = NID_pbe_WithSHA1And3_Key_TripleDES_CBC;
   }
@@ -1182,10 +1398,14 @@ PKCS12 *PKCS12_create(const char *password, const char *name,
   // Note that |password| may be NULL to specify no password, rather than the
   // empty string. They are encoded differently in PKCS#12. (One is the empty
   // byte array and the other is NUL-terminated UCS-2.)
+#if 1 // hezhiwen
+  password_len = password != NULL ? strlen(password) : 0;
+#else
   size_t password_len = password != NULL ? strlen(password) : 0;
 
   uint8_t key_id[EVP_MAX_MD_SIZE];
   unsigned key_id_len = 0;
+#endif
   if (cert != NULL && pkey != NULL) {
     if (!X509_check_private_key(cert, pkey) ||
         // Matching OpenSSL, use the SHA-1 hash of the certificate as the local
@@ -1197,10 +1417,12 @@ PKCS12 *PKCS12_create(const char *password, const char *name,
   }
 
   // See https://tools.ietf.org/html/rfc7292#section-4.
+#if 0 // hezhiwen
   PKCS12 *ret = NULL;
   CBB cbb, pfx, auth_safe, auth_safe_oid, auth_safe_wrapper, auth_safe_data,
       content_infos;
   uint8_t mac_key[EVP_MAX_MD_SIZE];
+#endif
   if (!CBB_init(&cbb, 0) ||
       !CBB_add_asn1(&cbb, &pfx, CBS_ASN1_SEQUENCE) ||
       !CBB_add_asn1_uint64(&pfx, 3) ||
@@ -1261,6 +1483,9 @@ PKCS12 *PKCS12_create(const char *password, const char *name,
   if (pkey != NULL) {
     CBB content_info, oid, wrapper, data, safe_contents, bag, bag_oid,
         bag_contents;
+  #if 1 // hezhiwen
+    size_t name_len = 0;
+  #endif
     if (// Add another data ContentInfo.
         !CBB_add_asn1(&content_infos, &content_info, CBS_ASN1_SEQUENCE) ||
         !CBB_add_asn1(&content_info, &oid, CBS_ASN1_OBJECT) ||
@@ -1293,7 +1518,9 @@ PKCS12 *PKCS12_create(const char *password, const char *name,
         goto err;
       }
     }
+  #if 0 // hezhiwen
     size_t name_len = 0;
+  #endif
     if (name) {
       name_len = strlen(name);
     }
@@ -1305,10 +1532,14 @@ PKCS12 *PKCS12_create(const char *password, const char *name,
 
   // Compute the MAC. Match OpenSSL in using SHA-1 as the hash function. The MAC
   // covers |auth_safe_data|.
+#if 1 // hezhiwen
+  mac_md = EVP_sha1();
+#else
   const EVP_MD *mac_md = EVP_sha1();
   uint8_t mac_salt[PKCS5_SALT_LEN];
   uint8_t mac[EVP_MAX_MD_SIZE];
   unsigned mac_len;
+#endif
   if (!CBB_flush(&auth_safe_data) ||
       !RAND_bytes(mac_salt, sizeof(mac_salt)) ||
       !pkcs12_key_gen(password, password_len, mac_salt, sizeof(mac_salt),
@@ -1319,7 +1550,9 @@ PKCS12 *PKCS12_create(const char *password, const char *name,
     goto err;
   }
 
+#if 0 // hezhiwen
   CBB mac_data, digest_info, mac_cbb, mac_salt_cbb;
+#endif
   if (!CBB_add_asn1(&pfx, &mac_data, CBS_ASN1_SEQUENCE) ||
       !CBB_add_asn1(&mac_data, &digest_info, CBS_ASN1_SEQUENCE) ||
       !EVP_marshal_digest_algorithm(&digest_info, mac_md) ||

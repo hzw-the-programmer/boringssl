@@ -86,6 +86,9 @@ int ASN1_item_i2d(ASN1_VALUE *val, unsigned char **out, const ASN1_ITEM *it) {
   if (out && !*out) {
     unsigned char *p, *buf;
     int len = ASN1_item_ex_i2d(&val, NULL, it, /*tag=*/-1, /*aclass=*/0);
+  #if 1 // hezhiwen
+    int len2;
+  #endif
     if (len <= 0) {
       return len;
     }
@@ -95,7 +98,11 @@ int ASN1_item_i2d(ASN1_VALUE *val, unsigned char **out, const ASN1_ITEM *it) {
       return -1;
     }
     p = buf;
+  #if 1 // hezhiwen
+    len2 = ASN1_item_ex_i2d(&val, &p, it, /*tag=*/-1, /*aclass=*/0);
+  #else
     int len2 = ASN1_item_ex_i2d(&val, &p, it, /*tag=*/-1, /*aclass=*/0);
+  #endif
     if (len2 <= 0) {
       return len2;
     }
@@ -162,6 +169,11 @@ int asn1_item_ex_i2d_opt(ASN1_VALUE **pval, unsigned char **out,
       return asn1_i2d_ex_primitive(pval, out, it, -1, 0, optional);
 
     case ASN1_ITYPE_CHOICE: {
+    #if 1 // hezhiwen
+      const ASN1_TEMPLATE *chtt;
+      ASN1_VALUE **pchval;
+    #endif
+
       // It never makes sense for CHOICE types to have implicit tagging, so if
       // tag != -1, then this looks like an error in the template.
       if (tag != -1) {
@@ -173,12 +185,20 @@ int asn1_item_ex_i2d_opt(ASN1_VALUE **pval, unsigned char **out,
         OPENSSL_PUT_ERROR(ASN1, ASN1_R_NO_MATCHING_CHOICE_TYPE);
         return -1;
       }
+    #if 1 // hezhiwen
+      chtt = it->templates + i;
+    #else
       const ASN1_TEMPLATE *chtt = it->templates + i;
+    #endif
       if (chtt->flags & ASN1_TFLG_OPTIONAL) {
         OPENSSL_PUT_ERROR(ASN1, ASN1_R_BAD_TEMPLATE);
         return -1;
       }
+    #if 1 // hezhiwen
+      pchval = asn1_get_field_ptr(pval, chtt);
+    #else
       ASN1_VALUE **pchval = asn1_get_field_ptr(pval, chtt);
+    #endif
       return asn1_template_ex_i2d(pchval, out, chtt, -1, 0);
     }
 
@@ -266,6 +286,9 @@ static int asn1_template_ex_i2d(ASN1_VALUE **pval, unsigned char **out,
   int i, ret, ttag, tclass;
   size_t j;
   uint32_t flags = tt->flags;
+#if 1 // hezhiwen
+  int optional;
+#endif
 
   // Historically, |iclass| was repurposed to pass additional flags into the
   // encoding process.
@@ -294,7 +317,11 @@ static int asn1_template_ex_i2d(ASN1_VALUE **pval, unsigned char **out,
     tclass = 0;
   }
 
+#if 1 // hezhiwen
+  optional = (flags & ASN1_TFLG_OPTIONAL) != 0;
+#else
   const int optional = (flags & ASN1_TFLG_OPTIONAL) != 0;
+#endif
 
   // At this point 'ttag' contains the outer tag to use, and 'tclass' is the
   // class.
@@ -427,9 +454,20 @@ static int der_cmp(const void *a, const void *b) {
 // |item|.
 static int asn1_set_seq_out(STACK_OF(ASN1_VALUE) *sk, unsigned char **out,
                             int skcontlen, const ASN1_ITEM *item, int do_sort) {
+#if 1 // hezhiwen
+  int ret = 0;
+  unsigned char *buf;
+  DER_ENC *encoded;
+  unsigned char *p;
+  size_t i;
+#endif
   // No need to sort if there are fewer than two items.
   if (!do_sort || sk_ASN1_VALUE_num(sk) < 2) {
+  #if 1 // hezhiwen
+    for (i = 0; i < sk_ASN1_VALUE_num(sk); i++) {
+  #else
     for (size_t i = 0; i < sk_ASN1_VALUE_num(sk); i++) {
+  #endif
       ASN1_VALUE *skitem = sk_ASN1_VALUE_value(sk, i);
       if (ASN1_item_ex_i2d(&skitem, out, item, -1, 0) < 0) {
         return 0;
@@ -443,17 +481,27 @@ static int asn1_set_seq_out(STACK_OF(ASN1_VALUE) *sk, unsigned char **out,
     return 0;
   }
 
+#if 1 // hezhiwen
+  buf = OPENSSL_malloc(skcontlen);
+  encoded = OPENSSL_malloc(sk_ASN1_VALUE_num(sk) * sizeof(*encoded));
+#else
   int ret = 0;
   unsigned char *const buf = OPENSSL_malloc(skcontlen);
   DER_ENC *encoded = OPENSSL_malloc(sk_ASN1_VALUE_num(sk) * sizeof(*encoded));
+#endif
   if (encoded == NULL || buf == NULL) {
     OPENSSL_PUT_ERROR(ASN1, ERR_R_MALLOC_FAILURE);
     goto err;
   }
 
   // Encode all the elements into |buf| and populate |encoded|.
+#if 1 // hezhiwen
+  p = buf;
+  for (i = 0; i < sk_ASN1_VALUE_num(sk); i++) {
+#else
   unsigned char *p = buf;
   for (size_t i = 0; i < sk_ASN1_VALUE_num(sk); i++) {
+#endif
     ASN1_VALUE *skitem = sk_ASN1_VALUE_value(sk, i);
     encoded[i].data = p;
     encoded[i].length = ASN1_item_ex_i2d(&skitem, &p, item, -1, 0);
@@ -467,7 +515,11 @@ static int asn1_set_seq_out(STACK_OF(ASN1_VALUE) *sk, unsigned char **out,
 
   // Output the elements in sorted order.
   p = *out;
+#if 1 // hezhiwen
+  for (i = 0; i < sk_ASN1_VALUE_num(sk); i++) {
+#else
   for (size_t i = 0; i < sk_ASN1_VALUE_num(sk); i++) {
+#endif
     OPENSSL_memcpy(p, encoded[i].data, encoded[i].length);
     p += encoded[i].length;
   }
@@ -490,6 +542,9 @@ static int asn1_i2d_ex_primitive(ASN1_VALUE **pval, unsigned char **out,
   int omit;
   int utype = it->utype;
   int len = asn1_ex_i2c(pval, NULL, &omit, &utype, it);
+#if 1 // hezhiwen
+  int usetag;
+#endif
   if (len < 0) {
     return -1;
   }
@@ -504,8 +559,13 @@ static int asn1_i2d_ex_primitive(ASN1_VALUE **pval, unsigned char **out,
   // If SEQUENCE, SET or OTHER then header is included in pseudo content
   // octets so don't include tag+length. We need to check here because the
   // call to asn1_ex_i2c() could change utype.
+#if 1 // hezhiwen
+  usetag =
+      utype != V_ASN1_SEQUENCE && utype != V_ASN1_SET && utype != V_ASN1_OTHER;
+#else
   int usetag =
       utype != V_ASN1_SEQUENCE && utype != V_ASN1_SET && utype != V_ASN1_OTHER;
+#endif
 
   // If not implicitly tagged get tag from underlying type
   if (tag == -1) {
@@ -514,10 +574,17 @@ static int asn1_i2d_ex_primitive(ASN1_VALUE **pval, unsigned char **out,
 
   // Output tag+length followed by content octets
   if (out) {
+  #if 1 // hezhiwen
+    int len2;
+  #endif
     if (usetag) {
       ASN1_put_object(out, /*constructed=*/0, len, tag, aclass);
     }
+  #if 1 // hezhiwen
+    len2 = asn1_ex_i2c(pval, *out, &omit, &utype, it);
+  #else
     int len2 = asn1_ex_i2c(pval, *out, &omit, &utype, it);
+  #endif
     if (len2 < 0) {
       return -1;
     }

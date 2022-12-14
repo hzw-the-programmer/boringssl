@@ -71,7 +71,12 @@ static int maybe_write(BIO *out, const void *buf, int len) {
 
 // do_indent prints |indent| spaces to |out|.
 static int do_indent(BIO *out, int indent) {
+#if 1 // hezhiwen
+  int i;
+  for (i = 0; i < indent; i++) {
+#else
   for (int i = 0; i < indent; i++) {
+#endif
     if (!maybe_write(out, " ", 1)) {
       return 0;
     }
@@ -147,6 +152,10 @@ static int do_name_ex(BIO *out, const X509_NAME *n, int indent,
   cnt = X509_NAME_entry_count(n);
   for (i = 0; i < cnt; i++) {
     const X509_NAME_ENTRY *ent;
+  #if 1 // hezhiwen
+    const ASN1_OBJECT *fn;
+    const ASN1_STRING *val;
+  #endif
     if (flags & XN_FLAG_DN_REV) {
       ent = X509_NAME_get_entry(n, cnt - i - 1);
     } else {
@@ -170,8 +179,13 @@ static int do_name_ex(BIO *out, const X509_NAME *n, int indent,
       }
     }
     prev = X509_NAME_ENTRY_set(ent);
+  #if 1 // hezhiwen
+    fn = X509_NAME_ENTRY_get_object(ent);
+    val = X509_NAME_ENTRY_get_data(ent);
+  #else
     const ASN1_OBJECT *fn = X509_NAME_ENTRY_get_object(ent);
     const ASN1_STRING *val = X509_NAME_ENTRY_get_data(ent);
+  #endif
     fn_nid = OBJ_obj2nid(fn);
     if (fn_opt != XN_FLAG_FN_NONE) {
       int objlen, fld_len;
@@ -235,6 +249,9 @@ int X509_NAME_print_ex(BIO *out, const X509_NAME *nm, int indent,
 int X509_NAME_print_ex_fp(FILE *fp, const X509_NAME *nm, int indent,
                           unsigned long flags) {
   BIO *bio = NULL;
+#if 1 // hezhiwen
+  int ret;
+#endif
   if (fp != NULL) {
     // If |fp| is NULL, this function returns the number of bytes without
     // writing.
@@ -243,7 +260,11 @@ int X509_NAME_print_ex_fp(FILE *fp, const X509_NAME *nm, int indent,
       return -1;
     }
   }
+#if 1 // hezhiwen
+  ret = X509_NAME_print_ex(bio, nm, indent, flags);
+#else
   int ret = X509_NAME_print_ex(bio, nm, indent, flags);
+#endif
   BIO_free(bio);
   return ret;
 }

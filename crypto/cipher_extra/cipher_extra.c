@@ -97,7 +97,12 @@ static const struct {
 };
 
 const EVP_CIPHER *EVP_get_cipherbynid(int nid) {
+#if 1 // hezhiwen
+  size_t i;
+  for (i = 0; i < OPENSSL_ARRAY_SIZE(kCiphers); i++) {
+#else
   for (size_t i = 0; i < OPENSSL_ARRAY_SIZE(kCiphers); i++) {
+#endif
     if (kCiphers[i].nid == nid) {
       return kCiphers[i].func();
     }
@@ -106,6 +111,9 @@ const EVP_CIPHER *EVP_get_cipherbynid(int nid) {
 }
 
 const EVP_CIPHER *EVP_get_cipherbyname(const char *name) {
+#if 1 // hezhiwen
+  size_t i;
+#endif
   if (name == NULL) {
     return NULL;
   }
@@ -117,7 +125,11 @@ const EVP_CIPHER *EVP_get_cipherbyname(const char *name) {
     name = "des-ede3-cbc";
   }
 
+#if 1 // hezhiwen
+  for (i = 0; i < OPENSSL_ARRAY_SIZE(kCiphers); i++) {
+#else
   for (size_t i = 0; i < OPENSSL_ARRAY_SIZE(kCiphers); i++) {
+#endif
     if (OPENSSL_strcasecmp(kCiphers[i].name, name) == 0) {
       return kCiphers[i].func();
     }

@@ -74,6 +74,9 @@ int ASN1_BIT_STRING_set(ASN1_BIT_STRING *x, const unsigned char *d,
 int asn1_bit_string_length(const ASN1_BIT_STRING *str,
                            uint8_t *out_padding_bits) {
   int len = str->length;
+#if 1 // hezhiwen
+  uint8_t padding_bits = 0;
+#endif
   if (str->flags & ASN1_STRING_FLAG_BITS_LEFT) {
     // If the string is already empty, it cannot have padding bits.
     *out_padding_bits = len == 0 ? 0 : str->flags & 0x07;
@@ -85,7 +88,9 @@ int asn1_bit_string_length(const ASN1_BIT_STRING *str,
   while (len > 0 && str->data[len - 1] == 0) {
     len--;
   }
+#if 0 // hezhiwen
   uint8_t padding_bits = 0;
+#endif
   if (len > 0) {
     uint8_t last = str->data[len - 1];
     assert(last != 0);
@@ -110,22 +115,40 @@ int ASN1_BIT_STRING_num_bytes(const ASN1_BIT_STRING *str, size_t *out) {
 }
 
 int i2c_ASN1_BIT_STRING(const ASN1_BIT_STRING *a, unsigned char **pp) {
+#if 1 // hezhiwen
+  uint8_t bits;
+  int len;
+  int ret;
+  uint8_t *p;
+#endif
   if (a == NULL) {
     return 0;
   }
 
+#if 1 // hezhiwen
+  len = asn1_bit_string_length(a, &bits);
+#else
   uint8_t bits;
   int len = asn1_bit_string_length(a, &bits);
+#endif
   if (len > INT_MAX - 1) {
     OPENSSL_PUT_ERROR(ASN1, ERR_R_OVERFLOW);
     return 0;
   }
+#if 1 // hezhiwen
+  ret = 1 + len;
+#else
   int ret = 1 + len;
+#endif
   if (pp == NULL) {
     return ret;
   }
 
+#if 1 // hezhiwen
+  p = *pp;
+#else
   uint8_t *p = *pp;
+#endif
   *(p++) = bits;
   OPENSSL_memcpy(p, a->data, len);
   if (len > 0) {
@@ -142,6 +165,9 @@ ASN1_BIT_STRING *c2i_ASN1_BIT_STRING(ASN1_BIT_STRING **a,
   const unsigned char *p;
   unsigned char *s;
   int padding;
+#if 1 // hezhiwen
+  uint8_t padding_mask;
+#endif
 
   if (len < 1) {
     OPENSSL_PUT_ERROR(ASN1, ASN1_R_STRING_TOO_SHORT);
@@ -170,7 +196,11 @@ ASN1_BIT_STRING *c2i_ASN1_BIT_STRING(ASN1_BIT_STRING **a,
   }
 
   // Unused bits in a BIT STRING must be zero.
+#if 1 // hezhiwen
+  padding_mask = (1 << padding) - 1;
+#else
   uint8_t padding_mask = (1 << padding) - 1;
+#endif
   if (padding != 0 && (len < 1 || (p[len - 1] & padding_mask) != 0)) {
     OPENSSL_PUT_ERROR(ASN1, ASN1_R_INVALID_BIT_STRING_PADDING);
     goto err;

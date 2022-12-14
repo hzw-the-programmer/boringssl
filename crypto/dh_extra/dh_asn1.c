@@ -86,18 +86,26 @@ static int marshal_integer(CBB *cbb, BIGNUM *bn) {
 
 DH *DH_parse_parameters(CBS *cbs) {
   DH *ret = DH_new();
+#if 1 // hezhiwen
+  CBS child;
+  uint64_t priv_length;
+#endif
   if (ret == NULL) {
     return NULL;
   }
 
+#if 0 // hezhiwen
   CBS child;
+#endif
   if (!CBS_get_asn1(cbs, &child, CBS_ASN1_SEQUENCE) ||
       !parse_integer(&child, &ret->p) ||
       !parse_integer(&child, &ret->g)) {
     goto err;
   }
 
+#if 0 // hezhiwen
   uint64_t priv_length;
+#endif
   if (CBS_len(&child) != 0) {
     if (!CBS_get_asn1_uint64(&child, &priv_length) ||
         priv_length > UINT_MAX) {
@@ -133,12 +141,21 @@ int DH_marshal_parameters(CBB *cbb, const DH *dh) {
 }
 
 DH *d2i_DHparams(DH **out, const uint8_t **inp, long len) {
+#if 1 // hezhiwen
+  CBS cbs;
+  DH *ret;
+#endif
   if (len < 0) {
     return NULL;
   }
+#if 1 // hezhiwen
+  CBS_init(&cbs, *inp, (size_t)len);
+  ret = DH_parse_parameters(&cbs);
+#else
   CBS cbs;
   CBS_init(&cbs, *inp, (size_t)len);
   DH *ret = DH_parse_parameters(&cbs);
+#endif
   if (ret == NULL) {
     return NULL;
   }

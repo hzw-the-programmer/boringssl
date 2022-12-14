@@ -86,14 +86,26 @@ static void crypto_buffer_free_object(CRYPTO_BUFFER *buf) {
 static CRYPTO_BUFFER *crypto_buffer_new(const uint8_t *data, size_t len,
                                         int data_is_static,
                                         CRYPTO_BUFFER_POOL *pool) {
+#if 1 // hezhiwen
+  CRYPTO_BUFFER *buf;
+  CRYPTO_BUFFER *duplicate;
+  int inserted = 0;
+#endif
   if (pool != NULL) {
     CRYPTO_BUFFER tmp;
+  #if 1 // hezhiwen
+    CRYPTO_BUFFER *duplicate;
+  #endif
     tmp.data = (uint8_t *) data;
     tmp.len = len;
     tmp.pool = pool;
 
     CRYPTO_MUTEX_lock_read(&pool->lock);
+  #if 1 // hezhiwen
+    duplicate = lh_CRYPTO_BUFFER_retrieve(pool->bufs, &tmp);
+  #else
     CRYPTO_BUFFER *duplicate = lh_CRYPTO_BUFFER_retrieve(pool->bufs, &tmp);
+  #endif
     if (data_is_static && duplicate != NULL && !duplicate->data_is_static) {
       // If the new |CRYPTO_BUFFER| would have static data, but the duplicate
       // does not, we replace the old one with the new static version.
@@ -109,7 +121,11 @@ static CRYPTO_BUFFER *crypto_buffer_new(const uint8_t *data, size_t len,
     }
   }
 
+#if 1 // hezhiwen
+  buf = OPENSSL_malloc(sizeof(CRYPTO_BUFFER));
+#else
   CRYPTO_BUFFER *const buf = OPENSSL_malloc(sizeof(CRYPTO_BUFFER));
+#endif
   if (buf == NULL) {
     return NULL;
   }
@@ -136,13 +152,19 @@ static CRYPTO_BUFFER *crypto_buffer_new(const uint8_t *data, size_t len,
   buf->pool = pool;
 
   CRYPTO_MUTEX_lock_write(&pool->lock);
+#if 1 // hezhiwen
+  duplicate = lh_CRYPTO_BUFFER_retrieve(pool->bufs, buf);
+#else
   CRYPTO_BUFFER *duplicate = lh_CRYPTO_BUFFER_retrieve(pool->bufs, buf);
+#endif
   if (data_is_static && duplicate != NULL && !duplicate->data_is_static) {
     // If the new |CRYPTO_BUFFER| would have static data, but the duplicate does
     // not, we replace the old one with the new static version.
     duplicate = NULL;
   }
+#if 0 // hezhiwen
   int inserted = 0;
+#endif
   if (duplicate == NULL) {
     CRYPTO_BUFFER *old = NULL;
     inserted = lh_CRYPTO_BUFFER_insert(pool->bufs, &old, buf);
@@ -199,11 +221,19 @@ CRYPTO_BUFFER *CRYPTO_BUFFER_new_from_static_data_unsafe(
 }
 
 void CRYPTO_BUFFER_free(CRYPTO_BUFFER *buf) {
+#if 1 // hezhiwen
+  CRYPTO_BUFFER_POOL *pool;
+  CRYPTO_BUFFER *found;
+#endif
   if (buf == NULL) {
     return;
   }
 
+#if 1 // hezhiwen
+  pool = buf->pool;
+#else
   CRYPTO_BUFFER_POOL *const pool = buf->pool;
+#endif
   if (pool == NULL) {
     if (CRYPTO_refcount_dec_and_test_zero(&buf->references)) {
       // If a reference count of zero is observed, there cannot be a reference
@@ -229,7 +259,11 @@ void CRYPTO_BUFFER_free(CRYPTO_BUFFER *buf) {
   // Note it is possible |buf| is no longer in the pool, if it was replaced by a
   // static version. If that static version was since removed, it is even
   // possible for |found| to be NULL.
+#if 1 // hezhiwen
+  found = lh_CRYPTO_BUFFER_retrieve(pool->bufs, buf);
+#else
   CRYPTO_BUFFER *found = lh_CRYPTO_BUFFER_retrieve(pool->bufs, buf);
+#endif
   if (found == buf) {
     found = lh_CRYPTO_BUFFER_delete(pool->bufs, buf);
     assert(found == buf);

@@ -120,11 +120,18 @@ void PEM_dek_info(char *buf, const char *type, int len, char *str) {
 void *PEM_ASN1_read(d2i_of_void *d2i, const char *name, FILE *fp, void **x,
                     pem_password_cb *cb, void *u) {
   BIO *b = BIO_new_fp(fp, BIO_NOCLOSE);
+#if 1 // hezhiwen
+  void *ret;
+#endif
   if (b == NULL) {
     OPENSSL_PUT_ERROR(PEM, ERR_R_BUF_LIB);
     return NULL;
   }
+#if 1 // hezhiwen
+  ret = PEM_ASN1_read_bio(d2i, name, b, x, cb, u);
+#else
   void *ret = PEM_ASN1_read_bio(d2i, name, b, x, cb, u);
+#endif
   BIO_free(b);
   return ret;
 }
@@ -261,11 +268,18 @@ int PEM_ASN1_write(i2d_of_void *i2d, const char *name, FILE *fp, void *x,
                    const EVP_CIPHER *enc, unsigned char *kstr, int klen,
                    pem_password_cb *callback, void *u) {
   BIO *b = BIO_new_fp(fp, BIO_NOCLOSE);
+#if 1 // hezhiwen
+  int ret;
+#endif
   if (b == NULL) {
     OPENSSL_PUT_ERROR(PEM, ERR_R_BUF_LIB);
     return 0;
   }
+#if 1 // hezhiwen
+  ret = PEM_ASN1_write_bio(i2d, name, b, x, enc, kstr, klen, callback, u);
+#else
   int ret = PEM_ASN1_write_bio(i2d, name, b, x, enc, kstr, klen, callback, u);
+#endif
   BIO_free(b);
   return ret;
 }
@@ -525,11 +539,18 @@ static int load_iv(char **fromp, unsigned char *to, int num) {
 int PEM_write(FILE *fp, const char *name, const char *header,
               const unsigned char *data, long len) {
   BIO *b = BIO_new_fp(fp, BIO_NOCLOSE);
+#if 1 // hezhiwen
+  int ret;
+#endif
   if (b == NULL) {
     OPENSSL_PUT_ERROR(PEM, ERR_R_BUF_LIB);
     return 0;
   }
+#if 1 // hezhiwen
+  ret = PEM_write_bio(b, name, header, data, len);
+#else
   int ret = PEM_write_bio(b, name, header, data, len);
+#endif
   BIO_free(b);
   return ret;
 }
@@ -597,11 +618,18 @@ err:
 int PEM_read(FILE *fp, char **name, char **header, unsigned char **data,
              long *len) {
   BIO *b = BIO_new_fp(fp, BIO_NOCLOSE);
+#if 1 // hezhiwen
+  int ret;
+#endif
   if (b == NULL) {
     OPENSSL_PUT_ERROR(PEM, ERR_R_BUF_LIB);
     return 0;
   }
+#if 1 // hezhiwen
+  ret = PEM_read_bio(b, name, header, data, len);
+#else
   int ret = PEM_read_bio(b, name, header, data, len);
+#endif
   BIO_free(b);
   return ret;
 }
@@ -788,10 +816,17 @@ err:
 }
 
 int PEM_def_callback(char *buf, int size, int rwflag, void *userdata) {
+#if 1 // hezhiwen
+  size_t len;
+#endif
   if (!buf || !userdata || size < 0) {
     return 0;
   }
+#if 1 // hezhiwen
+  len = strlen((char *)userdata);
+#else
   size_t len = strlen((char *)userdata);
+#endif
   if (len >= (size_t)size) {
     return 0;
   }

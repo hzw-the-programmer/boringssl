@@ -152,10 +152,17 @@ unsigned char *X509_keyid_get0(X509 *x, int *out_len) {
 
 int X509_add1_trust_object(X509 *x, ASN1_OBJECT *obj) {
   ASN1_OBJECT *objtmp = OBJ_dup(obj);
+#if 1 // hezhiwen
+  X509_CERT_AUX *aux;
+#endif
   if (objtmp == NULL) {
     goto err;
   }
+#if 1 // hezhiwen
+  aux = aux_get(x);
+#else
   X509_CERT_AUX *aux = aux_get(x);
+#endif
   if (aux->trust == NULL) {
     aux->trust = sk_ASN1_OBJECT_new_null();
     if (aux->trust == NULL) {
@@ -174,10 +181,17 @@ err:
 
 int X509_add1_reject_object(X509 *x, ASN1_OBJECT *obj) {
   ASN1_OBJECT *objtmp = OBJ_dup(obj);
+#if 1 // hezhiwen
+  X509_CERT_AUX *aux;
+#endif
   if (objtmp == NULL) {
     goto err;
   }
+#if 1 // hezhiwen
+  aux = aux_get(x);
+#else
   X509_CERT_AUX *aux = aux_get(x);
+#endif
   if (aux->reject == NULL) {
     aux->reject = sk_ASN1_OBJECT_new_null();
     if (aux->reject == NULL) {

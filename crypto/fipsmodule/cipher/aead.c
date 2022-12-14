@@ -74,6 +74,9 @@ int EVP_AEAD_CTX_init_with_direction(EVP_AEAD_CTX *ctx, const EVP_AEAD *aead,
                                      const uint8_t *key, size_t key_len,
                                      size_t tag_len,
                                      enum evp_aead_direction_t dir) {
+#if 1 // hezhiwen
+  int ok;
+#endif
   if (key_len != aead->key_len) {
     OPENSSL_PUT_ERROR(CIPHER, CIPHER_R_UNSUPPORTED_KEY_SIZE);
     ctx->aead = NULL;
@@ -82,7 +85,9 @@ int EVP_AEAD_CTX_init_with_direction(EVP_AEAD_CTX *ctx, const EVP_AEAD *aead,
 
   ctx->aead = aead;
 
+#if 0 // hezhiwen
   int ok;
+#endif
   if (aead->init) {
     ok = aead->init(ctx, key, key_len, tag_len);
   } else {
@@ -119,6 +124,9 @@ int EVP_AEAD_CTX_seal(const EVP_AEAD_CTX *ctx, uint8_t *out, size_t *out_len,
                       size_t max_out_len, const uint8_t *nonce,
                       size_t nonce_len, const uint8_t *in, size_t in_len,
                       const uint8_t *ad, size_t ad_len) {
+#if 1 // hezhiwen
+  size_t out_tag_len;
+#endif
   if (in_len + ctx->aead->overhead < in_len /* overflow */) {
     OPENSSL_PUT_ERROR(CIPHER, CIPHER_R_TOO_LARGE);
     goto error;
@@ -134,7 +142,9 @@ int EVP_AEAD_CTX_seal(const EVP_AEAD_CTX *ctx, uint8_t *out, size_t *out_len,
     goto error;
   }
 
+#if 0 // hezhiwen
   size_t out_tag_len;
+#endif
   if (ctx->aead->seal_scatter(ctx, out, out + in_len, &out_tag_len,
                               max_out_len - in_len, nonce, nonce_len, in,
                               in_len, NULL, 0, ad, ad_len)) {
@@ -187,6 +197,9 @@ int EVP_AEAD_CTX_open(const EVP_AEAD_CTX *ctx, uint8_t *out, size_t *out_len,
                       size_t max_out_len, const uint8_t *nonce,
                       size_t nonce_len, const uint8_t *in, size_t in_len,
                       const uint8_t *ad, size_t ad_len) {
+#if 1 // hezhiwen
+  size_t plaintext_len;
+#endif
   if (!check_alias(in, in_len, out, max_out_len)) {
     OPENSSL_PUT_ERROR(CIPHER, CIPHER_R_OUTPUT_ALIASES_INPUT);
     goto error;
@@ -209,7 +222,11 @@ int EVP_AEAD_CTX_open(const EVP_AEAD_CTX *ctx, uint8_t *out, size_t *out_len,
     goto error;
   }
 
+#if 1 // hezhiwen
+  plaintext_len = in_len - ctx->tag_len;
+#else
   size_t plaintext_len = in_len - ctx->tag_len;
+#endif
   if (max_out_len < plaintext_len) {
     OPENSSL_PUT_ERROR(CIPHER, CIPHER_R_BUFFER_TOO_SMALL);
     goto error;

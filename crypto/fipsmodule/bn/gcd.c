@@ -115,6 +115,13 @@
 
 int BN_mod_inverse_odd(BIGNUM *out, int *out_no_inverse, const BIGNUM *a,
                        const BIGNUM *n, BN_CTX *ctx) {
+#if 1 // hezhiwen
+  BIGNUM *A, *B, *X, *Y;
+  int ret = 0;
+  int sign;
+  BIGNUM *R;
+  int shift;
+#endif
   *out_no_inverse = 0;
 
   if (!BN_is_odd(n)) {
@@ -127,9 +134,11 @@ int BN_mod_inverse_odd(BIGNUM *out, int *out_no_inverse, const BIGNUM *a,
     return 0;
   }
 
+#if 0 // hezhiwen
   BIGNUM *A, *B, *X, *Y;
   int ret = 0;
   int sign;
+#endif
 
   BN_CTX_start(ctx);
   A = BN_CTX_get(ctx);
@@ -140,7 +149,11 @@ int BN_mod_inverse_odd(BIGNUM *out, int *out_no_inverse, const BIGNUM *a,
     goto err;
   }
 
+#if 1 // hezhiwen
+  R = out;
+#else
   BIGNUM *R = out;
+#endif
 
   BN_zero(Y);
   if (!BN_one(X) || BN_copy(B, a) == NULL || BN_copy(A, n) == NULL) {
@@ -157,7 +170,9 @@ int BN_mod_inverse_odd(BIGNUM *out, int *out_no_inverse, const BIGNUM *a,
   // Binary inversion algorithm; requires odd modulus. This is faster than the
   // general algorithm if the modulus is sufficiently small (about 400 .. 500
   // bits on 32-bit systems, but much more on 64-bit systems)
+#if 0 // hezhiwen
   int shift;
+#endif
 
   while (!BN_is_zero(B)) {
     //      0 < B < |n|,
@@ -283,6 +298,11 @@ err:
 BIGNUM *BN_mod_inverse(BIGNUM *out, const BIGNUM *a, const BIGNUM *n,
                        BN_CTX *ctx) {
   BIGNUM *new_out = NULL;
+#if 1 // hezhiwen
+  int ok = 0;
+  BIGNUM *a_reduced = NULL;
+  int no_inverse;
+#endif
   if (out == NULL) {
     new_out = BN_new();
     if (new_out == NULL) {
@@ -292,8 +312,10 @@ BIGNUM *BN_mod_inverse(BIGNUM *out, const BIGNUM *a, const BIGNUM *n,
     out = new_out;
   }
 
+#if 0 // hezhiwen
   int ok = 0;
   BIGNUM *a_reduced = NULL;
+#endif
   if (a->neg || BN_ucmp(a, n) >= 0) {
     a_reduced = BN_dup(a);
     if (a_reduced == NULL) {
@@ -305,7 +327,9 @@ BIGNUM *BN_mod_inverse(BIGNUM *out, const BIGNUM *a, const BIGNUM *n,
     a = a_reduced;
   }
 
+#if 0 // hezhiwen
   int no_inverse;
+#endif
   if (!BN_is_odd(n)) {
     if (!bn_mod_inverse_consttime(out, &no_inverse, a, n, ctx)) {
       goto err;
@@ -327,6 +351,10 @@ err:
 
 int BN_mod_inverse_blinded(BIGNUM *out, int *out_no_inverse, const BIGNUM *a,
                            const BN_MONT_CTX *mont, BN_CTX *ctx) {
+#if 1 // hezhiwen
+  int ret = 0;
+  BIGNUM blinding_factor;
+#endif
   *out_no_inverse = 0;
 
   if (BN_is_negative(a) || BN_cmp(a, &mont->N) >= 0) {
@@ -334,8 +362,10 @@ int BN_mod_inverse_blinded(BIGNUM *out, int *out_no_inverse, const BIGNUM *a,
     return 0;
   }
 
+#if 0 // hezhiwen
   int ret = 0;
   BIGNUM blinding_factor;
+#endif
   BN_init(&blinding_factor);
 
   if (!BN_rand_range_ex(&blinding_factor, 1, &mont->N) ||
@@ -355,24 +385,48 @@ err:
 
 int bn_mod_inverse_prime(BIGNUM *out, const BIGNUM *a, const BIGNUM *p,
                          BN_CTX *ctx, const BN_MONT_CTX *mont_p) {
+#if 1 // hezhiwen
+  BIGNUM *p_minus_2;
+  int ok;
+#endif
   BN_CTX_start(ctx);
+#if 1 // hezhiwen
+  p_minus_2 = BN_CTX_get(ctx);
+  ok = p_minus_2 != NULL &&
+       BN_copy(p_minus_2, p) &&
+       BN_sub_word(p_minus_2, 2) &&
+       BN_mod_exp_mont(out, a, p_minus_2, p, ctx, mont_p);
+#else
   BIGNUM *p_minus_2 = BN_CTX_get(ctx);
   int ok = p_minus_2 != NULL &&
            BN_copy(p_minus_2, p) &&
            BN_sub_word(p_minus_2, 2) &&
            BN_mod_exp_mont(out, a, p_minus_2, p, ctx, mont_p);
+#endif
   BN_CTX_end(ctx);
   return ok;
 }
 
 int bn_mod_inverse_secret_prime(BIGNUM *out, const BIGNUM *a, const BIGNUM *p,
                                 BN_CTX *ctx, const BN_MONT_CTX *mont_p) {
+#if 1 // hezhiwen
+  BIGNUM *p_minus_2;
+  int ok;
+#endif
   BN_CTX_start(ctx);
+#if 1 // hezhiwen
+  p_minus_2 = BN_CTX_get(ctx);
+  ok = p_minus_2 != NULL &&
+       BN_copy(p_minus_2, p) &&
+       BN_sub_word(p_minus_2, 2) &&
+       BN_mod_exp_mont_consttime(out, a, p_minus_2, p, ctx, mont_p);
+#else
   BIGNUM *p_minus_2 = BN_CTX_get(ctx);
   int ok = p_minus_2 != NULL &&
            BN_copy(p_minus_2, p) &&
            BN_sub_word(p_minus_2, 2) &&
            BN_mod_exp_mont_consttime(out, a, p_minus_2, p, ctx, mont_p);
+#endif
   BN_CTX_end(ctx);
   return ok;
 }

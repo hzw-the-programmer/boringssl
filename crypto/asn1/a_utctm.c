@@ -66,10 +66,15 @@
 
 int asn1_utctime_to_tm(struct tm *tm, const ASN1_UTCTIME *d,
                        int allow_timezone_offset) {
+#if 1 // hezhiwen
+  CBS cbs;
+#endif
   if (d->type != V_ASN1_UTCTIME) {
     return 0;
   }
+#if 0 // hezhiwen
   CBS cbs;
+#endif
   CBS_init(&cbs, d->data, (size_t)d->length);
   if (!CBS_parse_utc_time(&cbs, tm, allow_timezone_offset)) {
     return 0;
@@ -101,6 +106,10 @@ ASN1_UTCTIME *ASN1_UTCTIME_set(ASN1_UTCTIME *s, time_t t) {
 ASN1_UTCTIME *ASN1_UTCTIME_adj(ASN1_UTCTIME *s, time_t t, int offset_day,
                                long offset_sec) {
   struct tm data;
+#if 1 // hezhiwen
+  char buf[14];
+  int free_s = 0;
+#endif
   if (!OPENSSL_gmtime(&t, &data)) {
     return NULL;
   }
@@ -115,12 +124,16 @@ ASN1_UTCTIME *ASN1_UTCTIME_adj(ASN1_UTCTIME *s, time_t t, int offset_day,
     return NULL;
   }
 
+#if 0 // hezhiwen
   char buf[14];
+#endif
   BIO_snprintf(buf, sizeof(buf), "%02d%02d%02d%02d%02d%02dZ",
                data.tm_year % 100, data.tm_mon + 1, data.tm_mday, data.tm_hour,
                data.tm_min, data.tm_sec);
 
+#if 0 // hezhiwen
   int free_s = 0;
+#endif
   if (s == NULL) {
     free_s = 1;
     s = ASN1_UTCTIME_new();

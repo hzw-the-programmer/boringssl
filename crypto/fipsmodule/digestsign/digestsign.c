@@ -182,15 +182,23 @@ int EVP_DigestSignFinal(EVP_MD_CTX *ctx, uint8_t *out_sig,
 
 int EVP_DigestVerifyFinal(EVP_MD_CTX *ctx, const uint8_t *sig,
                           size_t sig_len) {
+#if 1 // hezhiwen
+  EVP_MD_CTX tmp_ctx;
+  int ret;
+  uint8_t md[EVP_MAX_MD_SIZE];
+  unsigned int mdlen;
+#endif
   if (!uses_prehash(ctx, evp_verify)) {
     OPENSSL_PUT_ERROR(EVP, EVP_R_OPERATION_NOT_SUPPORTED_FOR_THIS_KEYTYPE);
     return 0;
   }
 
+#if 0 // hezhiwen
   EVP_MD_CTX tmp_ctx;
   int ret;
   uint8_t md[EVP_MAX_MD_SIZE];
   unsigned int mdlen;
+#endif
 
   FIPS_service_indicator_lock_state();
   EVP_MD_CTX_init(&tmp_ctx);
@@ -209,8 +217,13 @@ int EVP_DigestVerifyFinal(EVP_MD_CTX *ctx, const uint8_t *sig,
 
 int EVP_DigestSign(EVP_MD_CTX *ctx, uint8_t *out_sig, size_t *out_sig_len,
                    const uint8_t *data, size_t data_len) {
+#if 1 // hezhiwen
+  int ret = 0;
+  FIPS_service_indicator_lock_state();
+#else
   FIPS_service_indicator_lock_state();
   int ret = 0;
+#endif
 
   if (uses_prehash(ctx, evp_sign)) {
     // If |out_sig| is NULL, the caller is only querying the maximum output
@@ -242,8 +255,13 @@ end:
 
 int EVP_DigestVerify(EVP_MD_CTX *ctx, const uint8_t *sig, size_t sig_len,
                      const uint8_t *data, size_t len) {
+#if 1 // hezhiwen
+  int ret = 0;
+  FIPS_service_indicator_lock_state();
+#else
   FIPS_service_indicator_lock_state();
   int ret = 0;
+#endif
 
   if (uses_prehash(ctx, evp_verify)) {
     ret = EVP_DigestVerifyUpdate(ctx, data, len) &&

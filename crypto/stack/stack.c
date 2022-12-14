@@ -133,11 +133,18 @@ void sk_free(_STACK *sk) {
 
 void sk_pop_free_ex(_STACK *sk, OPENSSL_sk_call_free_func call_free_func,
                     OPENSSL_sk_free_func free_func) {
+#if 1 // hezhiwen
+  size_t i;
+#endif
   if (sk == NULL) {
     return;
   }
 
+#if 1 // hezhiwen
+  for (i = 0; i < sk->num; i++) {
+#else
   for (size_t i = 0; i < sk->num; i++) {
+#endif
     if (sk->data[i] != NULL) {
       call_free_func(free_func, sk->data[i]);
     }
@@ -220,11 +227,18 @@ void *sk_delete(_STACK *sk, size_t where) {
 }
 
 void *sk_delete_ptr(_STACK *sk, const void *p) {
+#if 1 // hezhiwen
+  size_t i;
+#endif
   if (sk == NULL) {
     return NULL;
   }
 
+#if 1 // hezhiwen
+  for (i = 0; i < sk->num; i++) {
+#else
   for (size_t i = 0; i < sk->num; i++) {
+#endif
     if (sk->data[i] == p) {
       return sk_delete(sk, i);
     }
@@ -235,13 +249,21 @@ void *sk_delete_ptr(_STACK *sk, const void *p) {
 
 int sk_find(const _STACK *sk, size_t *out_index, const void *p,
             OPENSSL_sk_call_cmp_func call_cmp_func) {
+#if 1 // hezhiwen
+  size_t i;
+  size_t lo = 0, hi;
+#endif
   if (sk == NULL) {
     return 0;
   }
 
   if (sk->comp == NULL) {
     // Use pointer equality when no comparison function has been set.
+  #if 1 // hezhiwen
+    for (i = 0; i < sk->num; i++) {
+  #else
     for (size_t i = 0; i < sk->num; i++) {
+  #endif
       if (sk->data[i] == p) {
         if (out_index) {
           *out_index = i;
@@ -257,7 +279,11 @@ int sk_find(const _STACK *sk, size_t *out_index, const void *p,
   }
 
   if (!sk_is_sorted(sk)) {
+  #if 1 // hezhiwen
+    for (i = 0; i < sk->num; i++) {
+  #else
     for (size_t i = 0; i < sk->num; i++) {
+  #endif
       const void *elem = sk->data[i];
       if (call_cmp_func(sk->comp, &p, &elem) == 0) {
         if (out_index) {
@@ -273,11 +299,17 @@ int sk_find(const _STACK *sk, size_t *out_index, const void *p,
   //
   // |lo| and |hi| maintain a half-open interval of where the answer may be. All
   // indices such that |lo <= idx < hi| are candidates.
+#if 1 // hezhiwen
+  hi = sk->num;
+#else
   size_t lo = 0, hi = sk->num;
+#endif
   while (lo < hi) {
     // Bias |mid| towards |lo|. See the |r == 0| case below.
     size_t mid = lo + (hi - lo - 1) / 2;
+  #if 0 // hezhiwen
     assert(lo <= mid && mid < hi);
+  #endif
     const void *elem = sk->data[mid];
     int r = call_cmp_func(sk->comp, &p, &elem);
     if (r > 0) {
@@ -327,11 +359,18 @@ void *sk_pop(_STACK *sk) {
 }
 
 _STACK *sk_dup(const _STACK *sk) {
+#if 1 // hezhiwen
+  _STACK *ret;
+#endif
   if (sk == NULL) {
     return NULL;
   }
 
+#if 1 // hezhiwen
+  ret = OPENSSL_malloc(sizeof(_STACK));
+#else
   _STACK *ret = OPENSSL_malloc(sizeof(_STACK));
+#endif
   if (ret == NULL) {
     return NULL;
   }
@@ -418,17 +457,29 @@ _STACK *sk_deep_copy(const _STACK *sk, OPENSSL_sk_call_copy_func call_copy_func,
                      OPENSSL_sk_call_free_func call_free_func,
                      OPENSSL_sk_free_func free_func) {
   _STACK *ret = sk_dup(sk);
+#if 1 // hezhiwen
+  size_t i;
+  size_t j;
+#endif
   if (ret == NULL) {
     return NULL;
   }
 
+#if 1 // hezhiwen
+  for (i = 0; i < ret->num; i++) {
+#else
   for (size_t i = 0; i < ret->num; i++) {
+#endif
     if (ret->data[i] == NULL) {
       continue;
     }
     ret->data[i] = call_copy_func(copy_func, ret->data[i]);
     if (ret->data[i] == NULL) {
+    #if 1 // hezhiwen
+      for (j = 0; j < i; j++) {
+    #else
       for (size_t j = 0; j < i; j++) {
+    #endif
         if (ret->data[j] != NULL) {
           call_free_func(free_func, ret->data[j]);
         }

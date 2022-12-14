@@ -179,6 +179,31 @@ int i2d_X509_REQ_bio(BIO *bp, X509_REQ *req) {
 }
 
 
+#if 1 // hezhiwen
+#define IMPLEMENT_D2I_FP(type, name, bio_func) \
+  type *name(FILE *fp, type **obj) {           \
+    BIO *bio = BIO_new_fp(fp, BIO_NOCLOSE);    \
+    type *ret;                                 \
+    if (bio == NULL) {                         \
+      return NULL;                             \
+    }                                          \
+    ret = bio_func(bio, obj);                  \
+    BIO_free(bio);                             \
+    return ret;                                \
+  }
+
+#define IMPLEMENT_I2D_FP(type, name, bio_func) \
+  int name(FILE *fp, type *obj) {              \
+    BIO *bio = BIO_new_fp(fp, BIO_NOCLOSE);    \
+    int ret;                                   \
+    if (bio == NULL) {                         \
+      return 0;                                \
+    }                                          \
+    ret = bio_func(bio, obj);                  \
+    BIO_free(bio);                             \
+    return ret;                                \
+  }
+#else
 #define IMPLEMENT_D2I_FP(type, name, bio_func) \
   type *name(FILE *fp, type **obj) {           \
     BIO *bio = BIO_new_fp(fp, BIO_NOCLOSE);    \
@@ -200,6 +225,7 @@ int i2d_X509_REQ_bio(BIO *bp, X509_REQ *req) {
     BIO_free(bio);                             \
     return ret;                                \
   }
+#endif
 
 IMPLEMENT_D2I_FP(RSA, d2i_RSAPrivateKey_fp, d2i_RSAPrivateKey_bio)
 IMPLEMENT_I2D_FP(RSA, i2d_RSAPrivateKey_fp, i2d_RSAPrivateKey_bio)
@@ -210,6 +236,35 @@ IMPLEMENT_I2D_FP(RSA, i2d_RSAPublicKey_fp, i2d_RSAPublicKey_bio)
 IMPLEMENT_D2I_FP(RSA, d2i_RSA_PUBKEY_fp, d2i_RSA_PUBKEY_bio)
 IMPLEMENT_I2D_FP(RSA, i2d_RSA_PUBKEY_fp, i2d_RSA_PUBKEY_bio)
 
+#if 1 // hezhiwen
+#define IMPLEMENT_D2I_BIO(type, name, d2i_func)         \
+  type *name(BIO *bio, type **obj) {                    \
+    uint8_t *data;                                      \
+    size_t len;                                         \
+    const uint8_t *ptr;                                 \
+    type *ret;                                          \
+    if (!BIO_read_asn1(bio, &data, &len, 100 * 1024)) { \
+      return NULL;                                      \
+    }                                                   \
+    ptr = data;                                         \
+    ret = d2i_func(obj, &ptr, (long)len);               \
+    OPENSSL_free(data);                                 \
+    return ret;                                         \
+  }
+
+#define IMPLEMENT_I2D_BIO(type, name, i2d_func) \
+  int name(BIO *bio, type *obj) {               \
+    uint8_t *data = NULL;                       \
+    int len = i2d_func(obj, &data);             \
+    int ret;                                    \
+    if (len < 0) {                              \
+      return 0;                                 \
+    }                                           \
+    ret = BIO_write_all(bio, data, len);        \
+    OPENSSL_free(data);                         \
+    return ret;                                 \
+  }
+#else
 #define IMPLEMENT_D2I_BIO(type, name, d2i_func)         \
   type *name(BIO *bio, type **obj) {                    \
     uint8_t *data;                                      \
@@ -234,6 +289,7 @@ IMPLEMENT_I2D_FP(RSA, i2d_RSA_PUBKEY_fp, i2d_RSA_PUBKEY_bio)
     OPENSSL_free(data);                         \
     return ret;                                 \
   }
+#endif
 
 IMPLEMENT_D2I_BIO(RSA, d2i_RSAPrivateKey_bio, d2i_RSAPrivateKey)
 IMPLEMENT_I2D_BIO(RSA, i2d_RSAPrivateKey_bio, i2d_RSAPrivateKey)

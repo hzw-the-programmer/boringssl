@@ -78,18 +78,28 @@ int PKCS5_PBKDF2_HMAC(const char *password, size_t password_len,
 
   while (key_len > 0) {
     size_t todo = md_len;
+  #if 1 // hezhiwen
+    uint8_t i_buf[4];
+    uint8_t digest_tmp[EVP_MAX_MD_SIZE];
+    unsigned j;
+    size_t k;
+  #endif
     if (todo > key_len) {
       todo = key_len;
     }
 
+  #if 0 // hezhiwen
     uint8_t i_buf[4];
+  #endif
     i_buf[0] = (uint8_t)((i >> 24) & 0xff);
     i_buf[1] = (uint8_t)((i >> 16) & 0xff);
     i_buf[2] = (uint8_t)((i >> 8) & 0xff);
     i_buf[3] = (uint8_t)(i & 0xff);
 
     // Compute U_1.
+  #if 0
     uint8_t digest_tmp[EVP_MAX_MD_SIZE];
+  #endif
     if (!HMAC_Init_ex(&hctx, NULL, 0, NULL, NULL) ||
         !HMAC_Update(&hctx, salt, salt_len) ||
         !HMAC_Update(&hctx, i_buf, 4) ||
@@ -98,14 +108,22 @@ int PKCS5_PBKDF2_HMAC(const char *password, size_t password_len,
     }
 
     OPENSSL_memcpy(out_key, digest_tmp, todo);
+  #if 1 // hezhiwen
+    for (j = 1; j < iterations; j++) {
+  #else
     for (unsigned j = 1; j < iterations; j++) {
+  #endif
       // Compute the remaining U_* values and XOR.
       if (!HMAC_Init_ex(&hctx, NULL, 0, NULL, NULL) ||
           !HMAC_Update(&hctx, digest_tmp, md_len) ||
           !HMAC_Final(&hctx, digest_tmp, NULL)) {
         goto err;
       }
+    #if 1 // hezhiwen
+      for (k = 0; k < todo; k++) {
+    #else
       for (size_t k = 0; k < todo; k++) {
+    #endif
         out_key[k] ^= digest_tmp[k];
       }
     }

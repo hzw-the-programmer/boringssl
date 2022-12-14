@@ -47,15 +47,31 @@ void CTR_DRBG_free(CTR_DRBG_STATE *state) { OPENSSL_free(state); }
 int CTR_DRBG_init(CTR_DRBG_STATE *drbg,
                   const uint8_t entropy[CTR_DRBG_ENTROPY_LEN],
                   const uint8_t *personalization, size_t personalization_len) {
+#if 1 // hezhiwen
+  uint8_t seed_material[CTR_DRBG_ENTROPY_LEN];
+  size_t i;
+  static const uint8_t kInitMask[CTR_DRBG_ENTROPY_LEN] = {
+      0x53, 0x0f, 0x8a, 0xfb, 0xc7, 0x45, 0x36, 0xb9, 0xa9, 0x63, 0xb4, 0xf1,
+      0xc4, 0xcb, 0x73, 0x8b, 0xce, 0xa7, 0x40, 0x3d, 0x4d, 0x60, 0x6b, 0x6e,
+      0x07, 0x4e, 0xc5, 0xd3, 0xba, 0xf3, 0x9d, 0x18, 0x72, 0x60, 0x03, 0xca,
+      0x37, 0xa6, 0x2a, 0x74, 0xd1, 0xa2, 0xf5, 0x8e, 0x75, 0x06, 0x35, 0x8e,
+  };
+#endif
   // Section 10.2.1.3.1
   if (personalization_len > CTR_DRBG_ENTROPY_LEN) {
     return 0;
   }
 
+#if 0 // hezhiwen
   uint8_t seed_material[CTR_DRBG_ENTROPY_LEN];
+#endif
   OPENSSL_memcpy(seed_material, entropy, CTR_DRBG_ENTROPY_LEN);
 
+#if 1 // hezhiwen
+  for (i = 0; i < personalization_len; i++) {
+#else
   for (size_t i = 0; i < personalization_len; i++) {
+#endif
     seed_material[i] ^= personalization[i];
   }
 
@@ -63,6 +79,9 @@ int CTR_DRBG_init(CTR_DRBG_STATE *drbg,
 
   // kInitMask is the result of encrypting blocks with big-endian value 1, 2
   // and 3 with the all-zero AES-256 key.
+#if 1 // hezhiwen
+  for (i = 0; i < sizeof(kInitMask); i++) {
+#else
   static const uint8_t kInitMask[CTR_DRBG_ENTROPY_LEN] = {
       0x53, 0x0f, 0x8a, 0xfb, 0xc7, 0x45, 0x36, 0xb9, 0xa9, 0x63, 0xb4, 0xf1,
       0xc4, 0xcb, 0x73, 0x8b, 0xce, 0xa7, 0x40, 0x3d, 0x4d, 0x60, 0x6b, 0x6e,
@@ -71,6 +90,7 @@ int CTR_DRBG_init(CTR_DRBG_STATE *drbg,
   };
 
   for (size_t i = 0; i < sizeof(kInitMask); i++) {
+#endif
     seed_material[i] ^= kInitMask[i];
   }
 
@@ -93,6 +113,10 @@ static void ctr32_add(CTR_DRBG_STATE *drbg, uint32_t n) {
 
 static int ctr_drbg_update(CTR_DRBG_STATE *drbg, const uint8_t *data,
                            size_t data_len) {
+#if 1 // hezhiwen
+  uint8_t temp[CTR_DRBG_ENTROPY_LEN];
+  size_t i;
+#endif
   // Per section 10.2.1.2, |data_len| must be |CTR_DRBG_ENTROPY_LEN|. Here, we
   // allow shorter inputs and right-pad them with zeros. This is equivalent to
   // the specified algorithm but saves a copy in |CTR_DRBG_generate|.
@@ -100,13 +124,21 @@ static int ctr_drbg_update(CTR_DRBG_STATE *drbg, const uint8_t *data,
     return 0;
   }
 
+#if 1 // hezhiwen
+  for (i = 0; i < CTR_DRBG_ENTROPY_LEN; i += AES_BLOCK_SIZE) {
+#else
   uint8_t temp[CTR_DRBG_ENTROPY_LEN];
   for (size_t i = 0; i < CTR_DRBG_ENTROPY_LEN; i += AES_BLOCK_SIZE) {
+#endif
     ctr32_add(drbg, 1);
     drbg->block(drbg->counter, temp + i, &drbg->ks);
   }
 
+#if 1 // hezhiwen
+  for (i = 0; i < data_len; i++) {
+#else
   for (size_t i = 0; i < data_len; i++) {
+#endif
     temp[i] ^= data[i];
   }
 
@@ -124,12 +156,19 @@ int CTR_DRBG_reseed(CTR_DRBG_STATE *drbg,
   uint8_t entropy_copy[CTR_DRBG_ENTROPY_LEN];
 
   if (additional_data_len > 0) {
+  #if 1 // hezhiwen
+    size_t i;
+  #endif
     if (additional_data_len > CTR_DRBG_ENTROPY_LEN) {
       return 0;
     }
 
     OPENSSL_memcpy(entropy_copy, entropy, CTR_DRBG_ENTROPY_LEN);
+  #if 1 // hezhiwen
+    for (i = 0; i < additional_data_len; i++) {
+  #else
     for (size_t i = 0; i < additional_data_len; i++) {
+  #endif
       entropy_copy[i] ^= additional_data[i];
     }
 
@@ -148,6 +187,9 @@ int CTR_DRBG_reseed(CTR_DRBG_STATE *drbg,
 int CTR_DRBG_generate(CTR_DRBG_STATE *drbg, uint8_t *out, size_t out_len,
                       const uint8_t *additional_data,
                       size_t additional_data_len) {
+#if 1 // hezhiwen
+  static const size_t kChunkSize = 8 * 1024;
+#endif
   // See 9.3.1
   if (out_len > CTR_DRBG_MAX_GENERATE_LENGTH) {
     return 0;
@@ -169,16 +211,23 @@ int CTR_DRBG_generate(CTR_DRBG_STATE *drbg, uint8_t *out, size_t out_len,
   // the whole buffer, flushing the L1 cache, and then do another pass (missing
   // the cache every time) to “encrypt” it. The code can avoid this by
   // chunking.
+#if 0 // hezhiwen
   static const size_t kChunkSize = 8 * 1024;
+#endif
 
   while (out_len >= AES_BLOCK_SIZE) {
     size_t todo = kChunkSize;
+  #if 1 // hezhiwen
+    const size_t num_blocks = todo / AES_BLOCK_SIZE;
+  #endif
     if (todo > out_len) {
       todo = out_len;
     }
 
     todo &= ~(AES_BLOCK_SIZE-1);
+  #if 0 // hezhiwen
     const size_t num_blocks = todo / AES_BLOCK_SIZE;
+  #endif
 
     if (drbg->ctr) {
       OPENSSL_memset(out, 0, todo);
@@ -186,7 +235,12 @@ int CTR_DRBG_generate(CTR_DRBG_STATE *drbg, uint8_t *out, size_t out_len,
       drbg->ctr(out, out, num_blocks, &drbg->ks, drbg->counter);
       ctr32_add(drbg, (uint32_t)(num_blocks - 1));
     } else {
+    #if 1 // hezhiwen
+      size_t i;
+      for (i = 0; i < todo; i += AES_BLOCK_SIZE) {
+    #else
       for (size_t i = 0; i < todo; i += AES_BLOCK_SIZE) {
+    #endif
         ctr32_add(drbg, 1);
         drbg->block(drbg->counter, out + i, &drbg->ks);
       }

@@ -36,13 +36,18 @@ int BN_parse_asn1_unsigned(CBS *cbs, BIGNUM *ret) {
 }
 
 int BN_marshal_asn1(CBB *cbb, const BIGNUM *bn) {
+#if 1 // hezhiwen
+  CBB child;
+#endif
   // Negative numbers are unsupported.
   if (BN_is_negative(bn)) {
     OPENSSL_PUT_ERROR(BN, BN_R_NEGATIVE_NUMBER);
     return 0;
   }
 
+#if 0 // hezhiwen
   CBB child;
+#endif
   if (!CBB_add_asn1(cbb, &child, CBS_ASN1_INTEGER) ||
       // The number must be padded with a leading zero if the high bit would
       // otherwise be set or if |bn| is zero.

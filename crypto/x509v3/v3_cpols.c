@@ -433,7 +433,12 @@ static int i2r_certpol(const X509V3_EXT_METHOD *method, void *ext, BIO *out,
                        int indent) {
   const STACK_OF(POLICYINFO) *pol = ext;
   // First print out the policy OIDs
+#if 1 // hezhiwen
+  size_t i;
+  for (i = 0; i < sk_POLICYINFO_num(pol); i++) {
+#else
   for (size_t i = 0; i < sk_POLICYINFO_num(pol); i++) {
+#endif
     const POLICYINFO *pinfo = sk_POLICYINFO_value(pol, i);
     BIO_printf(out, "%*sPolicy: ", indent, "");
     i2a_ASN1_OBJECT(out, pinfo->policyid);
@@ -447,7 +452,12 @@ static int i2r_certpol(const X509V3_EXT_METHOD *method, void *ext, BIO *out,
 
 static void print_qualifiers(BIO *out, const STACK_OF(POLICYQUALINFO) *quals,
                              int indent) {
+#if 1 // hezhiwen
+  size_t i;
+  for (i = 0; i < sk_POLICYQUALINFO_num(quals); i++) {
+#else
   for (size_t i = 0; i < sk_POLICYQUALINFO_num(quals); i++) {
+#endif
     const POLICYQUALINFO *qualinfo = sk_POLICYQUALINFO_value(quals, i);
     switch (OBJ_obj2nid(qualinfo->pqualid)) {
       case NID_id_qt_cps:
@@ -473,12 +483,19 @@ static void print_qualifiers(BIO *out, const STACK_OF(POLICYQUALINFO) *quals,
 static void print_notice(BIO *out, const USERNOTICE *notice, int indent) {
   if (notice->noticeref) {
     NOTICEREF *ref;
+  #if 1 // hezhiwen
+    size_t i;
+  #endif
     ref = notice->noticeref;
     BIO_printf(out, "%*sOrganization: %.*s\n", indent, "",
                ref->organization->length, ref->organization->data);
     BIO_printf(out, "%*sNumber%s: ", indent, "",
                sk_ASN1_INTEGER_num(ref->noticenos) > 1 ? "s" : "");
+  #if 1 // hezhiwen
+    for (i = 0; i < sk_ASN1_INTEGER_num(ref->noticenos); i++) {
+  #else
     for (size_t i = 0; i < sk_ASN1_INTEGER_num(ref->noticenos); i++) {
+  #endif
       ASN1_INTEGER *num;
       char *tmp;
       num = sk_ASN1_INTEGER_value(ref->noticenos, i);

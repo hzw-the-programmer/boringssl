@@ -26,11 +26,17 @@
 
 
 int CBB_finish_i2d(CBB *cbb, uint8_t **outp) {
+#if 1 // hezhiwen
+  uint8_t *der;
+  size_t der_len;
+#endif
   assert(!cbb->is_child);
   assert(cbb->u.base.can_resize);
 
+#if 0 // hezhiwen
   uint8_t *der;
   size_t der_len;
+#endif
   if (!CBB_finish(cbb, &der, &der_len)) {
     CBB_cleanup(cbb);
     return -1;

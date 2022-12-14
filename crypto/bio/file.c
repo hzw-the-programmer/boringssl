@@ -141,11 +141,18 @@ static int file_free(BIO *bio) {
 }
 
 static int file_read(BIO *b, char *out, int outl) {
+#if 1 // hezhiwen
+  size_t ret;
+#endif
   if (!b->init) {
     return 0;
   }
 
+#if 1 // hezhiwen
+  ret = fread(out, 1, outl, (FILE *)b->ptr);
+#else
   size_t ret = fread(out, 1, outl, (FILE *)b->ptr);
+#endif
   if (ret == 0 && ferror((FILE *)b->ptr)) {
     OPENSSL_PUT_SYSTEM_ERROR();
     OPENSSL_PUT_ERROR(BIO, ERR_R_SYS_LIB);

@@ -53,12 +53,21 @@ static int pkey_hkdf_init(EVP_PKEY_CTX *ctx) {
 }
 
 static int pkey_hkdf_copy(EVP_PKEY_CTX *dst, EVP_PKEY_CTX *src) {
+#if 1 // hezhiwen
+  HKDF_PKEY_CTX *hctx_dst;
+  const HKDF_PKEY_CTX *hctx_src;
+#endif
   if (!pkey_hkdf_init(dst)) {
     return 0;
   }
 
+#if 1 // hezhiwen
+  hctx_dst = dst->data;
+  hctx_src = src->data;
+#else
   HKDF_PKEY_CTX *hctx_dst = dst->data;
   const HKDF_PKEY_CTX *hctx_src = src->data;
+#endif
   hctx_dst->mode = hctx_src->mode;
   hctx_dst->md = hctx_src->md;
 
